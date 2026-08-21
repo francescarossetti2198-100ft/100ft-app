@@ -50,10 +50,10 @@ programma.get("/:id", requireAuth, async (c) => {
   if (!sbloccato(mese.mese, mese.anno)) return c.json({ error: "Questo mese non è ancora disponibile" }, 403);
 
   const { results: merende } = await c.env.DB.prepare(
-    `SELECT titolo, descrizione FROM merende_fit WHERE programma_id = ? ORDER BY ordine`
+    `SELECT titolo, descrizione, link_url AS linkUrl FROM merende_fit WHERE programma_id = ? ORDER BY ordine`
   )
     .bind(id)
-    .all<{ titolo: string; descrizione: string | null }>();
+    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null }>();
 
   return c.json({ ...mese, merende });
 });
@@ -66,19 +66,21 @@ programma.post("/", requireCoach, async (c) => {
     focusTema?: string;
     descrizione?: string;
     lineeGuidaNutrizionali?: string;
-    merende?: { titolo: string; descrizione?: string }[];
+    merende?: { titolo: string; descrizione?: string; linkUrl?: string }[];
   }>();
   const { mese, anno, focusTema, descrizione, lineeGuidaNutrizionali, merende } = body;
 
   if (!mese || !anno) return c.json({ error: "Mese e anno sono obbligatori" }, 400);
 
+  // Upsert parziale: un campo omesso nella richiesta lascia invariato il valore esistente
+  // (COALESCE), invece di svuotarlo — utile quando in futuro un form aggiorna un campo alla volta.
   await c.env.DB.prepare(
     `INSERT INTO programma_mensile (mese, anno, focus_tema, descrizione, linee_guida_nutrizionali)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (mese, anno) DO UPDATE SET
-       focus_tema = excluded.focus_tema,
-       descrizione = excluded.descrizione,
-       linee_guida_nutrizionali = excluded.linee_guida_nutrizionali`
+       focus_tema = COALESCE(excluded.focus_tema, programma_mensile.focus_tema),
+       descrizione = COALESCE(excluded.descrizione, programma_mensile.descrizione),
+       linee_guida_nutrizionali = COALESCE(excluded.linee_guida_nutrizionali, programma_mensile.linee_guida_nutrizionali)`
   )
     .bind(mese, anno, focusTema ?? null, descrizione ?? null, lineeGuidaNutrizionali ?? null)
     .run();
@@ -91,9 +93,9 @@ programma.post("/", requireCoach, async (c) => {
     await c.env.DB.prepare(`DELETE FROM merende_fit WHERE programma_id = ?`).bind(programmaId.id).run();
     for (const [i, m] of merende.entries()) {
       await c.env.DB.prepare(
-        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine) VALUES (?, ?, ?, ?)`
+        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine, link_url) VALUES (?, ?, ?, ?, ?)`
       )
-        .bind(programmaId.id, m.titolo, m.descrizione ?? null, i)
+        .bind(programmaId.id, m.titolo, m.descrizione ?? null, i, m.linkUrl ?? null)
         .run();
     }
   }

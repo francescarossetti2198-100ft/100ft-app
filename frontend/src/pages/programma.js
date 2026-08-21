@@ -1,6 +1,16 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 
+// Solo http/https: evita che un link_url malformato (es. "javascript:...") diventi un href eseguibile.
+function linkSicuro(url) {
+  try {
+    const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 const MESI = [
   "Gen", "Feb", "Mar", "Apr", "Mag", "Giu",
   "Lug", "Ago", "Set", "Ott", "Nov", "Dic",
@@ -109,14 +119,16 @@ async function loadDettaglio(content, id) {
               <p class="mono" style="color:var(--mute); font-size:12px; margin-top:20px">MERENDE FIT DEL MESE</p>
               <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap">
                 ${m.merende
-                  .map(
-                    (mf) => `
+                  .map((mf) => {
+                    const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
+                    return `
                       <div class="card" style="flex:1 1 140px; background:var(--surface-2)">
                         <p style="font-weight:600; font-size:14px">${mf.titolo}</p>
                         ${mf.descrizione ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${mf.descrizione}</p>` : ""}
+                        ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:6px">▶ Vedi la ricetta</a>` : ""}
                       </div>
-                    `
-                  )
+                    `;
+                  })
                   .join("")}
               </div>
             `
