@@ -76,7 +76,7 @@ export function renderRegistrazione(appEl) {
         email,
         password,
       });
-      setUser({ isCoach: false, atletaId: user.id });
+      setUser({ userId: user.id, role: user.role });
       navigate("/");
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
