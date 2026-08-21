@@ -3,6 +3,9 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { oggi, sessioneOggi } from "../lib/oggi";
+import { calcolaAnelli } from "../lib/settimana";
+import { calcolaLivello } from "../lib/livelli";
+import { pubblicaPost } from "../lib/feed";
 
 type Variables = { user: SessionUser };
 const presenze = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -49,6 +52,10 @@ presenze.post("/conferma", requireAuth, async (c) => {
 
   if (esistente?.confermata) return c.json({ ok: true });
 
+  // Snapshot prima della conferma, per rilevare level up / streak da pubblicare nel feed.
+  const primaAnelli = await calcolaAnelli(c.env.DB, c.var.user.userId);
+  const livelloPrima = calcolaLivello(primaAnelli.settimaneChiuseTotali);
+
   await c.env.DB.prepare(
     `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES (?, ?, ?, 1)
      ON CONFLICT (user_id, sessione_id, data) DO UPDATE SET confermata = 1`
@@ -58,6 +65,27 @@ presenze.post("/conferma", requireAuth, async (c) => {
 
   // +10 XP per sessione completata (brief, sezione 4) — assegnato una sola volta alla conferma.
   await awardXp(c.env.DB, c.var.user.userId, "sessione_completata", 10);
+
+  // Post automatici nel feed: Level Up e Consistency (brief, sezione 11).
+  const dopoAnelli = await calcolaAnelli(c.env.DB, c.var.user.userId);
+  const livelloDopo = calcolaLivello(dopoAnelli.settimaneChiuseTotali);
+
+  if (livelloDopo && (!livelloPrima || livelloDopo.attuale.numero > livelloPrima.attuale.numero)) {
+    await pubblicaPost(
+      c.env.DB,
+      c.var.user.userId,
+      "level_up",
+      `Livello ${livelloDopo.attuale.numero} — ${livelloDopo.attuale.nome}`
+    );
+  }
+  if (dopoAnelli.streakSettimane > primaAnelli.streakSettimane && dopoAnelli.streakSettimane % 4 === 0) {
+    await pubblicaPost(
+      c.env.DB,
+      c.var.user.userId,
+      "consistency",
+      `${dopoAnelli.streakSettimane} settimane di fila con tutti gli allenamenti completati`
+    );
+  }
 
   return c.json({ ok: true });
 });

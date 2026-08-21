@@ -239,4 +239,19 @@ for (const p of PROGRAMMA) {
   });
 }
 
+// Feed — qualche post demo (i post automatici veri scattano solo al momento della conferma
+// presenza, non retroattivamente: questi rappresentano cosa sarebbe successo nel tempo).
+out.push(
+  `INSERT INTO post_feed (user_id, tipo, testo) VALUES (NULL, 'annuncio_coach', 'Benvenuti nella nuova stagione 100FT! Vi aspetto in sala 💪');`
+);
+out.push(
+  `INSERT INTO post_feed (user_id, tipo, testo) VALUES ((SELECT id FROM users WHERE email = 'davide@100ft.app'), 'level_up', 'Livello 5 — Esperto');`
+);
+out.push(
+  `INSERT INTO post_feed (user_id, tipo, testo) VALUES ((SELECT id FROM users WHERE email = 'sara@100ft.app'), 'consistency', '36 settimane di fila con tutti gli allenamenti completati');`
+);
+out.push(
+  `INSERT INTO post_feed (user_id, tipo, testo) VALUES ((SELECT id FROM users WHERE email = 'luca@100ft.app'), 'level_up', 'Livello 4 — Avanzato');`
+);
+
 console.log(out.join("\n"));
