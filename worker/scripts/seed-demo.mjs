@@ -124,4 +124,119 @@ for (const a of ATLETI) {
   }
 }
 
+// Programma mensile — una stagione intera (brief, sezione 13: settembre -> luglio) nel
+// passato rispetto a oggi, così risulta tutta sbloccata e navigabile per la demo.
+const PROGRAMMA = [
+  {
+    mese: 9, anno: 2025, focusTema: "Definizione",
+    descrizione: "Si riparte con lavoro metabolico ad alta densità: circuiti a tempo, core stability, recuperi calibrati al caldo di fine estate. L'obiettivo del mese è ritrovare la condizione, non cercare i massimali.",
+    lineeGuidaNutrizionali: "Coerenti con un mese ad alta densità metabolica: idratazione costante, pasto post-allenamento entro 60 minuti con proteine e carboidrati, attenzione al sale nei giorni più caldi.",
+    merende: [
+      { titolo: "Yogurt greco + frutti di bosco", descrizione: "Pre-allenamento" },
+      { titolo: "Banana + burro di arachidi", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 10, anno: 2025, focusTema: "Forza",
+    descrizione: "Si alza il carico: schemi di forza su squat, hinge, push e pull, con più recupero tra le serie. Tecnica prima di tutto, la velocità viene dopo.",
+    lineeGuidaNutrizionali: "Più attenzione alle proteine nei pasti principali per sostenere il recupero; niente diete drastiche in un mese di carico.",
+    merende: [
+      { titolo: "Uovo sodo + frutta secca", descrizione: "Pre-allenamento" },
+      { titolo: "Skyr + miele", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 11, anno: 2025, focusTema: "Resistenza",
+    descrizione: "Circuiti più lunghi, meno pause, ritmo cardiovascolare sostenuto. Il mese giusto per costruire la base di fondo prima dell'inverno.",
+    lineeGuidaNutrizionali: "Carboidrati a lento rilascio nei pasti prima dell'allenamento, idratazione con elettroliti nelle sessioni più intense.",
+    merende: [
+      { titolo: "Avena + frutta fresca", descrizione: "Pre-allenamento" },
+      { titolo: "Smoothie proteico", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 12, anno: 2025, focusTema: "Mobilità",
+    descrizione: "Mese più leggero sul volume, più lavoro su mobilità articolare e controllo motorio. Utile per arrivare alle feste senza accumulare fatica.",
+    lineeGuidaNutrizionali: "Nessuna restrizione particolare per le feste — solo attenzione a non saltare i pasti principali nei giorni di allenamento.",
+    merende: [
+      { titolo: "Cioccolato fondente + mandorle", descrizione: "Pre-allenamento" },
+      { titolo: "Ricotta + pera", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 1, anno: 2026, focusTema: "Reset & Costanza",
+    descrizione: "Si riparte con gradualità dopo le feste: l'obiettivo non è strafare a gennaio, ma tornare a una routine costante e sostenibile.",
+    lineeGuidaNutrizionali: "Pasti regolari, niente diete lampo — l'idea è ricostruire l'abitudine, non compensare le feste in una settimana.",
+    merende: [
+      { titolo: "Yogurt + cereali integrali", descrizione: "Pre-allenamento" },
+      { titolo: "Toast integrale + tacchino", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 2, anno: 2026, focusTema: "Potenza",
+    descrizione: "Movimenti esplosivi e balistici (salti, lanci, sprint brevi) innestati sulla base di forza costruita a ottobre. Qualità sopra quantità.",
+    lineeGuidaNutrizionali: "Pasto pre-allenamento leggero e digeribile, per arrivare scarichi ma non a stomaco vuoto ai movimenti esplosivi.",
+    merende: [
+      { titolo: "Banana + caffè", descrizione: "Pre-allenamento" },
+      { titolo: "Frullato proteico + frutta", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 3, anno: 2026, focusTema: "Core & Stabilità",
+    descrizione: "Lavoro mirato su core, anti-rotazione e controllo del bacino — la base che rende più sicuri ed efficaci tutti gli altri movimenti.",
+    lineeGuidaNutrizionali: "Nessuna indicazione specifica questo mese: si torna alle linee guida generali di idratazione e pasto post-allenamento.",
+    merende: [
+      { titolo: "Hummus + verdure crude", descrizione: "Pre-allenamento" },
+      { titolo: "Yogurt greco + noci", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 4, anno: 2026, focusTema: "Cardio & Conditioning",
+    descrizione: "Intensità cardiovascolare al centro: intervalli, circuiti misti, recuperi attivi. Si comincia a preparare il fisico verso l'estate.",
+    lineeGuidaNutrizionali: "Idratazione ancora più centrale con l'aumento delle temperature primaverili; carboidrati coerenti col volume di lavoro.",
+    merende: [
+      { titolo: "Frutta fresca + fiocchi d'avena", descrizione: "Pre-allenamento" },
+      { titolo: "Bowl di quinoa + legumi", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 5, anno: 2026, focusTema: "Definizione Estiva",
+    descrizione: "Circuiti metabolici ad alta densità, simili a settembre ma con una base di forza e resistenza costruita nei mesi precedenti.",
+    lineeGuidaNutrizionali: "Attenzione alla qualità dei pasti più che alla quantità; niente restrizioni drastiche in vista dell'estate.",
+    merende: [
+      { titolo: "Anguria + menta", descrizione: "Pre-allenamento" },
+      { titolo: "Yogurt + frutti di bosco", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 6, anno: 2026, focusTema: "Performance",
+    descrizione: "Il mese in cui si mettono insieme forza, potenza e resistenza costruite durante l'anno. Test dei Personal Best del gruppo.",
+    lineeGuidaNutrizionali: "Pasti bilanciati e regolari nei giorni dei test; niente sperimentazioni nutrizionali last-minute.",
+    merende: [
+      { titolo: "Toast + marmellata", descrizione: "Pre-allenamento" },
+      { titolo: "Petto di pollo + riso", descrizione: "Post-allenamento" },
+    ],
+  },
+  {
+    mese: 7, anno: 2026, focusTema: "Mantenimento",
+    descrizione: "Ultimo mese prima della pausa estiva: volume più leggero, focus sul mantenere quanto costruito e chiudere la stagione senza infortuni.",
+    lineeGuidaNutrizionali: "Idratazione costante col caldo, pasti leggeri ma completi — si chiude la stagione, non ci si ferma di colpo.",
+    merende: [
+      { titolo: "Cocomero + lime", descrizione: "Pre-allenamento" },
+      { titolo: "Insalata di farro + legumi", descrizione: "Post-allenamento" },
+    ],
+  },
+];
+
+for (const p of PROGRAMMA) {
+  out.push(
+    `INSERT INTO programma_mensile (mese, anno, focus_tema, descrizione, linee_guida_nutrizionali) VALUES (${p.mese}, ${p.anno}, '${esc(p.focusTema)}', '${esc(p.descrizione)}', '${esc(p.lineeGuidaNutrizionali)}');`
+  );
+  p.merende.forEach((mf, i) => {
+    out.push(
+      `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine) VALUES ((SELECT id FROM programma_mensile WHERE mese = ${p.mese} AND anno = ${p.anno}), '${esc(mf.titolo)}', '${esc(mf.descrizione)}', ${i});`
+    );
+  });
+}
+
 console.log(out.join("\n"));
