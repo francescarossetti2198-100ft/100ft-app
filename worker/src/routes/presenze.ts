@@ -2,31 +2,17 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
+import { oggi, sessioneOggi } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const presenze = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Presenza è solo per il giorno stesso, niente prenotazioni future (brief, sezione 3).
-// Nota: giorno/data calcolati sull'ora del Worker (UTC), non sul fuso di Roma —
-// da rivedere se il disallineamento vicino a mezzanotte diventa un problema reale.
-function oggi(): { data: string; giornoSettimana: number } {
-  const now = new Date();
-  const data = now.toISOString().slice(0, 10);
-  const giornoSettimana = ((now.getUTCDay() + 6) % 7) + 1; // 1=lunedì ... 7=domenica
-  return { data, giornoSettimana };
-}
-
 presenze.get("/oggi", requireAuth, async (c) => {
-  const { data, giornoSettimana } = oggi();
-
-  const sessione = await c.env.DB.prepare(
-    `SELECT id, ora_inizio, ora_fine, tipo_sessione FROM sessioni_gruppo WHERE giorno_settimana = ?`
-  )
-    .bind(giornoSettimana)
-    .first<{ id: number; ora_inizio: string; ora_fine: string; tipo_sessione: string }>();
-
+  const sessione = await sessioneOggi(c.env.DB);
   if (!sessione) return c.json({ sessione: null, confermata: false, inSala: [] });
 
+  const { data } = oggi();
   const [mia, inSala] = await Promise.all([
     c.env.DB.prepare(`SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`)
       .bind(c.var.user.userId, sessione.id, data)
@@ -51,14 +37,10 @@ presenze.post("/conferma", requireAuth, async (c) => {
     return c.json({ error: "Solo gli atleti possono confermare la presenza" }, 403);
   }
 
-  const { data, giornoSettimana } = oggi();
-
-  const sessione = await c.env.DB.prepare(`SELECT id FROM sessioni_gruppo WHERE giorno_settimana = ?`)
-    .bind(giornoSettimana)
-    .first<{ id: number }>();
-
+  const sessione = await sessioneOggi(c.env.DB);
   if (!sessione) return c.json({ error: "Nessuna sessione oggi" }, 400);
 
+  const { data } = oggi();
   const esistente = await c.env.DB.prepare(
     `SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`
   )

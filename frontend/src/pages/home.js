@@ -1,7 +1,8 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 
-// TODO: nota del coach, richieste pre-allenamento (brief, sezione 7) — non ancora costruite.
+const CATEGORIE = ["Legs", "Mobility", "Upper Body", "Conditioning", "Other"];
+
 export function renderHome(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -10,15 +11,116 @@ export function renderHome(appEl) {
     <div class="card" id="progresso-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
+    <div class="card" id="nota-coach-card" style="margin-top:12px"></div>
     <div class="card" id="presenza-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
+    <div class="card" id="richieste-card" style="margin-top:12px"></div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
   loadPresenza(el);
   loadProgresso(el);
+  loadNotaCoach(el);
+  loadRichieste(el);
+}
+
+async function loadNotaCoach(el) {
+  const card = el.querySelector("#nota-coach-card");
+  try {
+    const { testo } = await api.get("/nota-coach");
+    if (!testo) {
+      card.remove();
+      return;
+    }
+    card.style.borderColor = "var(--accent)";
+    card.innerHTML = `
+      <p class="mono" style="color:var(--accent); font-size:12px">💧 Nota del coach · oggi</p>
+      <p style="margin-top:8px">${testo}</p>
+    `;
+  } catch {
+    card.remove();
+  }
+}
+
+async function loadRichieste(el) {
+  const card = el.querySelector("#richieste-card");
+  try {
+    const { sessione, aperte, inviata, conteggi } = await api.get("/richieste/oggi");
+
+    if (!sessione) {
+      card.remove();
+      return;
+    }
+
+    const conteggiHtml = Object.keys(conteggi).length
+      ? `<div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px">
+          ${Object.entries(conteggi)
+            .map(([cat, n]) => `<span class="mono" style="font-size:12px; color:var(--mute)">${cat} (${n})</span>`)
+            .join("")}
+        </div>`
+      : "";
+
+    if (inviata) {
+      card.innerHTML = `
+        <p class="mono" style="color:var(--mute); font-size:13px">Richieste per l'allenamento</p>
+        <p style="margin-top:8px">Richiesta inviata ✓</p>
+        ${conteggiHtml}
+      `;
+      return;
+    }
+
+    if (!aperte) {
+      card.innerHTML = `
+        <p class="mono" style="color:var(--mute); font-size:13px">Richieste per l'allenamento</p>
+        <p class="mono" style="color:var(--mute); margin-top:8px">Chiuse per oggi (aprono di nuovo domani).</p>
+        ${conteggiHtml}
+      `;
+      return;
+    }
+
+    card.innerHTML = `
+      <p class="mono" style="color:var(--mute); font-size:13px">Richieste per l'allenamento</p>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:2px">Aperte fino alle 13:00 di oggi</p>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px" id="categoria-scelte">
+        ${CATEGORIE.map((c) => `<button type="button" class="btn categoria-btn" data-cat="${c}" style="background:var(--surface-2); padding:6px 10px; font-size:12px">${c}</button>`).join("")}
+      </div>
+      <input id="richiesta-testo" type="text" placeholder="Oppure scrivi una richiesta libera"
+             style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text)" />
+      <p class="error-text" id="richiesta-error" hidden style="margin-top:6px"></p>
+      <button class="btn" id="richiesta-submit" style="width:100%; margin-top:10px">Invia richiesta</button>
+      ${conteggiHtml}
+    `;
+
+    let categoriaScelta = null;
+    const bottoni = card.querySelectorAll(".categoria-btn");
+    bottoni.forEach((b) => {
+      b.addEventListener("click", () => {
+        const giaAttivo = categoriaScelta === b.dataset.cat;
+        bottoni.forEach((x) => (x.style.background = "var(--surface-2)"));
+        categoriaScelta = giaAttivo ? null : b.dataset.cat;
+        if (!giaAttivo) b.style.background = "var(--accent)";
+      });
+    });
+
+    card.querySelector("#richiesta-submit").addEventListener("click", async (e) => {
+      const errorEl = card.querySelector("#richiesta-error");
+      const testoLibero = card.querySelector("#richiesta-testo").value;
+      errorEl.hidden = true;
+      e.target.disabled = true;
+      try {
+        await api.post("/richieste", { categoria: categoriaScelta, testoLibero });
+        loadRichieste(el);
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+        e.target.disabled = false;
+      }
+    });
+  } catch {
+    card.remove();
+  }
 }
 
 function anelliSvg({ allenamenti, sfide, streakSettimane }) {

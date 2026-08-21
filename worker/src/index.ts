@@ -6,6 +6,8 @@ import auth from "./routes/auth";
 import presenze from "./routes/presenze";
 import sfide from "./routes/sfide";
 import profilo from "./routes/profilo";
+import notaCoach from "./routes/nota-coach";
+import richieste from "./routes/richieste";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -20,12 +22,20 @@ app.use("*", async (c, next) => {
 
 app.use("*", attachUser);
 
+// Risposte API sempre dinamiche/autenticate: mai in cache lato browser.
+app.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store");
+});
+
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.route("/api/auth", auth);
 app.route("/api/presenze", presenze);
 app.route("/api/sfide", sfide);
 app.route("/api/profilo", profilo);
+app.route("/api/nota-coach", notaCoach);
+app.route("/api/richieste", richieste);
 
 // Esempio di rotta protetta — punto di partenza per atleti/programma/sfide/feed/pagamenti,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).
