@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
+import { awardXp } from "../lib/xp";
 
 type Variables = { user: SessionUser };
 const presenze = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -58,12 +59,23 @@ presenze.post("/conferma", requireAuth, async (c) => {
 
   if (!sessione) return c.json({ error: "Nessuna sessione oggi" }, 400);
 
+  const esistente = await c.env.DB.prepare(
+    `SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`
+  )
+    .bind(c.var.user.userId, sessione.id, data)
+    .first<{ confermata: number }>();
+
+  if (esistente?.confermata) return c.json({ ok: true });
+
   await c.env.DB.prepare(
     `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES (?, ?, ?, 1)
      ON CONFLICT (user_id, sessione_id, data) DO UPDATE SET confermata = 1`
   )
     .bind(c.var.user.userId, sessione.id, data)
     .run();
+
+  // +10 XP per sessione completata (brief, sezione 4) — assegnato una sola volta alla conferma.
+  await awardXp(c.env.DB, c.var.user.userId, "sessione_completata", 10);
 
   return c.json({ ok: true });
 });

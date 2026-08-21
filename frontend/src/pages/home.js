@@ -11,11 +11,39 @@ export function renderHome(appEl) {
     <div class="card" id="presenza-card">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
+    <div class="card" id="progresso-card" style="margin-top:12px"></div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
   loadPresenza(el);
+  loadProgresso(el);
+}
+
+// "Your Progress": card livello attuale + barra di progresso cumulativo (brief, sezione 7).
+async function loadProgresso(el) {
+  const card = el.querySelector("#progresso-card");
+  try {
+    const { livello } = await api.get("/profilo/me");
+    if (!livello) {
+      card.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun livello ancora.</p>`;
+      return;
+    }
+    const { attuale, prossimo, settimaneCompletate } = livello;
+    const progresso = prossimo
+      ? Math.round(((settimaneCompletate - (attuale.settimaneMin - 1)) / (prossimo.settimaneMin - attuale.settimaneMin)) * 100)
+      : 100;
+
+    card.innerHTML = `
+      <p class="mono" style="color:var(--mute); font-size:13px">Il tuo livello</p>
+      <p style="font-weight:600; color:${attuale.colore}; margin-top:4px">Livello ${attuale.numero} — ${attuale.nome}</p>
+      <div style="background:var(--surface-2); border-radius:6px; height:6px; margin-top:10px; overflow:hidden">
+        <div style="background:${attuale.colore}; width:${progresso}%; height:100%"></div>
+      </div>
+    `;
+  } catch {
+    card.remove();
+  }
 }
 
 async function loadPresenza(el) {
