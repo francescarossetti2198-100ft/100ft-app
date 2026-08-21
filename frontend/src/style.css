@@ -1,0 +1,160 @@
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1e1e1e;
+  --accent: #8b5cf6;
+  --text: #f5f5f5;
+  --mute: #8a8a8a;
+  --border: #2a2a2a;
+
+  /* Tag colore sessioni, coerenti con le schede PDF esistenti */
+  --sessione-a: #ff7a29; /* arancio */
+  --sessione-b: #8bc53f; /* verde */
+  --sessione-c: #4b3fa0; /* indaco */
+  --sessione-extra: #e83e8c; /* magenta */
+
+  /* Colori livelli (sezione 5 del brief) */
+  --livello-1: #8bc53f;
+  --livello-2: #2d7dd2;
+  --livello-3: #f4b740;
+  --livello-4: #ff7a29;
+  --livello-5: #e63946;
+  --livello-6: #a85cff;
+
+  --font-ui: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: inherit;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.screen {
+  flex: 1;
+  padding: 20px 16px 90px;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--mute);
+}
+
+.field input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.error-text {
+  color: var(--livello-5);
+  font-size: 13px;
+}
+
+.success-text {
+  color: var(--livello-1);
+  font-size: 13px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+nav.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+}
+
+nav.tabbar a {
+  text-decoration: none;
+  color: var(--mute);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+nav.tabbar a.active {
+  color: var(--accent);
+}

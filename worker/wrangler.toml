@@ -1,0 +1,27 @@
+name = "100ft-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Origine del frontend Pages, per CORS + cookie di sessione.
+# Aggiorna con l'URL reale del progetto Pages appena creato.
+[vars]
+FRONTEND_ORIGIN = "http://localhost:5173"
+
+# Database D1 — creare con: wrangler d1 create 100ft-db
+# poi incollare qui il database_id restituito.
+[[d1_databases]]
+binding = "DB"
+database_name = "100ft-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Bucket R2 per le foto della sfida "Ricordati di bere" — creare con: wrangler r2 bucket create 100ft-foto
+[[r2_buckets]]
+binding = "FOTO_SFIDE"
+bucket_name = "100ft-foto"
+
+# Secrets da impostare con `wrangler secret put <NOME>` (mai in questo file):
+#   SESSION_SECRET        - stringa casuale lunga, usata per firmare i cookie di sessione
+#   COACH_PASSWORD_HASH   - hash pbkdf2 della password del coach (vedi worker/src/lib/password.ts)
+#   RESEND_API_KEY        - chiave API resend.com per l'invio email di reset password

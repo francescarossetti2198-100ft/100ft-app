@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>100FT — App Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black: #0A0A0A;
+    --card: #141414;
+    --card-2: #1B1B1B;
+    --hairline: #2A2A2A;
+    --white: #F5F4F0;
+    --mute: #8C8A85;
+    --mute-2: #5C5A56;
+    --accent: #8B5CF6;
+    --accent-dim: #3B2A66;
+    --navy: #10192B;
+    --green: #4CAF7D;
+    --indigo: #6C6FC4;
+    --magenta: #D6558C;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:#000;
+    font-family:'Inter',sans-serif;
+    color:var(--white);
+    display:flex;
+    justify-content:center;
+    padding:40px 16px;
+    min-height:100vh;
+  }
+  .phone{
+    width:390px;
+    max-width:100%;
+    background:var(--black);
+    border-radius:36px;
+    border:8px solid #000;
+    box-shadow: 0 0 0 1px #1a1a1a, 0 40px 80px rgba(0,0,0,.6);
+    overflow:hidden;
+    position:relative;
+  }
+  .statusbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 24px 6px; font-family:'Space Mono',monospace; font-size:12px; color:var(--mute);
+  }
+  .screen{ min-height:740px; display:none; flex-direction:column; }
+  .screen.active{ display:flex; }
+
+  /* ---------- Eyebrow / labels ---------- */
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  .hairline{ border-top:1px solid var(--hairline); }
+
+  /* ---------- LOGIN ---------- */
+  .login{ padding:60px 28px 40px; justify-content:space-between; }
+  .login-top{}
+  .logo-mark{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:15px;
+    letter-spacing:.02em;
+    color:var(--white);
+    margin-bottom:60px;
+  }
+  .logo-mark span{ color:var(--accent); }
+  .login-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-style:italic;
+    font-size:40px;
+    line-height:1.0;
+    letter-spacing:-.01em;
+  }
+  .login-title .line2{ color:var(--accent); }
+  .login-sub{ color:var(--mute); font-size:13.5px; margin-top:16px; line-height:1.5; max-width:280px;}
+  .field{ margin-top:22px; }
+  .field label{
+    display:block; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--mute-2); margin-bottom:8px;
+  }
+  .field input{
+    width:100%; background:transparent; border:none; border-bottom:1px solid var(--hairline);
+    color:var(--white); font-size:16px; padding:8px 0; font-family:'Inter',sans-serif;
+  }
+  .field input:focus{ outline:none; border-bottom-color:var(--accent); }
+  .btn-primary{
+    margin-top:36px; width:100%; background:var(--accent); color:#fff; border:none;
+    padding:16px; font-family:'Space Grotesk',sans-serif; font-size:13px; letter-spacing:.08em;
+    text-transform:uppercase; cursor:pointer; border-radius:2px;
+  }
+  .btn-ghost{
+    margin-top:14px; width:100%; background:transparent; color:var(--mute); border:1px solid var(--hairline);
+    padding:14px; font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; cursor:pointer; border-radius:2px;
+  }
+
+  /* ---------- NAV ---------- */
+  .content{ flex:1; overflow-y:auto; padding:0 20px 100px; }
+  .tabbar{
+    position:absolute; bottom:0; left:0; right:0; background:rgba(10,10,10,.92);
+    backdrop-filter:blur(8px); border-top:1px solid var(--hairline);
+    display:flex; padding:12px 8px 20px;
+  }
+  .tab{
+    flex:1; text-align:center; font-family:'Space Mono',monospace; font-size:9.5px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--mute-2); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .tab.active{ color:var(--accent); }
+  .tab-dot{ width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.9; }
+
+  /* ---------- HOME ---------- */
+  .home-header{ padding:24px 20px 8px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .greet-eyebrow{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--mute); letter-spacing:.1em; text-transform:uppercase; }
+  .greet-name{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; margin-top:4px; }
+  .avatar{ width:40px; height:40px; border-radius:50%; background:var(--card-2); border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center; font-family:'Space Mono',monospace; font-size:13px; color:var(--mute);}
+
+  .rings-card{ margin:20px 0; background:var(--card); border:1px solid var(--hairline); padding:24px; border-radius:4px; }
+  .rings-row{ display:flex; align-items:center; gap:22px; }
+  .rings-svg{ flex-shrink:0; }
+  .rings-legend{ flex:1; display:flex; flex-direction:column; gap:10px; }
+  .legend-item{ display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px; }
+  .legend-label{ display:flex; align-items:center; gap:8px; color:var(--mute); }
+  .legend-swatch{ width:8px; height:8px; border-radius:50%; }
+  .legend-val{ font-family:'Space Mono',monospace; font-weight:700; color:var(--white); }
+
+  .section-head{ display:flex; justify-content:space-between; align-items:baseline; margin:28px 0 12px; }
+  .section-title{ font-family:'Space Grotesk',sans-serif; font-size:15px; text-transform:uppercase; letter-spacing:.01em;}
+  .section-more{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute-2); text-transform:uppercase; }
+
+  .focus-card{ background:var(--navy); border:1px solid #22304a; padding:20px; border-radius:4px; }
+  .focus-card .eyebrow{ color:#8FA3D6; }
+  .focus-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:24px; margin:8px 0 10px;}
+  .focus-text{ font-size:12.5px; color:#B8C2DB; line-height:1.6; }
+
+  .checkin-btn{
+    margin-top:16px; width:100%; background:transparent; border:1px solid var(--accent); color:var(--accent);
+    padding:14px; font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    border-radius:2px; display:flex; justify-content:space-between; align-items:center;
+  }
+
+  .row-list .row-item{
+    display:flex; justify-content:space-between; align-items:center; padding:14px 0;
+  }
+  .row-item + .row-item{ border-top:1px solid var(--hairline); }
+  .row-left{ display:flex; align-items:center; gap:12px; }
+  .row-time{ font-family:'Space Mono',monospace; font-size:11px; color:var(--mute-2); width:38px; }
+  .row-name{ font-size:13.5px; font-weight:600; }
+  .row-sub{ font-size:11px; color:var(--mute); margin-top:2px; }
+  .tag{ font-family:'Space Mono',monospace; font-size:9.5px; padding:3px 7px; border-radius:2px; text-transform:uppercase; letter-spacing:.04em; }
+  .tag-green{ background:rgba(76,175,125,.15); color:var(--green); }
+  .tag-indigo{ background:rgba(108,111,196,.15); color:var(--indigo); }
+  .tag-magenta{ background:rgba(214,85,140,.15); color:var(--magenta); }
+
+  /* ---------- PROGRAMMA ---------- */
+  .page-header{ padding:24px 20px 4px; }
+  .page-eyebrow{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--accent); letter-spacing:.1em; text-transform:uppercase; }
+  .page-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; margin-top:4px; }
+
+  .timeline{ display:flex; gap:6px; overflow-x:auto; padding:20px 0 24px; margin:0 -4px; }
+  .tl-month{
+    flex-shrink:0; width:64px; padding:10px 0; text-align:center; border:1px solid var(--hairline);
+    border-radius:2px; font-family:'Space Mono',monospace;
+  }
+  .tl-month.current{ border-color:var(--accent); background:rgba(139,92,246,.12); }
+  .tl-month.locked{ opacity:.4; }
+  .tl-month.locked .tl-m{ color:var(--mute-2); }
+  .tl-m{ font-size:10px; text-transform:uppercase; color:var(--mute); }
+  .tl-month.current .tl-m{ color:var(--accent); }
+  .tl-dot{ width:6px; height:6px; border-radius:50%; background:var(--hairline); margin:8px auto 0; }
+  .tl-month.current .tl-dot{ background:var(--accent); }
+
+  .month-card{ background:var(--card); border:1px solid var(--hairline); padding:22px; border-radius:4px; }
+  .month-card .eyebrow{ color:var(--accent); }
+  .month-focus{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; margin:10px 0 14px; line-height:1.05;}
+  .month-desc{ font-size:13px; color:#C9C7C2; line-height:1.65; }
+  .nutri-box{ margin-top:18px; padding-top:16px; border-top:1px solid var(--hairline); }
+  .nutri-box .eyebrow{ color:var(--mute-2); }
+  .nutri-text{ font-size:12px; color:var(--mute); line-height:1.6; margin-top:8px; }
+  .disclaimer{ font-size:10.5px; color:var(--mute-2); margin-top:10px; font-style:italic; }
+  .snack-box{ margin-top:16px; }
+  .snack-row{ display:flex; gap:10px; margin-top:8px; }
+  .snack-item{ flex:1; background:rgba(255,255,255,.03); border:1px solid var(--hairline); border-radius:4px; padding:10px 12px; }
+  .snack-name{ font-size:12px; font-weight:600; color:var(--white); }
+  .snack-detail{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute); margin-top:3px; }
+
+  /* ---------- SFIDE ---------- */
+  .sfida-card{ border:1px solid var(--hairline); border-radius:4px; overflow:hidden; margin-bottom:14px; background:var(--card); }
+  .sfida-photo{ height:150px; background:linear-gradient(135deg,#1b1b1b,#0d0d0d); display:flex; align-items:center; justify-content:center; color:var(--mute-2); font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; position:relative;}
+  .sfida-points{ position:absolute; top:10px; right:10px; background:var(--accent); color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:11px; padding:4px 8px; border-radius:2px;}
+  .sfida-body{ padding:14px 16px 16px; }
+  .sfida-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:17px; margin:4px 0 6px;}
+  .sfida-desc{ font-size:12px; color:var(--mute); line-height:1.5; }
+  .sfida-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .sfida-count{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--mute-2);}
+  .join-btn{ background:transparent; border:1px solid var(--accent); color:var(--accent); font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:8px 14px; border-radius:2px; }
+
+  .leaderboard{ background:var(--card); border:1px solid var(--hairline); border-radius:4px; padding:6px 16px; margin-bottom:24px; }
+  .lb-row{ display:flex; align-items:center; gap:12px; padding:12px 0; }
+  .lb-row + .lb-row{ border-top:1px solid var(--hairline); }
+  .lb-rank{ font-family:'Space Mono',monospace; font-size:12px; color:var(--mute-2); width:16px; }
+  .lb-rank.top{ color:var(--accent); }
+  .lb-av{ width:30px; height:30px; border-radius:50%; background:var(--card-2); border:1px solid var(--hairline); }
+  .lb-name{ flex:1; font-size:13px; font-weight:600; }
+  .lb-pts{ font-family:'Space Mono',monospace; font-size:12px; color:var(--white); }
+
+  .card-carousel{ display:flex; gap:12px; overflow-x:auto; padding:4px 0 10px; margin:0 -4px; }
+  .card-item{ flex-shrink:0; width:108px; position:relative; }
+  .card-item img{ width:108px; height:122px; border-radius:8px; display:block; }
+  .card-item.locked img{ opacity:.35; filter:grayscale(.4); }
+  .card-item.current img{ box-shadow:0 0 0 2px var(--accent), 0 0 18px rgba(139,92,246,.5); }
+  .card-req{ font-family:'Space Mono',monospace; font-size:9.5px; color:var(--mute-2); text-align:center; margin-top:6px; }
+  .card-item.current .card-req{ color:var(--accent); }
+
+  /* ---------- PROFILO ---------- */
+  .profile-hero{ padding:32px 20px 20px; text-align:center; }
+  .profile-avatar{ width:84px; height:84px; border-radius:50%; background:var(--card-2); border:1px solid var(--hairline);
+    margin:0 auto 14px; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:26px; color:var(--mute); }
+  .profile-nick{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:23px; }
+  .profile-since{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--mute-2); margin-top:4px; text-transform:uppercase; letter-spacing:.06em;}
+
+  .stat-row{ display:flex; border-top:1px solid var(--hairline); border-bottom:1px solid var(--hairline); margin:20px 0 26px; }
+  .stat{ flex:1; text-align:center; padding:16px 0; }
+  .stat + .stat{ border-left:1px solid var(--hairline); }
+  .stat-num{ font-family:'Space Mono',monospace; font-size:20px; font-weight:700; color:var(--accent); }
+  .stat-lab{ font-size:9.5px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+
+  .privacy-block{ display:flex; align-items:center; justify-content:space-between; margin:24px 0 10px; }
+  .lock-note{ font-family:'Space Mono',monospace; font-size:9.5px; color:var(--mute-2); text-transform:uppercase; letter-spacing:.05em; display:flex; align-items:center; gap:6px; }
+
+  .field-view{ padding:12px 0; border-top:1px solid var(--hairline); }
+  .field-view:last-child{ border-bottom:1px solid var(--hairline); }
+  .fv-label{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute-2); text-transform:uppercase; letter-spacing:.05em; }
+  .fv-val{ font-size:13.5px; margin-top:4px; }
+
+  .pay-badge{ display:inline-flex; align-items:center; gap:6px; background:rgba(76,175,125,.12); color:var(--green);
+    font-family:'Space Mono',monospace; font-size:10.5px; padding:6px 10px; border-radius:2px; text-transform:uppercase; letter-spacing:.05em; margin-top:6px;}
+
+  /* ---------- FEED ---------- */
+  .feed-post{ border-bottom:1px solid var(--hairline); padding:18px 0; }
+  .feed-post:first-child{ padding-top:0; }
+  .feed-head{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .feed-av{ width:34px; height:34px; border-radius:50%; background:var(--card-2); border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; color:var(--mute); flex-shrink:0; }
+  .feed-who{ flex:1; }
+  .feed-name{ font-size:13px; font-weight:600; }
+  .feed-action{ font-size:11.5px; color:var(--mute); margin-top:1px; }
+  .feed-time{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute-2); }
+  .feed-photo{ width:100%; height:220px; border-radius:3px; background:linear-gradient(135deg,#1b1b1b,#0d0d0d);
+    display:flex; align-items:center; justify-content:center; color:var(--mute-2); font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px; position:relative; overflow:hidden; }
+  .feed-pts{ position:absolute; top:10px; right:10px; background:var(--accent); color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:11px; padding:4px 8px; border-radius:2px;}
+  .feed-caption{ font-size:12.5px; color:#C9C7C2; line-height:1.5; margin-bottom:10px; }
+  .feed-caption b{ color:var(--white); font-weight:600; }
+  .feed-foot{ display:flex; align-items:center; gap:16px; }
+  .feed-reaction{ display:flex; align-items:center; gap:5px; font-family:'Space Mono',monospace; font-size:11px; color:var(--mute); }
+  .feed-reaction.active{ color:var(--accent); }
+  .feed-filter{ display:flex; gap:8px; padding:16px 0 4px; overflow-x:auto; }
+  .filter-chip{ flex-shrink:0; font-family:'Space Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+    padding:7px 14px; border:1px solid var(--hairline); border-radius:20px; color:var(--mute); }
+  .filter-chip.active{ border-color:var(--accent); color:var(--accent); background:rgba(139,92,246,.1); }
+  .feed-checkin{ display:flex; align-items:center; gap:6px; }
+  .feed-checkin .feed-caption{ margin:0; }
+
+  .coach-note{ background:rgba(139,92,246,.08); border:1px solid rgba(139,92,246,.35); border-radius:4px; padding:16px 18px; margin:20px 0; display:flex; gap:12px; align-items:flex-start; }
+  .coach-note-icon{ font-size:20px; flex-shrink:0; line-height:1; margin-top:2px; }
+  .coach-note-label{ font-family:'Space Mono',monospace; font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+  .coach-note-text{ font-size:13px; color:#E8E6E0; line-height:1.5; }
+
+  .booking-row{ display:flex; justify-content:space-between; align-items:center; padding:14px 0; }
+  .booking-row + .booking-row{ border-top:1px solid var(--hairline); }
+  .booking-info{ display:flex; flex-direction:column; gap:3px; }
+  .booking-day{ font-size:13.5px; font-weight:600; }
+  .booking-meta{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--mute); display:flex; align-items:center; gap:8px; }
+  .booking-btn{ font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; padding:8px 14px; border-radius:2px; border:1px solid var(--accent); color:var(--accent); background:transparent; flex-shrink:0; }
+  .booking-btn.booked{ background:var(--accent); color:#fff; }
+  .booking-btn.full{ border-color:var(--hairline); color:var(--mute-2); }
+
+  .level-badge{ display:flex; align-items:center; gap:16px; margin-top:18px; padding-top:18px; border-top:1px solid var(--hairline); }
+  .level-card-thumb{ width:70px; height:79px; border-radius:6px; flex-shrink:0; object-fit:cover; }
+  .level-info{ flex:1; }
+  .level-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; }
+  .level-sub{ font-size:11px; color:var(--mute); margin-top:2px; line-height:1.4; }
+  .level-progress{ display:flex; gap:4px; margin-top:8px; }
+  .level-week{ flex:1; height:4px; border-radius:2px; background:var(--hairline); }
+  .level-week.done{ background:var(--accent); }
+
+  .request-item{ display:flex; align-items:flex-start; gap:10px; padding:12px 0; }
+  .request-item + .request-item{ border-top:1px solid var(--hairline); }
+  .request-av{ width:28px; height:28px; border-radius:50%; background:var(--card-2); border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:11px; color:var(--mute); flex-shrink:0; }
+  .request-text{ font-size:12.5px; line-height:1.4; }
+  .request-text b{ font-weight:600; color:var(--white); }
+  .request-deadline{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
+  .deadline-tag{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute-2); text-transform:uppercase; letter-spacing:.05em; }
+  .request-btn{ font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; padding:8px 14px; border-radius:2px; border:1px solid var(--accent); color:var(--accent); background:transparent; }
+
+  .ladder{ border:1px solid var(--hairline); border-radius:4px; overflow:hidden; margin:24px 0; }
+  .ladder-row{ display:flex; align-items:center; gap:12px; padding:13px 16px; }
+  .ladder-row + .ladder-row{ border-top:1px solid var(--hairline); }
+  .ladder-row.current{ background:rgba(139,92,246,.1); }
+  .ladder-icon{ font-size:20px; width:26px; text-align:center; flex-shrink:0; }
+  .ladder-row.locked .ladder-icon{ opacity:.7; }
+  .ladder-name{ flex:1; font-size:13px; font-weight:600; }
+  .ladder-row.locked .ladder-name{ color:var(--mute-2); font-weight:500; }
+  .ladder-req{ font-family:'Space Mono',monospace; font-size:10.5px; color:var(--mute); }
+  .ladder-row.current .ladder-req{ color:var(--accent); }
+  .ladder-check{ font-family:'Space Mono',monospace; font-size:11px; color:var(--green); width:16px; text-align:center; }
+
+  /* ---------- BEREAL-STYLE CAPTURE ---------- */
+  .notif-demo-btn{ width:100%; margin-top:20px; background:transparent; border:1px dashed var(--hairline); color:var(--mute); padding:14px; font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; border-radius:4px; }
+
+  .push-banner{ position:absolute; top:54px; left:12px; right:12px; background:rgba(20,20,20,.92); backdrop-filter:blur(12px); border:1px solid var(--hairline); border-radius:14px; padding:12px 14px; display:flex; gap:10px; align-items:flex-start; z-index:20; }
+  .push-icon{ width:34px; height:34px; border-radius:8px; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .push-title{ font-size:12.5px; font-weight:700; }
+  .push-text{ font-size:11.5px; color:var(--mute); margin-top:2px; line-height:1.4; }
+  .push-time{ font-family:'Space Mono',monospace; font-size:9px; color:var(--mute-2); margin-left:auto; flex-shrink:0; }
+
+  .bereal-screen{ background:#000; position:relative; height:100%; display:flex; flex-direction:column; }
+  .bereal-top{ display:flex; flex-direction:column; align-items:center; padding:20px 0 12px; }
+  .bereal-timer{ font-family:'Space Mono',monospace; font-size:26px; font-weight:700; color:#fff; letter-spacing:.05em; }
+  .bereal-sub{ font-family:'Space Mono',monospace; font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:.08em; margin-top:4px; }
+  .bereal-cam{ flex:1; position:relative; margin:0 14px; border-radius:20px; overflow:hidden; background:linear-gradient(135deg,#1a1a1a,#0a0a0a); display:flex; align-items:center; justify-content:center; }
+  .bereal-cam-label{ font-family:'Space Mono',monospace; font-size:10px; color:var(--mute-2); letter-spacing:.08em; text-transform:uppercase; }
+  .bereal-inset{ position:absolute; top:16px; left:16px; width:92px; height:122px; border-radius:14px; border:2.5px solid #fff; background:linear-gradient(135deg,#2a2a2a,#111); display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(0,0,0,.5); }
+  .bereal-inset-label{ font-family:'Space Mono',monospace; font-size:8px; color:var(--mute-2); text-transform:uppercase; }
+  .bereal-bottom{ display:flex; align-items:center; justify-content:center; gap:40px; padding:22px 0 30px; }
+  .bereal-shutter{ width:70px; height:70px; border-radius:50%; border:4px solid #fff; background:transparent; }
+  .bereal-side-btn{ width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.1); border:none; color:#fff; font-size:16px; }
+  .bereal-caption{ text-align:center; color:var(--mute); font-size:11px; padding:0 30px; margin-top:6px;}
+
+  ::-webkit-scrollbar{ display:none; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+  <!-- ============ LOGIN ============ -->
+  <div class="screen active" id="screen-login">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="login">
+      <div class="login-top">
+        <img src="logo-100ft-white.png" alt="100FT Functional Training" style="width:150px; margin-bottom:56px; display:block;">
+        <div style="display:none">100</div>
+        <div class="login-title">Bentornato<br><span class="line2">in palestra</span></div>
+        <p class="login-sub">Accedi con la tua email per vedere il programma, prenotare e tracciare i progressi.</p>
+
+        <div class="field">
+          <label>Email</label>
+          <input type="text" placeholder="marco.rossi@email.com">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" placeholder="••••••••••">
+        </div>
+      </div>
+      <div>
+        <button class="btn-primary" onclick="showScreen('home')">Accedi</button>
+        <button class="btn-ghost">Non hai un account? Registrati</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="screen" id="screen-home">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content">
+      <div style="padding:20px 20px 0;"><img src="logo-100ft-violet.png" alt="100FT" style="height:22px;"></div>
+      <div class="home-header">
+        <div>
+          <div class="greet-eyebrow">Bentornato</div>
+          <div class="greet-name">Marco</div>
+        </div>
+        <div class="avatar">M</div>
+      </div>
+
+      <div class="rings-card">
+        <div class="eyebrow">Questa settimana</div>
+        <div class="rings-row">
+          <svg class="rings-svg" width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="40" stroke="#2A2A2A" stroke-width="7" fill="none"/>
+            <circle cx="46" cy="46" r="40" stroke="#8B5CF6" stroke-width="7" fill="none" stroke-linecap="round"
+              stroke-dasharray="251.2" stroke-dashoffset="0" transform="rotate(-90 46 46)"/>
+            <circle cx="46" cy="46" r="30" stroke="#2A2A2A" stroke-width="7" fill="none"/>
+            <circle cx="46" cy="46" r="30" stroke="#D6558C" stroke-width="7" fill="none" stroke-linecap="round"
+              stroke-dasharray="188.4" stroke-dashoffset="66" transform="rotate(-90 46 46)"/>
+            <circle cx="46" cy="46" r="20" stroke="#2A2A2A" stroke-width="7" fill="none"/>
+            <circle cx="46" cy="46" r="20" stroke="#4CAF7D" stroke-width="7" fill="none" stroke-linecap="round"
+              stroke-dasharray="125.6" stroke-dashoffset="31" transform="rotate(-90 46 46)"/>
+          </svg>
+          <div class="rings-legend">
+            <div class="legend-item">
+              <span class="legend-label"><span class="legend-swatch" style="background:#8B5CF6"></span>Allenamenti</span>
+              <span class="legend-val">3/3</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-label"><span class="legend-swatch" style="background:#D6558C"></span>Sfide</span>
+              <span class="legend-val">2/3</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-label"><span class="legend-swatch" style="background:#4CAF7D"></span>Streak</span>
+              <span class="legend-val">5 sett.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="level-badge">
+          <img class="level-card-thumb" src="card_final_2.png">
+          <div class="level-info">
+            <div class="level-title">Livello 2 — Inizio</div>
+            <div class="level-sub">6 settimane totali con tutti gli anelli chiusi. Ancora 3 per salire a Intermedio.</div>
+            <div class="level-progress">
+              <div class="level-week done"></div>
+              <div class="level-week done"></div>
+              <div class="level-week done"></div>
+              <div class="level-week done"></div>
+              <div class="level-week done"></div>
+              <div class="level-week done"></div>
+              <div class="level-week"></div>
+              <div class="level-week"></div>
+              <div class="level-week"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coach-note">
+        <div class="coach-note-icon">💧</div>
+        <div>
+          <div class="coach-note-label">Nota del coach · Oggi</div>
+          <div class="coach-note-text">Circuito lungo oggi — portate una bottiglia d'acqua in più. E le ginocchia alte, please 😄</div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div class="section-title">Presenza di oggi</div>
+        <div class="section-more">Lun 24 · 19:30 · Gruppo A</div>
+      </div>
+      <div class="row-list">
+        <div class="booking-row">
+          <div class="booking-info">
+            <div class="booking-day">Sessione delle 19:30</div>
+            <div class="booking-meta"><span class="tag tag-green" style="padding:2px 6px;">A</span><span>9/12 presenti</span></div>
+          </div>
+          <button class="booking-btn booked">Presente ✓</button>
+        </div>
+      </div>
+      <div class="disclaimer" style="margin-top:8px;">Puoi confermare la presenza solo per la sessione di oggi.</div>
+
+      <div class="section-head">
+        <div class="section-title">Richieste per l'allenamento</div>
+      </div>
+      <div class="row-list">
+        <div class="request-item">
+          <div class="request-av">C</div>
+          <div class="request-text"><b>Chiara</b> — mi piacerebbe allungare di più i quadricipiti oggi</div>
+        </div>
+        <div class="request-item">
+          <div class="request-av">L</div>
+          <div class="request-text"><b>Luca</b> — un po' di mobilità cervicale se possibile 🙏</div>
+        </div>
+        <div class="request-item">
+          <div class="request-av">V</div>
+          <div class="request-text"><b>Valentina</b> — meno salti oggi, ginocchio un po' affaticato</div>
+        </div>
+      </div>
+      <div class="request-deadline">
+        <span class="deadline-tag">Aperte fino alle 13:00 di oggi</span>
+        <button class="request-btn">+ Richiesta</button>
+      </div>
+
+      <div class="section-head">
+        <div class="section-title">In sala oggi</div>
+        <div class="section-more">19:30 · Gruppo A · 9/12</div>
+      </div>
+      <div class="row-list">
+        <div class="row-item">
+          <div class="row-left">
+            <span class="row-time">18:02</span>
+            <div><div class="row-name">Chiara I.</div><div class="row-sub">Check-in confermato</div></div>
+          </div>
+          <span class="tag tag-green">Presente</span>
+        </div>
+        <div class="row-item">
+          <div class="row-left">
+            <span class="row-time">17:58</span>
+            <div><div class="row-name">Valentina T.</div><div class="row-sub">Check-in confermato</div></div>
+          </div>
+          <span class="tag tag-green">Presente</span>
+        </div>
+        <div class="row-item">
+          <div class="row-left">
+            <span class="row-time">—</span>
+            <div><div class="row-name">Luca B.</div><div class="row-sub">In attesa</div></div>
+          </div>
+          <span class="tag tag-indigo">Prenotato</span>
+        </div>
+      </div>
+
+      <button class="notif-demo-btn" onclick="showScreen('bereal-notif')">▶ Demo: notifica "ricordati di bere"</button>
+    </div>
+    <div class="tabbar">
+      <div class="tab active" onclick="showScreen('home')"><span class="tab-dot"></span>Home</div>
+      <div class="tab" onclick="showScreen('programma')"><span class="tab-dot"></span>Programma</div>
+      <div class="tab" onclick="showScreen('sfide')"><span class="tab-dot"></span>Sfide</div>
+      <div class="tab" onclick="showScreen('feed')"><span class="tab-dot"></span>Feed</div>
+      <div class="tab" onclick="showScreen('profilo')"><span class="tab-dot"></span>Profilo</div>
+    </div>
+  </div>
+
+  <!-- ============ PROGRAMMA ============ -->
+  <div class="screen" id="screen-programma">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content">
+      <div class="page-header" style="padding-left:0; padding-right:0;">
+        <div class="page-eyebrow">Settembre → Luglio</div>
+        <div class="page-title">Programma</div>
+      </div>
+
+      <div class="timeline">
+        <div class="tl-month current"><div class="tl-m">Set</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+        <div class="tl-month locked"><div class="tl-m">🔒</div><div class="tl-dot"></div></div>
+      </div>
+      <div class="disclaimer" style="margin-top:-16px; margin-bottom:16px;">I mesi futuri si sbloccano quando arrivano — niente spoiler sul programma 😉</div>
+
+      <div class="month-card">
+        <div class="eyebrow">Settembre · Mese 01 di 11</div>
+        <div class="month-focus">Definizione</div>
+        <div class="month-desc">Si riparte con lavoro metabolico ad alta densità: circuiti a tempo, core stability, recuperi calibrati al caldo di fine estate. L'obiettivo del mese è ritrovare la condizione, non cercare i massimali.</div>
+        <div class="nutri-box">
+          <div class="eyebrow">Linee guida nutrizionali generali</div>
+          <div class="nutri-text">Coerenti con un mese ad alta densità metabolica: idratazione costante, pasto post-allenamento entro 60 minuti con proteine e carboidrati, attenzione al sale nei giorni più caldi.</div>
+
+          <div class="snack-box">
+            <div class="eyebrow">Merende fit del mese</div>
+            <div class="snack-row">
+              <div class="snack-item">
+                <div class="snack-name">Yogurt greco + frutti di bosco</div>
+                <div class="snack-detail">Pre-allenamento</div>
+              </div>
+              <div class="snack-item">
+                <div class="snack-name">Banana + burro di arachidi</div>
+                <div class="snack-detail">Post-allenamento</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="disclaimer">Indicazioni generali del coach, non una dieta personalizzata. Per esigenze specifiche, consulta un nutrizionista.</div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab" onclick="showScreen('home')"><span class="tab-dot"></span>Home</div>
+      <div class="tab active" onclick="showScreen('programma')"><span class="tab-dot"></span>Programma</div>
+      <div class="tab" onclick="showScreen('sfide')"><span class="tab-dot"></span>Sfide</div>
+      <div class="tab" onclick="showScreen('feed')"><span class="tab-dot"></span>Feed</div>
+      <div class="tab" onclick="showScreen('profilo')"><span class="tab-dot"></span>Profilo</div>
+    </div>
+  </div>
+
+  <!-- ============ SFIDE ============ -->
+  <div class="screen" id="screen-sfide">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content">
+      <div class="page-header" style="padding-left:0; padding-right:0;">
+        <div class="page-eyebrow">Settembre</div>
+        <div class="page-title">Sfide</div>
+      </div>
+
+      <div class="section-head" style="margin-top:20px;">
+        <div class="section-title">Classifica del mese</div>
+        <div class="section-more">Vedi tutti</div>
+      </div>
+      <div class="leaderboard">
+        <div class="lb-row">
+          <span class="lb-rank top">01</span><div class="lb-av"></div>
+          <span class="lb-name">Valentina T.</span><span class="lb-pts">340 PT</span>
+        </div>
+        <div class="lb-row">
+          <span class="lb-rank top">02</span><div class="lb-av"></div>
+          <span class="lb-name">Chiara I.</span><span class="lb-pts">310 PT</span>
+        </div>
+        <div class="lb-row">
+          <span class="lb-rank">03</span><div class="lb-av"></div>
+          <span class="lb-name">Marco (tu)</span><span class="lb-pts">265 PT</span>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div class="section-title">Attive ora</div>
+      </div>
+
+      <div class="sfida-card">
+        <div class="sfida-photo">FEED FOTO ATLETI<div class="sfida-points">+15 PT</div></div>
+        <div class="sfida-body">
+          <div class="eyebrow">Sfida settimanale</div>
+          <div class="sfida-title">3/3 allenamenti</div>
+          <div class="sfida-desc">Completa tutte e tre le sessioni della settimana per sbloccare i punti bonus.</div>
+          <div class="sfida-foot">
+            <span class="sfida-count">18 partecipanti</span>
+            <button class="join-btn">2/3 fatti</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sfida-card">
+        <div class="sfida-photo">FEED FOTO ATLETI<div class="sfida-points">+10 PT</div></div>
+        <div class="sfida-body">
+          <div class="eyebrow">Sfida flash</div>
+          <div class="sfida-title">Ricordati di bere</div>
+          <div class="sfida-desc">Quando arriva la notifica, scatta una foto del bicchiere d'acqua entro 10 minuti.</div>
+          <div class="sfida-foot">
+            <span class="sfida-count">24 partecipanti</span>
+            <button class="join-btn">Partecipa</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sfida-card">
+        <div class="sfida-photo">FEED FOTO ATLETI<div class="sfida-points">+5 PT</div></div>
+        <div class="sfida-body">
+          <div class="eyebrow">Sfida carina</div>
+          <div class="sfida-title">Calzino spaiato</div>
+          <div class="sfida-desc">Vieni ad allenarti con due calzini diversi. Foto in sala per validare.</div>
+          <div class="sfida-foot">
+            <span class="sfida-count">9 partecipanti</span>
+            <button class="join-btn">Partecipa</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab" onclick="showScreen('home')"><span class="tab-dot"></span>Home</div>
+      <div class="tab" onclick="showScreen('programma')"><span class="tab-dot"></span>Programma</div>
+      <div class="tab active" onclick="showScreen('sfide')"><span class="tab-dot"></span>Sfide</div>
+      <div class="tab" onclick="showScreen('feed')"><span class="tab-dot"></span>Feed</div>
+      <div class="tab" onclick="showScreen('profilo')"><span class="tab-dot"></span>Profilo</div>
+    </div>
+  </div>
+
+  <!-- ============ FEED ============ -->
+  <div class="screen" id="screen-feed">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content">
+      <div class="page-header" style="padding-left:0; padding-right:0;">
+        <div class="page-eyebrow">Gruppo · 24 atleti</div>
+        <div class="page-title">Feed</div>
+      </div>
+
+      <div class="feed-filter">
+        <div class="filter-chip active">Tutti</div>
+        <div class="filter-chip">Sfide</div>
+        <div class="filter-chip">Presenze</div>
+        <div class="filter-chip">Traguardi</div>
+      </div>
+
+      <div style="margin-top:6px;">
+
+        <div class="feed-post">
+          <div class="feed-head">
+            <div class="feed-av">V</div>
+            <div class="feed-who">
+              <div class="feed-name">Valentina T.</div>
+              <div class="feed-action">ha completato la sfida <b style="color:var(--white)">Ricordati di bere</b></div>
+            </div>
+            <div class="feed-time">14 min</div>
+          </div>
+          <div class="feed-photo">FOTO · BICCHIERE D'ACQUA<div class="feed-pts">+10 PT</div></div>
+          <div class="feed-foot">
+            <div class="feed-reaction active">🔥 12</div>
+            <div class="feed-reaction">💬 3</div>
+          </div>
+        </div>
+
+        <div class="feed-post">
+          <div class="feed-head">
+            <div class="feed-av">L</div>
+            <div class="feed-who">
+              <div class="feed-name">Luca B.</div>
+              <div class="feed-action">check-in alla sessione delle 19:30</div>
+            </div>
+            <div class="feed-time">1 h</div>
+          </div>
+          <div class="feed-caption">Presente <b>27</b> volte questo mese — nuovo record personale.</div>
+          <div class="feed-foot">
+            <div class="feed-reaction active">💪 8</div>
+            <div class="feed-reaction">💬 1</div>
+          </div>
+        </div>
+
+        <div class="feed-post">
+          <div class="feed-head">
+            <div class="feed-av">C</div>
+            <div class="feed-who">
+              <div class="feed-name">Chiara I.</div>
+              <div class="feed-action">sfida carina <b style="color:var(--white)">Calzino spaiato</b></div>
+            </div>
+            <div class="feed-time">3 h</div>
+          </div>
+          <div class="feed-photo">FOTO · CALZINI SPAIATI<div class="feed-pts">+5 PT</div></div>
+          <div class="feed-caption">"Oggi mix rosso e verde, tanto nessuno se ne accorge sotto ai leggings 😄"</div>
+          <div class="feed-foot">
+            <div class="feed-reaction active">😂 19</div>
+            <div class="feed-reaction">💬 6</div>
+          </div>
+        </div>
+
+        <div class="feed-post">
+          <div class="feed-head">
+            <div class="feed-av">M</div>
+            <div class="feed-who">
+              <div class="feed-name">Marco (tu)</div>
+              <div class="feed-action">ha raggiunto un traguardo</div>
+            </div>
+            <div class="feed-time">Ieri</div>
+          </div>
+          <div class="feed-caption"><b>5 settimane di streak</b> — 3/3 allenamenti ogni settimana da agosto.</div>
+          <div class="feed-foot">
+            <div class="feed-reaction">🔥 24</div>
+            <div class="feed-reaction">💬 4</div>
+          </div>
+        </div>
+
+        <div class="feed-post" style="border-bottom:none;">
+          <div class="feed-head">
+            <div class="feed-av">F</div>
+            <div class="feed-who">
+              <div class="feed-name">Coach Francesca</div>
+              <div class="feed-action">ha pubblicato il focus di Settembre</div>
+            </div>
+            <div class="feed-time">2 giorni</div>
+          </div>
+          <div class="feed-caption">Si parte con <b>Definizione</b> — circuiti a tempo e core stability. Dettagli nella scheda Programma.</div>
+          <div class="feed-foot">
+            <div class="feed-reaction active">👍 22</div>
+            <div class="feed-reaction">💬 7</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab" onclick="showScreen('home')"><span class="tab-dot"></span>Home</div>
+      <div class="tab" onclick="showScreen('programma')"><span class="tab-dot"></span>Programma</div>
+      <div class="tab" onclick="showScreen('sfide')"><span class="tab-dot"></span>Sfide</div>
+      <div class="tab active" onclick="showScreen('feed')"><span class="tab-dot"></span>Feed</div>
+      <div class="tab" onclick="showScreen('profilo')"><span class="tab-dot"></span>Profilo</div>
+    </div>
+  </div>
+
+  <!-- ============ PROFILO ============ -->
+  <div class="screen" id="screen-profilo">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content">
+      <div class="profile-hero">
+        <div class="profile-avatar">M</div>
+        <div class="profile-nick">Marco "Er Cinghiale"</div>
+        <div class="profile-since">Nel gruppo dal set. 2025</div>
+        <div style="display:inline-flex; align-items:center; gap:6px; margin-top:12px; background:var(--card); border:1px solid var(--hairline); padding:6px 14px; border-radius:20px;">
+          <span style="font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.04em; color:var(--mute);">🔹 Livello 2 — Inizio</span>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat"><div class="stat-num">47</div><div class="stat-lab">Presenze tot.</div></div>
+        <div class="stat"><div class="stat-num">5</div><div class="stat-lab">Streak sett.</div></div>
+        <div class="stat"><div class="stat-num">265</div><div class="stat-lab">Punti sfide</div></div>
+      </div>
+
+      <div class="section-title" style="margin-bottom:6px;">Scala livelli · Set–Lug</div>
+      <div class="card-carousel">
+        <div class="card-item">
+          <img src="card_final_1.png">
+          <div class="card-req">1–3 sett. ✓</div>
+        </div>
+        <div class="card-item current">
+          <img src="card_final_2.png">
+          <div class="card-req">4–8 sett. ●</div>
+        </div>
+        <div class="card-item locked">
+          <img src="card_final_3.png">
+          <div class="card-req">9–15 sett.</div>
+        </div>
+        <div class="card-item locked">
+          <img src="card_final_4.png">
+          <div class="card-req">16–24 sett.</div>
+        </div>
+        <div class="card-item locked">
+          <img src="card_final_5.png">
+          <div class="card-req">25–34 sett.</div>
+        </div>
+        <div class="card-item locked">
+          <img src="card_final_6.png">
+          <div class="card-req">35+ sett.</div>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-bottom:6px;">Pubblico · visibile al gruppo</div>
+      <div class="field-view">
+        <div class="fv-label">Obiettivo dichiarato</div>
+        <div class="fv-val">Migliorare la resistenza e la tecnica al TRX</div>
+      </div>
+      <div class="field-view">
+        <div class="fv-label">Focus personale</div>
+        <div class="fv-val">Flessibilità, coordinazione bicipiti</div>
+      </div>
+
+      <div class="privacy-block">
+        <div class="section-title" style="margin:0;">Privato · solo tu e il coach</div>
+        <div class="lock-note">🔒 Bloccato</div>
+      </div>
+      <div class="field-view">
+        <div class="fv-label">Peso attuale</div>
+        <div class="fv-val">78 kg</div>
+      </div>
+      <div class="field-view">
+        <div class="fv-label">Note infortuni</div>
+        <div class="fv-val">Leggero fastidio spalla dx, attenzione overhead</div>
+      </div>
+      <div class="field-view">
+        <div class="fv-label">Pagamento — Settembre</div>
+        <div class="pay-badge">● Confermato</div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab" onclick="showScreen('home')"><span class="tab-dot"></span>Home</div>
+      <div class="tab" onclick="showScreen('programma')"><span class="tab-dot"></span>Programma</div>
+      <div class="tab" onclick="showScreen('sfide')"><span class="tab-dot"></span>Sfide</div>
+      <div class="tab" onclick="showScreen('feed')"><span class="tab-dot"></span>Feed</div>
+      <div class="tab active" onclick="showScreen('profilo')"><span class="tab-dot"></span>Profilo</div>
+    </div>
+  </div>
+
+  <!-- ============ BEREAL: NOTIFICA ============ -->
+  <div class="screen" id="screen-bereal-notif">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div style="height:600px; background:linear-gradient(160deg,#1a2440,#0A0A0A); position:relative;">
+      <div class="push-banner">
+        <div class="push-icon">💧</div>
+        <div style="flex:1;">
+          <div class="push-title">100FT</div>
+          <div class="push-text">È il momento — scatta la tua foto dell'acqua entro 5 minuti!</div>
+        </div>
+        <div class="push-time">ora</div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab" onclick="showScreen('home')"><span class="tab-dot"></span>← Torna alla Home</div>
+      <div class="tab active" onclick="showScreen('bereal-cam')" style="color:var(--accent);">Apri fotocamera →</div>
+    </div>
+  </div>
+
+  <!-- ============ BEREAL: FOTOCAMERA ============ -->
+  <div class="screen" id="screen-bereal-cam">
+    <div class="bereal-screen">
+      <div class="statusbar" style="color:#fff;"><span>09:41</span><span>●●●●</span></div>
+      <div class="bereal-top">
+        <div class="bereal-timer">04:47</div>
+        <div class="bereal-sub">💧 Ricordati di bere</div>
+      </div>
+      <div class="bereal-cam">
+        <span class="bereal-cam-label">Fotocamera posteriore</span>
+        <div class="bereal-inset">
+          <span class="bereal-inset-label">Selfie</span>
+        </div>
+      </div>
+      <div class="bereal-caption">18 atleti hanno già risposto</div>
+      <div class="bereal-bottom">
+        <button class="bereal-side-btn">⟲</button>
+        <button class="bereal-shutter" onclick="showScreen('bereal-posted')"></button>
+        <button class="bereal-side-btn">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BEREAL: PUBBLICATO ============ -->
+  <div class="screen" id="screen-bereal-posted">
+    <div class="statusbar"><span>09:41</span><span>●●●●</span></div>
+    <div class="content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:600px; text-align:center;">
+      <div style="font-size:44px; margin-bottom:16px;">✅</div>
+      <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:20px;">Foto pubblicata nel Feed</div>
+      <div style="font-size:12.5px; color:var(--mute); margin-top:8px; max-width:240px;">+10 punti sfida assegnati. Il tuo scatto è ora visibile a tutto il gruppo.</div>
+      <button class="btn-primary" style="margin-top:28px; width:200px;" onclick="showScreen('feed')">Vedi nel Feed</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function showScreen(name){
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+  }
+</script>
+
+</body>
+</html>

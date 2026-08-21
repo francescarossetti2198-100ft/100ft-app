@@ -1,0 +1,8 @@
+FRONTEND_ORIGIN=http://localhost:5173
+SESSION_SECRET=cambia-questa-stringa-con-un-valore-casuale-lungo
+COACH_PASSWORD_HASH=
+RESEND_API_KEY=
+
+# Per generare COACH_PASSWORD_HASH: crea un piccolo script che importa
+# hashPassword() da worker/src/lib/password.ts e stampa il risultato,
+# poi incollalo qui (in locale) o con `wrangler secret put COACH_PASSWORD_HASH` (in produzione).
