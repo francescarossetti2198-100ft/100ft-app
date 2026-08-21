@@ -23,52 +23,87 @@ export function renderProfilo(appEl) {
   loadProfilo(el);
 }
 
+function scalaLivelliHtml(livello) {
+  // I 6 livelli del brief (sezione 5), hardcoded qui solo per etichette/soglie —
+  // la fonte di verità resta worker/src/lib/livelli.ts.
+  const LIVELLI = [
+    { numero: 1, settimaneMin: 1 },
+    { numero: 2, settimaneMin: 4 },
+    { numero: 3, settimaneMin: 9 },
+    { numero: 4, settimaneMin: 16 },
+    { numero: 5, settimaneMin: 25 },
+    { numero: 6, settimaneMin: 35 },
+  ];
+  const attualeNumero = livello?.attuale.numero ?? 0;
+
+  return `
+    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px">
+      ${LIVELLI.map((l) => {
+        const stato = l.numero < attualeNumero ? "✓" : l.numero === attualeNumero ? "●" : "";
+        const prossimoMin = LIVELLI[l.numero]?.settimaneMin;
+        const range = prossimoMin ? `${l.settimaneMin}–${prossimoMin - 1}` : `${l.settimaneMin}+`;
+        return `
+          <div style="flex:0 0 auto; min-width:64px; text-align:center; padding:8px; border-radius:8px;
+                      border:1px solid ${l.numero === attualeNumero ? "var(--accent)" : "var(--border)"}">
+            <p class="mono" style="font-size:11px; color:var(--mute)">${range} sett.</p>
+            <p style="margin-top:4px">${stato || "&nbsp;"}</p>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 async function loadProfilo(el) {
   const content = el.querySelector("#profilo-content");
   try {
     const p = await api.get("/profilo/me");
     const nomeVisualizzato = p.nickname || p.nome || (p.role === "coach" ? "Coach" : "Atleta");
 
+    const statsHtml = `
+      <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
+        <div>
+          <p style="font-weight:600; font-size:18px">${p.presenzeTotali}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px">Presenze tot.</p>
+        </div>
+        <div>
+          <p style="font-weight:600; font-size:18px">${p.anelli.streakSettimane}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px">Streak sett.</p>
+        </div>
+        <div>
+          <p style="font-weight:600; font-size:18px">${p.puntiTotali}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px">Punti totali</p>
+        </div>
+      </div>
+    `;
+
     if (!p.livello) {
       content.innerHTML = `
         <div class="card">
           <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
           <p class="mono" style="color:var(--mute); margin-top:8px">
-            Nessun livello ancora — completa la prima settimana di allenamenti per sbloccarlo.
+            Nessun livello ancora — chiudi l'anello allenamenti per la prima settimana per sbloccarlo.
           </p>
         </div>
+        ${statsHtml}
       `;
       return;
     }
 
-    const { attuale, prossimo, settimaneCompletate } = p.livello;
-    const settimaneAlProssimo = prossimo ? prossimo.settimaneMin - settimaneCompletate : null;
+    const { attuale } = p.livello;
 
     content.innerHTML = `
       <div class="card">
         <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
+        <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px">Livello ${attuale.numero} — ${attuale.nome}</p>
       </div>
       <div class="card" style="margin-top:12px; text-align:center">
         <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
-             style="width:140px; height:140px; border-radius:12px; object-fit:cover" />
-        <p style="font-weight:600; color:${attuale.colore}; margin-top:10px">Livello ${attuale.numero} — ${attuale.nome}</p>
-        <p class="mono" style="color:var(--mute); font-size:13px">${settimaneCompletate} settimane cumulative</p>
-        ${
-          prossimo
-            ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${settimaneAlProssimo} settiman${settimaneAlProssimo === 1 ? "a" : "e"} a Livello ${prossimo.numero} — ${prossimo.nome}</p>`
-            : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Livello massimo raggiunto</p>`
-        }
+             style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
+        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
+        <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
       </div>
-      <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
-        <div>
-          <p style="font-weight:600; font-size:18px">${p.xpTotale}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">XP totali</p>
-        </div>
-        <div>
-          <p style="font-weight:600; font-size:18px">${p.sfideCompletate}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Sfide</p>
-        </div>
-      </div>
+      ${statsHtml}
     `;
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;

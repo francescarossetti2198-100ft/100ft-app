@@ -6,6 +6,26 @@ import { awardXp } from "../lib/xp";
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+// Classifica del mese (brief, sezione 10 — una delle classifiche multiple previste;
+// per ora solo "Month", le altre (Season/Improvement/All Time) restano da costruire).
+sfide.get("/classifica", requireAuth, async (c) => {
+  const oggi = new Date();
+  const inizioMese = `${oggi.getUTCFullYear()}-${String(oggi.getUTCMonth() + 1).padStart(2, "0")}-01`;
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT u.id AS userId, p.nome, p.nickname, COALESCE(SUM(x.xp_assegnati), 0) AS punti
+     FROM users u
+     JOIN athlete_profile p ON p.user_id = u.id
+     LEFT JOIN xp_log x ON x.user_id = u.id AND x.data >= ?
+     GROUP BY u.id
+     ORDER BY punti DESC, p.nome ASC`
+  )
+    .bind(inizioMese)
+    .all();
+
+  return c.json({ classifica: results });
+});
+
 sfide.get("/", requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.punti, s.data_inizio, s.data_fine,

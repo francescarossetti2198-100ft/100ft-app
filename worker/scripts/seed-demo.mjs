@@ -81,21 +81,24 @@ for (const a of ATLETI) {
   );
 }
 
-// Presenze storiche: una per settimana, a ritroso dall'ultimo lunedì, + xp_log corrispondente.
-// Usa sempre la sessione del lunedì (id=1 da 0002_seed_sessioni.sql) — la data non deve
-// necessariamente cadere di lunedì per questo scopo dimostrativo.
+// Presenze storiche: TUTTE e 3 le sessioni della settimana (lun/mer/ven, id 1/2/3 da
+// 0002_seed_sessioni.sql), a ritroso dall'ultimo lunedì — così ogni settimana risulta
+// "chiusa" secondo la regola in lib/settimana.ts (anello allenamenti pieno).
 const lunedi = ultimoLunedi();
 for (const a of ATLETI) {
   for (let settimana = 0; settimana < a.settimane; settimana++) {
-    const d = new Date(lunedi);
-    d.setUTCDate(d.getUTCDate() - settimana * 7);
-    const data = isoDate(d);
-    out.push(
-      `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), 1, '${data}', 1);`
-    );
-    out.push(
-      `INSERT INTO xp_log (user_id, azione, xp_assegnati, data) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), 'sessione_completata', 10, '${data}T19:00:00Z');`
-    );
+    for (const sessioneId of [1, 2, 3]) {
+      const offsetGiorni = sessioneId === 1 ? 0 : sessioneId === 2 ? 2 : 4; // lun/mer/ven
+      const d = new Date(lunedi);
+      d.setUTCDate(d.getUTCDate() - settimana * 7 + offsetGiorni);
+      const data = isoDate(d);
+      out.push(
+        `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), ${sessioneId}, '${data}', 1);`
+      );
+      out.push(
+        `INSERT INTO xp_log (user_id, azione, xp_assegnati, data) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), 'sessione_completata', 10, '${data}T19:00:00Z');`
+      );
+    }
   }
 }
 
