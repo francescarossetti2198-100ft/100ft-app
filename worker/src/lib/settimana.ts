@@ -5,7 +5,7 @@
 // livelli difficili da raggiungere nella pratica — da rivedere con Francesca insieme alle altre
 // semplificazioni dichiarate.
 
-function inizioSettimana(d: Date): Date {
+export function inizioSettimana(d: Date): Date {
   const copia = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const giorno = (copia.getUTCDay() + 6) % 7; // 0 = lunedì
   copia.setUTCDate(copia.getUTCDate() - giorno);

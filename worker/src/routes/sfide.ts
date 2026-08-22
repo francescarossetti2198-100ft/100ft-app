@@ -3,28 +3,41 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
+import { inizioSettimana } from "../lib/settimana";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Classifica del mese (brief, sezione 10 — una delle classifiche multiple previste;
-// per ora solo "Month", le altre (Season/Improvement/All Time) restano da costruire).
+const PERIODI = ["settimana", "mese", "totale"] as const;
+type Periodo = (typeof PERIODI)[number];
+
+// Classifiche multiple (brief, sezione 10) — Settimana/Mese/Totale per ora; Season e
+// Improvement (basata sul miglioramento personale, non sui punti totali) restano da fare.
 sfide.get("/classifica", requireAuth, async (c) => {
+  const richiesto = c.req.query("periodo");
+  const periodo: Periodo = PERIODI.includes(richiesto as Periodo) ? (richiesto as Periodo) : "mese";
+
   const oggi = new Date();
-  const inizioMese = `${oggi.getUTCFullYear()}-${String(oggi.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  let dataMinima: string | null = null;
+  if (periodo === "settimana") {
+    dataMinima = inizioSettimana(oggi).toISOString().slice(0, 10);
+  } else if (periodo === "mese") {
+    dataMinima = `${oggi.getUTCFullYear()}-${String(oggi.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  }
+  // periodo === "totale" -> nessun filtro sulla data
 
   const { results } = await c.env.DB.prepare(
     `SELECT u.id AS userId, p.nome, p.nickname, COALESCE(SUM(x.xp_assegnati), 0) AS punti
      FROM users u
      JOIN athlete_profile p ON p.user_id = u.id
-     LEFT JOIN xp_log x ON x.user_id = u.id AND x.data >= ?
+     LEFT JOIN xp_log x ON x.user_id = u.id ${dataMinima ? "AND x.data >= ?" : ""}
      GROUP BY u.id
      ORDER BY punti DESC, p.nome ASC`
   )
-    .bind(inizioMese)
+    .bind(...(dataMinima ? [dataMinima] : []))
     .all();
 
-  return c.json({ classifica: results });
+  return c.json({ classifica: results, periodo });
 });
 
 sfide.get("/", requireAuth, async (c) => {

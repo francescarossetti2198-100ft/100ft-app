@@ -7,7 +7,13 @@ const TIPO_LABEL = {
   valore_manuale: "Sfida personale",
 };
 
-// TODO: classifiche Season/Improvement/All Time (brief, sezione 10). Per ora solo Month.
+const PERIODI = [
+  { valore: "settimana", label: "Settimana" },
+  { valore: "mese", label: "Mese" },
+  { valore: "totale", label: "Totale" },
+];
+
+// TODO: classifica Season e Improvement (basata sul miglioramento personale, brief sezione 10).
 export function renderSfide(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -21,7 +27,7 @@ export function renderSfide(appEl) {
   appEl.appendChild(renderTabbar());
 
   loadDailyDrop(el);
-  loadClassifica(el);
+  loadClassifica(el, "mese");
   loadSfide(el);
 }
 
@@ -92,29 +98,51 @@ async function loadDailyDrop(el) {
   }
 }
 
-async function loadClassifica(el) {
+async function loadClassifica(el, periodo) {
   const box = el.querySelector("#classifica");
   try {
-    const { classifica } = await api.get("/sfide/classifica");
+    const { classifica } = await api.get(`/sfide/classifica?periodo=${periodo}`);
     const top = classifica.slice(0, 5);
+
+    const tabsHtml = `
+      <div style="display:flex; gap:6px; margin-bottom:10px">
+        ${PERIODI.map(
+          (p) => `
+            <button type="button" class="periodo-btn" data-periodo="${p.valore}"
+              style="flex:1; padding:6px 0; border-radius:6px; border:none; font-size:12px; cursor:pointer;
+                     background:${p.valore === periodo ? "var(--accent)" : "var(--surface-2)"}; color:var(--text)">
+              ${p.label}
+            </button>
+          `
+        ).join("")}
+      </div>
+    `;
 
     box.innerHTML = `
       <div class="card">
-        <p class="mono" style="color:var(--mute); font-size:13px">Classifica del mese</p>
-        <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px">
-          ${top
-            .map(
-              (a, i) => `
-                <div style="display:flex; justify-content:space-between">
-                  <span>${i + 1}. ${a.nickname || a.nome}</span>
-                  <strong>${a.punti} PT</strong>
-                </div>
-              `
-            )
-            .join("")}
+        ${tabsHtml}
+        <div style="display:flex; flex-direction:column; gap:8px">
+          ${
+            top.length
+              ? top
+                  .map(
+                    (a, i) => `
+                      <div style="display:flex; justify-content:space-between">
+                        <span>${i + 1}. ${a.nickname || a.nome}</span>
+                        <strong>${a.punti} PT</strong>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun punto ancora in questo periodo.</p>`
+          }
         </div>
       </div>
     `;
+
+    box.querySelectorAll(".periodo-btn").forEach((btn) => {
+      btn.addEventListener("click", () => loadClassifica(el, btn.dataset.periodo));
+    });
   } catch {
     box.remove();
   }
@@ -180,7 +208,7 @@ async function loadSfide(el) {
         try {
           await api.postForm(`/sfide/${id}/partecipa`, formData);
           loadSfide(el);
-          loadClassifica(el);
+          loadClassifica(el, "mese");
         } catch (err) {
           if (errorEl) {
             errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
