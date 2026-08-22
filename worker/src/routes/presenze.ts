@@ -6,6 +6,7 @@ import { oggi, sessioneOggi } from "../lib/oggi";
 import { calcolaAnelli } from "../lib/settimana";
 import { calcolaLivello } from "../lib/livelli";
 import { pubblicaPost } from "../lib/feed";
+import { assegnaMilestone } from "../lib/milestones";
 
 type Variables = { user: SessionUser };
 const presenze = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -85,6 +86,22 @@ presenze.post("/conferma", requireAuth, async (c) => {
       "consistency",
       `${dopoAnelli.streakSettimane} settimane di fila con tutti gli allenamenti completati`
     );
+  }
+
+  // Milestones legate alle presenze (brief, sezione 10) — "first_month" semplificato come
+  // il raggiungimento del Livello 2 (4 settimane chiuse), stessa semplificazione già
+  // dichiarata per il calcolo dei livelli.
+  const totalePresenze = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`
+  )
+    .bind(c.var.user.userId)
+    .first<{ n: number }>();
+
+  if (totalePresenze?.n === 1) await assegnaMilestone(c.env.DB, c.var.user.userId, "first_session");
+  if (totalePresenze?.n === 10) await assegnaMilestone(c.env.DB, c.var.user.userId, "10_sessions");
+  if (totalePresenze?.n === 25) await assegnaMilestone(c.env.DB, c.var.user.userId, "25_sessions");
+  if (livelloDopo?.attuale.numero === 2 && (!livelloPrima || livelloPrima.attuale.numero < 2)) {
+    await assegnaMilestone(c.env.DB, c.var.user.userId, "first_month");
   }
 
   return c.json({ ok: true });

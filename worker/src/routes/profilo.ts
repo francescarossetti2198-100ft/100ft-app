@@ -10,7 +10,7 @@ const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
 profilo.get("/me", requireAuth, async (c) => {
   const userId = c.var.user.userId;
 
-  const [profiloRow, anelli, punti, sfideCompletate, presenzeTotali] = await Promise.all([
+  const [profiloRow, anelli, punti, sfideCompletate, presenzeTotali, milestones] = await Promise.all([
     c.env.DB.prepare(`SELECT nome, cognome, nickname FROM athlete_profile WHERE user_id = ?`)
       .bind(userId)
       .first<{ nome: string; cognome: string; nickname: string | null }>(),
@@ -20,6 +20,9 @@ profilo.get("/me", requireAuth, async (c) => {
       .first<{ totale: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM partecipazioni_sfide WHERE user_id = ?`).bind(userId).first<{ n: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(userId).first<{ n: number }>(),
+    c.env.DB.prepare(`SELECT tipo, data_raggiunta AS dataRaggiunta FROM milestones WHERE user_id = ? ORDER BY data_raggiunta`)
+      .bind(userId)
+      .all<{ tipo: string; dataRaggiunta: string }>(),
   ]);
 
   return c.json({
@@ -32,6 +35,7 @@ profilo.get("/me", requireAuth, async (c) => {
     puntiTotali: punti?.totale ?? 0,
     sfideCompletate: sfideCompletate?.n ?? 0,
     presenzeTotali: presenzeTotali?.n ?? 0,
+    milestones: milestones.results,
   });
 });
 

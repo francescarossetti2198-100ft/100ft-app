@@ -10,6 +10,7 @@ import notaCoach from "./routes/nota-coach";
 import richieste from "./routes/richieste";
 import programma from "./routes/programma";
 import feed from "./routes/feed";
+import personalBest from "./routes/personal-best";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -40,6 +41,7 @@ app.route("/api/nota-coach", notaCoach);
 app.route("/api/richieste", richieste);
 app.route("/api/programma", programma);
 app.route("/api/feed", feed);
+app.route("/api/personal-best", personalBest);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).

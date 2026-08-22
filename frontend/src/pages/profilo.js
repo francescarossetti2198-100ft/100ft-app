@@ -3,7 +3,26 @@ import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError } from "../api.js";
 
-// TODO: dati pubblici vs privati, stato pagamento, achievements/milestones (brief, sezione 14).
+const MILESTONE_LABEL = {
+  first_session: "Prima sessione 🎬",
+  "10_sessions": "10 sessioni 🔟",
+  "25_sessions": "25 sessioni 🏅",
+  first_month: "Primo mese 📅",
+  hydration_hero: "Hydration Hero 💧",
+  team_player: "Team Player 🤝",
+  new_pb: "Primo Personal Best 💪",
+};
+
+const ESERCIZI = [
+  { valore: "push-ups", label: "Push-up", placeholder: "ripetizioni" },
+  { valore: "squat", label: "Squat", placeholder: "ripetizioni" },
+  { valore: "corda", label: "Salto con la corda", placeholder: "ripetizioni" },
+  { valore: "plank", label: "Plank", placeholder: "secondi di tenuta" },
+  { valore: "1km", label: "1km", placeholder: "tempo in secondi" },
+];
+
+// TODO: dati pubblici vs privati, stato pagamento (brief, sezione 14) — servono la Coach
+// Dashboard e una decisione su come gestire i dati privati dell'atleta.
 export function renderProfilo(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -54,6 +73,22 @@ function scalaLivelliHtml(livello) {
   `;
 }
 
+function achievementsHtml(milestones) {
+  if (!milestones?.length) {
+    return `<p class="mono" style="color:var(--mute); font-size:13px">Nessun traguardo ancora.</p>`;
+  }
+  return `
+    <div style="display:flex; flex-wrap:wrap; gap:8px">
+      ${milestones
+        .map(
+          (m) =>
+            `<span class="mono" style="font-size:12px; background:var(--surface-2); border-radius:6px; padding:5px 9px">${MILESTONE_LABEL[m.tipo] ?? m.tipo}</span>`
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 async function loadProfilo(el) {
   const content = el.querySelector("#profilo-content");
   try {
@@ -77,6 +112,13 @@ async function loadProfilo(el) {
       </div>
     `;
 
+    const achievementsCard = `
+      <div class="card" style="margin-top:12px">
+        <p class="mono" style="color:var(--mute); font-size:12px">Achievements</p>
+        <div style="margin-top:8px">${achievementsHtml(p.milestones)}</div>
+      </div>
+    `;
+
     if (!p.livello) {
       content.innerHTML = `
         <div class="card">
@@ -86,26 +128,94 @@ async function loadProfilo(el) {
           </p>
         </div>
         ${statsHtml}
+        ${achievementsCard}
+        <div class="card" style="margin-top:12px" id="pb-card"></div>
       `;
-      return;
+    } else {
+      const { attuale } = p.livello;
+      content.innerHTML = `
+        <div class="card">
+          <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
+          <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px">Livello ${attuale.numero} — ${attuale.nome}</p>
+        </div>
+        <div class="card" style="margin-top:12px; text-align:center">
+          <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
+               style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
+          <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
+          <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
+        </div>
+        ${statsHtml}
+        ${achievementsCard}
+        <div class="card" style="margin-top:12px" id="pb-card"></div>
+      `;
     }
 
-    const { attuale } = p.livello;
-
-    content.innerHTML = `
-      <div class="card">
-        <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
-        <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px">Livello ${attuale.numero} — ${attuale.nome}</p>
-      </div>
-      <div class="card" style="margin-top:12px; text-align:center">
-        <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
-             style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
-        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
-        <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
-      </div>
-      ${statsHtml}
-    `;
+    if (p.role === "atleta") loadPersonalBest(el);
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+  }
+}
+
+async function loadPersonalBest(el) {
+  const card = el.querySelector("#pb-card");
+  if (!card) return;
+
+  try {
+    const { personalBest } = await api.get("/personal-best/me");
+    const migliori = new Map();
+    for (const pb of personalBest) {
+      const attuale = migliori.get(pb.esercizio);
+      if (!attuale || (pb.isNewPb && !attuale.isNewPb) || pb.data > attuale.data) migliori.set(pb.esercizio, pb);
+    }
+
+    const listaHtml = migliori.size
+      ? `<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px">
+          ${[...migliori.values()]
+            .map((pb) => `<div style="display:flex; justify-content:space-between"><span>${pb.esercizio}</span><strong>${pb.valore}</strong></div>`)
+            .join("")}
+        </div>`
+      : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px">Nessun PB registrato ancora.</p>`;
+
+    card.innerHTML = `
+      <p class="mono" style="color:var(--mute); font-size:12px">Personal Best</p>
+      ${listaHtml}
+      <div style="display:flex; gap:6px; margin-top:12px">
+        <select id="pb-esercizio" style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text)">
+          ${ESERCIZI.map((e) => `<option value="${e.valore}">${e.label}</option>`).join("")}
+        </select>
+        <input id="pb-valore" type="text" placeholder="${ESERCIZI[0].placeholder}"
+               style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text)" />
+      </div>
+      <p class="error-text" id="pb-error" hidden style="margin-top:6px"></p>
+      <p class="success-text" id="pb-success" hidden style="margin-top:6px"></p>
+      <button class="btn" id="pb-submit" style="width:100%; margin-top:10px">Registra</button>
+    `;
+
+    const select = card.querySelector("#pb-esercizio");
+    const input = card.querySelector("#pb-valore");
+    select.addEventListener("change", () => {
+      input.placeholder = ESERCIZI.find((e) => e.valore === select.value)?.placeholder ?? "";
+    });
+
+    card.querySelector("#pb-submit").addEventListener("click", async (e) => {
+      const errorEl = card.querySelector("#pb-error");
+      const successEl = card.querySelector("#pb-success");
+      errorEl.hidden = true;
+      successEl.hidden = true;
+      e.target.disabled = true;
+      try {
+        const res = await api.post("/personal-best", { esercizio: select.value, valore: input.value });
+        successEl.textContent = res.isNewPb ? "Nuovo PB registrato! +20 punti 🎉" : "Registrato (non è un nuovo record).";
+        successEl.hidden = false;
+        // Un nuovo PB aggiorna anche punti totali e achievements, non solo questa card.
+        loadProfilo(el);
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+        e.target.disabled = false;
+      }
+    });
+  } catch {
+    card.remove();
   }
 }
