@@ -1,7 +1,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 
-const CATEGORIE = ["Legs", "Mobility", "Upper Body", "Conditioning", "Other"];
+const CATEGORIE = ["Legs", "Mobility", "Upper Body", "Alta intensità", "Other"];
 
 export function renderHome(appEl) {
   const el = document.createElement("div");
