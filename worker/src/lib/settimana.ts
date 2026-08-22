@@ -70,6 +70,42 @@ export async function sessioniProgrammatePerSettimana(db: D1Database): Promise<n
   return row?.n ?? 0;
 }
 
+export type SessioneSettimana = {
+  sessioneId: number;
+  data: string;
+  oraInizio: string;
+  oraFine: string;
+  confermata: boolean;
+};
+
+// Le 3 (o quante sono) sessioni di questa settimana con lo stato di presenza — per la
+// checklist "Lunedì ✓ / Mercoledì / Venerdì" sotto l'anello Allenamenti in Home.
+export async function sessioniSettimanaConStato(db: D1Database, userId: number): Promise<SessioneSettimana[]> {
+  const inizio = inizioSettimana(new Date());
+  const { results: sessioni } = await db
+    .prepare(`SELECT id, giorno_settimana AS giornoSettimana, ora_inizio AS oraInizio, ora_fine AS oraFine FROM sessioni_gruppo ORDER BY giorno_settimana`)
+    .all<{ id: number; giornoSettimana: number; oraInizio: string; oraFine: string }>();
+
+  const risultato: SessioneSettimana[] = [];
+  for (const s of sessioni) {
+    const data = new Date(inizio);
+    data.setUTCDate(data.getUTCDate() + (s.giornoSettimana - 1));
+    const dataIso = data.toISOString().slice(0, 10);
+    const presenza = await db
+      .prepare(`SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`)
+      .bind(userId, s.id, dataIso)
+      .first<{ confermata: number }>();
+    risultato.push({
+      sessioneId: s.id,
+      data: dataIso,
+      oraInizio: s.oraInizio,
+      oraFine: s.oraFine,
+      confermata: !!presenza?.confermata,
+    });
+  }
+  return risultato;
+}
+
 async function tutteLeDate(db: D1Database, sql: string, userId: number): Promise<string[]> {
   const { results } = await db.prepare(sql).bind(userId).all<{ data: string }>();
   return results.map((r) => r.data);

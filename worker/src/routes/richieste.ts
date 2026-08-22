@@ -3,7 +3,7 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { oggi, sessioneOggi } from "../lib/oggi";
 
-const CATEGORIE = ["Legs", "Mobility", "Upper Body", "Alta intensità", "Other"] as const;
+const CATEGORIE = ["Mobilità", "Gambe", "Parte superiore", "Altro"] as const;
 
 type Variables = { user: SessionUser };
 const richieste = new Hono<{ Bindings: Env; Variables: Variables }>();
