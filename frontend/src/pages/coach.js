@@ -130,6 +130,12 @@ export function renderCoach(appEl) {
       <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
       <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">MESSAGGI</p>
+      <div id="messaggi-atleti" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+      <div id="messaggi-thread" style="margin-top:14px"></div>
+    </div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
@@ -138,6 +144,7 @@ export function renderCoach(appEl) {
   initPiano(el);
   initSfida(el);
   initRichieste(el);
+  initMessaggi(el);
 }
 
 function initNota(el) {
@@ -347,4 +354,117 @@ function initRichieste(el) {
 
   el.querySelector("#richieste-refresh").addEventListener("click", carica);
   carica();
+}
+
+function formattaOraMessaggio(dataIso) {
+  const d = new Date(dataIso.replace(" ", "T") + "Z");
+  const oggi = new Date();
+  const stessoGiorno = d.toDateString() === oggi.toDateString();
+  const ora = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (stessoGiorno) return ora;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${ora}`;
+}
+
+function bollaMessaggioHtml(m) {
+  const allineamento = m.daCoach ? "flex-end" : "flex-start";
+  const sfondo = m.daCoach ? "var(--accent)" : "var(--surface-2)";
+  const colore = m.daCoach ? "#fff" : "var(--text)";
+  return `
+    <div style="display:flex; justify-content:${allineamento}">
+      <div style="max-width:78%; background:${sfondo}; color:${colore}; padding:10px 14px; border-radius:14px">
+        <p style="font-size:14px; white-space:pre-wrap">${m.testo}</p>
+        <p class="mono" style="font-size:10px; opacity:0.7; margin-top:4px; text-align:right">${formattaOraMessaggio(m.creatoIl)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function initMessaggi(el) {
+  const listEl = el.querySelector("#messaggi-atleti");
+  const threadEl = el.querySelector("#messaggi-thread");
+  let atletaSelezionato = null;
+
+  async function caricaAtleti() {
+    try {
+      const { atleti } = await api.get("/messaggi/atleti");
+
+      if (!atleti.length) {
+        listEl.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta registrato.</p>`;
+        return;
+      }
+
+      listEl.innerHTML = atleti
+        .map((a) => {
+          const attivo = a.userId === atletaSelezionato;
+          return `
+            <button type="button" class="atleta-msg-btn" data-id="${a.userId}" data-nome="${a.nickname || a.nome}"
+              style="display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left;
+                     padding:10px 0; border-top:1px solid var(--border); background:none; border-left:none; border-right:none; border-bottom:none;
+                     cursor:pointer; color:var(--text); font-family:inherit; ${attivo ? "opacity:1" : ""}">
+              <span>
+                <span style="font-weight:${attivo ? 700 : 400}">${a.nickname || a.nome}</span>
+                ${a.ultimoTesto ? `<span class="mono" style="color:var(--mute); font-size:12px; display:block; margin-top:2px">${a.ultimoTesto.slice(0, 40)}${a.ultimoTesto.length > 40 ? "…" : ""}</span>` : ""}
+              </span>
+              ${a.nonLetti > 0 ? `<span class="mono" style="background:var(--accent); color:#fff; border-radius:10px; padding:2px 8px; font-size:11px">${a.nonLetti}</span>` : ""}
+            </button>
+          `;
+        })
+        .join("");
+
+      listEl.querySelectorAll(".atleta-msg-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          atletaSelezionato = Number(btn.dataset.id);
+          caricaThread(btn.dataset.nome);
+          caricaAtleti();
+        });
+      });
+    } catch (err) {
+      listEl.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+    }
+  }
+
+  async function caricaThread(nome) {
+    threadEl.innerHTML = `
+      <p style="font-weight:600; border-top:1px solid var(--border); padding-top:12px">${nome}</p>
+      <div id="thread-bolle" style="margin-top:10px; display:flex; flex-direction:column; gap:8px; max-height:320px; overflow-y:auto">
+        <p class="mono" style="color:var(--mute)">Carico...</p>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <input id="thread-testo" type="text" placeholder="Scrivi un messaggio..."
+               style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:10px 14px; color:var(--text)" />
+        <button class="btn" id="thread-invia" style="border-radius:20px; padding:10px 16px">Invia</button>
+      </div>
+      <p class="error-text" id="thread-error" hidden style="margin-top:6px"></p>
+    `;
+
+    const bolleEl = threadEl.querySelector("#thread-bolle");
+    try {
+      const { messaggi } = await api.get(`/messaggi/${atletaSelezionato}`);
+      bolleEl.innerHTML = messaggi.length
+        ? messaggi.map(bollaMessaggioHtml).join("")
+        : `<p class="mono" style="color:var(--mute); font-size:13px">Ancora nessun messaggio.</p>`;
+      bolleEl.scrollTop = bolleEl.scrollHeight;
+    } catch (err) {
+      bolleEl.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+    }
+
+    threadEl.querySelector("#thread-invia").addEventListener("click", async () => {
+      const input = threadEl.querySelector("#thread-testo");
+      const errorEl = threadEl.querySelector("#thread-error");
+      const testo = input.value.trim();
+      errorEl.hidden = true;
+      if (!testo) return;
+
+      try {
+        await api.post(`/messaggi/${atletaSelezionato}`, { testo });
+        input.value = "";
+        await caricaThread(nome);
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+      }
+    });
+  }
+
+  caricaAtleti();
 }
