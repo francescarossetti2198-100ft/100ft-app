@@ -22,7 +22,13 @@ registerRoute("/feed", { render: renderFeed });
 registerRoute("/profilo", { render: renderProfilo });
 
 async function bootstrap() {
-  await loadSession();
+  try {
+    await loadSession();
+  } catch {
+    // Sessione non verificabile per un errore imprevisto (es. rete instabile, worker che si
+    // sta riavviando in dev) — meglio far vedere il login e permettere di riprovare, che
+    // bloccare l'app per sempre senza più rispondere alla navigazione.
+  }
   startRouter(document.getElementById("app"));
 }
 

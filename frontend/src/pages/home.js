@@ -7,7 +7,8 @@ export function renderHome(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
-    <h1>Home</h1>
+    <p class="mono" style="color:var(--mute); font-size:13px">Bentornato</p>
+    <h1 id="saluto-nome">Home</h1>
     <div class="card" id="progresso-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
@@ -153,7 +154,10 @@ function anelliSvg({ allenamenti, sfide, streakSettimane }) {
 async function loadProgresso(el) {
   const card = el.querySelector("#progresso-card");
   try {
-    const { anelli, livello } = await api.get("/profilo/me");
+    const { nome, nickname, anelli, livello } = await api.get("/profilo/me");
+
+    const saluto = el.querySelector("#saluto-nome");
+    if (saluto) saluto.textContent = nickname || nome || "Home";
 
     const legenda = `
       <div style="display:flex; flex-direction:column; gap:10px; justify-content:center">
