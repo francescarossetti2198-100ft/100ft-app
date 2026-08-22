@@ -1,4 +1,5 @@
 import { currentPath } from "../router.js";
+import { getUser } from "../auth.js";
 
 const TABS = [
   { path: "/", label: "Home", icon: "🏠" },
@@ -8,12 +9,15 @@ const TABS = [
   { path: "/profilo", label: "Profilo", icon: "👤" },
 ];
 
+const TAB_COACH = { path: "/coach", label: "Coach", icon: "🎓" };
+
 export function renderTabbar() {
   const nav = document.createElement("nav");
   nav.className = "tabbar";
 
+  const tabs = getUser()?.role === "coach" ? [...TABS, TAB_COACH] : TABS;
   const active = currentPath();
-  for (const tab of TABS) {
+  for (const tab of tabs) {
     const a = document.createElement("a");
     a.href = `#${tab.path}`;
     a.className = tab.path === active ? "active" : "";

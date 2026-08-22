@@ -22,9 +22,12 @@ programma.get("/", requireAuth, async (c) => {
     `SELECT id, mese, anno, focus_tema AS focusTema FROM programma_mensile ORDER BY anno, mese`
   ).all<{ id: number; mese: number; anno: number; focusTema: string | null }>();
 
+  // Il coach vede il focus di tutti i mesi (anche futuri) per poterli modificare — il lock
+  // anti-spoiler resta per gli atleti.
+  const isCoach = c.var.user.role === "coach";
   const mesi = results.map((r) => {
     const sblocc = sbloccato(r.mese, r.anno);
-    return { id: r.id, mese: r.mese, anno: r.anno, sbloccato: sblocc, focusTema: sblocc ? r.focusTema : null };
+    return { id: r.id, mese: r.mese, anno: r.anno, sbloccato: sblocc, focusTema: sblocc || isCoach ? r.focusTema : null };
   });
 
   return c.json({ mesi });
@@ -47,7 +50,9 @@ programma.get("/:id", requireAuth, async (c) => {
     }>();
 
   if (!mese) return c.json({ error: "Mese non trovato" }, 404);
-  if (!sbloccato(mese.mese, mese.anno)) return c.json({ error: "Questo mese non è ancora disponibile" }, 403);
+  if (!sbloccato(mese.mese, mese.anno) && c.var.user.role !== "coach") {
+    return c.json({ error: "Questo mese non è ancora disponibile" }, 403);
+  }
 
   const { results: merende } = await c.env.DB.prepare(
     `SELECT titolo, descrizione, link_url AS linkUrl FROM merende_fit WHERE programma_id = ? ORDER BY ordine`

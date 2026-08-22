@@ -10,6 +10,7 @@ import { renderProgramma } from "./pages/programma.js";
 import { renderSfide } from "./pages/sfide.js";
 import { renderFeed } from "./pages/feed.js";
 import { renderProfilo } from "./pages/profilo.js";
+import { renderCoach } from "./pages/coach.js";
 
 registerRoute("/login", { render: renderLogin, protected: false });
 registerRoute("/registrati", { render: renderRegistrazione, protected: false });
@@ -20,6 +21,7 @@ registerRoute("/programma", { render: renderProgramma });
 registerRoute("/sfide", { render: renderSfide });
 registerRoute("/feed", { render: renderFeed });
 registerRoute("/profilo", { render: renderProfilo });
+registerRoute("/coach", { render: renderCoach });
 
 async function bootstrap() {
   try {
