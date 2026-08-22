@@ -28,13 +28,28 @@ export function renderSfide(appEl) {
 async function loadDailyDrop(el) {
   const card = el.querySelector("#daily-drop-card");
   try {
-    const { risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
+    const { giornoValido, attivo, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
+
+    // Solo nei giorni di allenamento (lun/mer/ven) — negli altri giorni la card non c'è.
+    if (!giornoValido) {
+      card.remove();
+      return;
+    }
 
     if (risposta) {
       card.innerHTML = `
         <p class="mono" style="color:var(--mute); font-size:12px">💧 DAILY DROP</p>
         <p style="margin-top:6px">Hai già risposto oggi ✓</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
+      `;
+      return;
+    }
+
+    // Non riveliamo mai l'orario esatto prima che scatti — si perderebbe l'effetto sorpresa.
+    if (!attivo) {
+      card.innerHTML = `
+        <p class="mono" style="color:var(--mute); font-size:12px">💧 DAILY DROP</p>
+        <p class="mono" style="color:var(--mute); margin-top:6px">Non ancora arrivato oggi — tieni d'occhio l'app.</p>
       `;
       return;
     }

@@ -3,39 +3,61 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
+import { oggi as oggiInfo } from "../lib/oggi";
+import { orarioDailyDrop, minutiOra } from "../lib/dailyDropOrario";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
-// Nota di scope: qui c'è solo il nucleo (foto -> XP -> feed, una risposta al giorno).
-// L'orario casuale + finestra di 5 minuti + notifica push richiedono Durable Objects o un
-// Cron Trigger lato Worker (il brief stesso lo segnala come "da progettare") — per ora la
-// risposta è sempre disponibile, non legata a una notifica. Anche la fotocamera doppia
-// (foto + selfie in overlay) è semplificata a una singola foto.
+// Solo nei giorni di allenamento (lun/mer/ven), a un orario "casuale" ma mai durante la
+// sessione (vedi lib/dailyDropOrario.ts). L'endpoint non rivela mai l'orario esatto:
+// prima che scatti dice solo "non ancora", altrimenti si perde l'effetto sorpresa.
+//
+// Nota di scope: qui c'è il nucleo completo della logica (giorno giusto, orario giusto,
+// niente durante l'allenamento, foto -> XP -> feed, una risposta al giorno) ma NON la vera
+// notifica push — richiede un Cron Trigger o Durable Object lato Worker per svegliare il
+// client, cosa che il brief stesso segnala come "da progettare". Per ora, una volta scattato
+// l'orario, il Daily Drop resta disponibile finché l'atleta non apre l'app (niente
+// finestra rigida di 5 minuti, che senza notifica sarebbe quasi impossibile da rispettare).
+// Anche la fotocamera doppia (foto + selfie in overlay) resta semplificata a una singola foto.
 type Variables = { user: SessionUser };
 const dailyDrop = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+function attivoOra(): boolean {
+  const { data, giornoSettimana } = oggiInfo();
+  const orarioScatto = orarioDailyDrop(data, giornoSettimana);
+  if (orarioScatto === null) return false; // non è lun/mer/ven
+  return minutiOra(new Date()) >= orarioScatto;
+}
+
 dailyDrop.get("/oggi", requireAuth, async (c) => {
-  const oggi = new Date().toISOString().slice(0, 10);
+  const { data, giornoSettimana } = oggiInfo();
+  const giornoValido = orarioDailyDrop(data, giornoSettimana) !== null;
 
   const [mia, conteggio] = await Promise.all([
     c.env.DB.prepare(`SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND date(data) = ?`)
-      .bind(c.var.user.userId, oggi)
+      .bind(c.var.user.userId, data)
       .first(),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM post_feed WHERE tipo = 'daily_drop' AND date(data) = ?`)
-      .bind(oggi)
+      .bind(data)
       .first<{ n: number }>(),
   ]);
 
-  return c.json({ risposta: !!mia, numeroRisposte: conteggio?.n ?? 0 });
+  return c.json({
+    giornoValido,
+    attivo: giornoValido && attivoOra(),
+    risposta: !!mia,
+    numeroRisposte: conteggio?.n ?? 0,
+  });
 });
 
 dailyDrop.post("/", requireAuth, async (c) => {
   if (c.var.user.role !== "atleta") return c.json({ error: "Solo gli atleti possono rispondere" }, 403);
+  if (!attivoOra()) return c.json({ error: "Il Daily Drop non è ancora arrivato oggi" }, 400);
 
-  const oggi = new Date().toISOString().slice(0, 10);
+  const { data } = oggiInfo();
   const esistente = await c.env.DB.prepare(
     `SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND date(data) = ?`
   )
-    .bind(c.var.user.userId, oggi)
+    .bind(c.var.user.userId, data)
     .first();
   if (esistente) return c.json({ error: "Hai già risposto al Daily Drop di oggi" }, 409);
 
