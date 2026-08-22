@@ -10,7 +10,6 @@ import notaCoach from "./routes/nota-coach";
 import richieste from "./routes/richieste";
 import programma from "./routes/programma";
 import feed from "./routes/feed";
-import personalBest from "./routes/personal-best";
 import dailyDrop from "./routes/daily-drop";
 import foto from "./routes/foto";
 
@@ -43,7 +42,6 @@ app.route("/api/nota-coach", notaCoach);
 app.route("/api/richieste", richieste);
 app.route("/api/programma", programma);
 app.route("/api/feed", feed);
-app.route("/api/personal-best", personalBest);
 app.route("/api/daily-drop", dailyDrop);
 app.route("/api/foto", foto);
 
