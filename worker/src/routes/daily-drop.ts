@@ -7,9 +7,10 @@ import { oggi as oggiInfo } from "../lib/oggi";
 import { orarioDailyDrop, minutiOra } from "../lib/dailyDropOrario";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
-// Solo nei giorni di allenamento (lun/mer/ven), a un orario "casuale" ma mai durante la
-// sessione (vedi lib/dailyDropOrario.ts). L'endpoint non rivela mai l'orario esatto:
-// prima che scatti dice solo "non ancora", altrimenti si perde l'effetto sorpresa.
+// Solo in occasione dei giorni di allenamento (lun/mer/ven), e non ogni volta — occasionale,
+// non un appuntamento fisso — a un orario "casuale" ma mai durante la sessione, uguale per
+// tutti (vedi lib/dailyDropOrario.ts). L'endpoint non rivela mai l'orario esatto: prima che
+// scatti dice solo "non ancora", altrimenti si perde l'effetto sorpresa.
 //
 // Nota di scope: qui c'è il nucleo completo della logica (giorno giusto, orario giusto,
 // niente durante l'allenamento, foto -> XP -> feed, una risposta al giorno) ma NON la vera
@@ -24,13 +25,13 @@ const dailyDrop = new Hono<{ Bindings: Env; Variables: Variables }>();
 function attivoOra(): boolean {
   const { data, giornoSettimana } = oggiInfo();
   const orarioScatto = orarioDailyDrop(data, giornoSettimana);
-  if (orarioScatto === null) return false; // non è lun/mer/ven
+  if (orarioScatto === null) return false; // oggi non è previsto (giorno sbagliato, o "non tocca")
   return minutiOra(new Date()) >= orarioScatto;
 }
 
 dailyDrop.get("/oggi", requireAuth, async (c) => {
   const { data, giornoSettimana } = oggiInfo();
-  const giornoValido = orarioDailyDrop(data, giornoSettimana) !== null;
+  const previsto = orarioDailyDrop(data, giornoSettimana) !== null;
 
   const [mia, conteggio] = await Promise.all([
     c.env.DB.prepare(`SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND date(data) = ?`)
@@ -42,8 +43,8 @@ dailyDrop.get("/oggi", requireAuth, async (c) => {
   ]);
 
   return c.json({
-    giornoValido,
-    attivo: giornoValido && attivoOra(),
+    previsto,
+    attivo: previsto && attivoOra(),
     risposta: !!mia,
     numeroRisposte: conteggio?.n ?? 0,
   });

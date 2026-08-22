@@ -28,10 +28,10 @@ export function renderSfide(appEl) {
 async function loadDailyDrop(el) {
   const card = el.querySelector("#daily-drop-card");
   try {
-    const { giornoValido, attivo, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
+    const { previsto, attivo, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
 
-    // Solo nei giorni di allenamento (lun/mer/ven) — negli altri giorni la card non c'è.
-    if (!giornoValido) {
+    // Occasionale in occasione dei giorni di allenamento — quando non è previsto, niente card.
+    if (!previsto) {
       card.remove();
       return;
     }
