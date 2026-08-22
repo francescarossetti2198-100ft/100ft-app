@@ -93,8 +93,8 @@ async function loadProfilo(el) {
           <p class="mono" style="color:var(--mute); font-size:12px">Presenze tot.</p>
         </div>
         <div>
-          <p style="font-weight:600; font-size:18px">${p.anelli.streakSettimane}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Streak sett.</p>
+          <p style="font-weight:600; font-size:18px">${p.anelli.settimaneCompletateTotali}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
         </div>
         <div>
           <p style="font-weight:600; font-size:18px">${p.puntiTotali}</p>
@@ -115,7 +115,7 @@ async function loadProfilo(el) {
         <div class="card">
           <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
           <p class="mono" style="color:var(--mute); margin-top:8px">
-            Nessun livello ancora — chiudi l'anello allenamenti per la prima settimana per sbloccarlo.
+            Nessun livello ancora — completa la tua prima settimana (Training + Challenges + Feedback) per sbloccarlo.
           </p>
         </div>
         ${statsHtml}

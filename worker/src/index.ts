@@ -12,6 +12,7 @@ import programma from "./routes/programma";
 import feed from "./routes/feed";
 import dailyDrop from "./routes/daily-drop";
 import foto from "./routes/foto";
+import feedback from "./routes/feedback";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -44,6 +45,7 @@ app.route("/api/programma", programma);
 app.route("/api/feed", feed);
 app.route("/api/daily-drop", dailyDrop);
 app.route("/api/foto", foto);
+app.route("/api/feedback", feedback);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).

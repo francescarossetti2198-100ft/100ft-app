@@ -98,6 +98,46 @@ for (const a of ATLETI) {
       out.push(
         `INSERT INTO xp_log (user_id, azione, xp_assegnati, data) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), 'sessione_completata', 10, '${data}T19:00:00Z');`
       );
+      // Feedback "How was today?" per ogni sessione storica, altrimenti l'anello FEEDBACK
+      // (funzionalità nuova) azzererebbe tutte le settimane completate della demo.
+      const faccina = [3, 4, 5, 4, 5][(settimana + sessioneId) % 5];
+      out.push(
+        `INSERT INTO feedback_allenamento (user_id, sessione_id, data, faccina) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), ${sessioneId}, '${data}', ${faccina});`
+      );
+    }
+  }
+}
+
+// Backfill di sfide mensili per gli ultimi mesi, altrimenti l'anello CHALLENGES (ora
+// mensile, brief aggiornato) non chiuderebbe mai retroattivamente e nessuna settimana
+// storica risulterebbe completa. Copre solo gli ultimi 3 mesi (non l'intera storia di
+// ogni atleta) — oltre diventa dispendioso generare dati di fantasia; i livelli demo
+// saranno quindi più bassi di prima, per design (Feedback e Challenges mensili sono
+// requisiti nuovi, prima bastava la sola presenza).
+const MESI_BACKFILL = 3;
+const oraSeed = new Date();
+for (let m = 0; m < MESI_BACKFILL; m++) {
+  const meseDate = new Date(Date.UTC(oraSeed.getUTCFullYear(), oraSeed.getUTCMonth() - m, 1));
+  const annoMese = `${meseDate.getUTCFullYear()}-${String(meseDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const fineMese = new Date(Date.UTC(meseDate.getUTCFullYear(), meseDate.getUTCMonth() + 1, 0));
+
+  for (let i = 1; i <= 4; i++) {
+    const titolo = `Sfida mensile ${annoMese} #${i}`;
+    out.push(
+      `INSERT INTO sfide (titolo, descrizione, tipo, punti, data_inizio, data_fine) VALUES ('${esc(titolo)}', 'Sfida mensile generata per la demo', 'valore_manuale', 10, '${isoDate(meseDate)}', '${isoDate(fineMese)}');`
+    );
+
+    for (const a of ATLETI) {
+      // Approssimazione: partecipa se aveva già iniziato ad allenarsi in quel mese
+      // (circa 4 settimane per mese di anzianità).
+      if (a.settimane >= (m + 1) * 4) {
+        out.push(
+          `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, data, punti_assegnati) VALUES ((SELECT id FROM sfide WHERE titolo = '${esc(titolo)}'), (SELECT id FROM users WHERE email = '${esc(a.email)}'), 'demo', '${isoDate(meseDate)}', 10);`
+        );
+        out.push(
+          `INSERT INTO xp_log (user_id, azione, xp_assegnati, data) VALUES ((SELECT id FROM users WHERE email = '${esc(a.email)}'), 'sfida', 10, '${isoDate(meseDate)}T12:00:00Z');`
+        );
+      }
     }
   }
 }

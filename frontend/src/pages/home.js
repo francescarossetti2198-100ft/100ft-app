@@ -3,6 +3,24 @@ import { api, ApiError } from "../api.js";
 
 const CATEGORIE = ["Legs", "Mobility", "Upper Body", "Alta intensità", "Other"];
 
+// Scala fissa del feedback "How was today?" — sempre queste 5 faccine, in quest'ordine,
+// mai sostituite con stelle, slider, numeri o altre emoji.
+const FACCE = [
+  { valore: 1, emoji: "😫", titolo: "Pessima giornata" },
+  { valore: 2, emoji: "😕", titolo: "Non benissimo" },
+  { valore: 3, emoji: "😐", titolo: "Nella media" },
+  { valore: 4, emoji: "🙂", titolo: "Andata bene" },
+  { valore: 5, emoji: "🔥", titolo: "Fantastico" },
+];
+
+const GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
+
+function formattaData(dataIso) {
+  const d = new Date(`${dataIso}T00:00:00Z`);
+  const giorno = GIORNI[(d.getUTCDay() + 6) % 7];
+  return `${giorno} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export function renderHome(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -16,6 +34,7 @@ export function renderHome(appEl) {
     <div class="card" id="presenza-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
+    <div id="feedback-cards" style="margin-top:12px"></div>
     <div class="card" id="richieste-card" style="margin-top:12px"></div>
   `;
   appEl.appendChild(el);
@@ -24,6 +43,7 @@ export function renderHome(appEl) {
   loadPresenza(el);
   loadProgresso(el);
   loadNotaCoach(el);
+  loadFeedbackDaDare(el);
   loadRichieste(el);
 }
 
@@ -42,6 +62,69 @@ async function loadNotaCoach(el) {
     `;
   } catch {
     card.remove();
+  }
+}
+
+// "How was today?" — disponibile solo dopo la fine della sessione, solo per chi era
+// presente (Presenza -> Allenamento -> Feedback). Una card per ogni sessione di questa
+// settimana ancora senza feedback.
+async function loadFeedbackDaDare(el) {
+  const container = el.querySelector("#feedback-cards");
+  try {
+    const { sessioni } = await api.get("/feedback/da-dare");
+    if (!sessioni.length) {
+      container.innerHTML = "";
+      return;
+    }
+
+    container.innerHTML = sessioni
+      .map(
+        (s) => `
+          <div class="card" style="margin-top:12px" data-data="${s.data}" data-sessione="${s.sessioneId}">
+            <p class="mono" style="color:var(--mute); font-size:12px">HOW WAS TODAY? · ${formattaData(s.data)}</p>
+            <div style="display:flex; justify-content:space-between; margin-top:10px">
+              ${FACCE.map(
+                (f) => `
+                  <button type="button" class="faccia-btn" data-valore="${f.valore}" title="${f.titolo}"
+                    style="background:none; border:none; font-size:28px; cursor:pointer; padding:4px; border-radius:8px">
+                    ${f.emoji}
+                  </button>
+                `
+              ).join("")}
+            </div>
+            <input class="feedback-nota" type="text" placeholder="Nota facoltativa"
+                   style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
+            <p class="error-text feedback-error" hidden style="margin-top:6px"></p>
+          </div>
+        `
+      )
+      .join("");
+
+    container.querySelectorAll(".faccia-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const cardEl = btn.closest("[data-sessione]");
+        const errorEl = cardEl.querySelector(".feedback-error");
+        errorEl.hidden = true;
+        cardEl.querySelectorAll(".faccia-btn").forEach((b) => (b.disabled = true));
+
+        try {
+          await api.post("/feedback", {
+            sessioneId: Number(cardEl.dataset.sessione),
+            data: cardEl.dataset.data,
+            faccina: Number(btn.dataset.valore),
+            nota: cardEl.querySelector(".feedback-nota").value,
+          });
+          loadFeedbackDaDare(el);
+          loadProgresso(el);
+        } catch (err) {
+          errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+          errorEl.hidden = false;
+          cardEl.querySelectorAll(".faccia-btn").forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+  } catch {
+    container.innerHTML = "";
   }
 }
 
@@ -124,16 +207,15 @@ async function loadRichieste(el) {
   }
 }
 
-function anelliSvg({ allenamenti, sfide, streakSettimane }) {
-  const pctAllenamenti = allenamenti.totali > 0 ? Math.min(1, allenamenti.fatti / allenamenti.totali) : 0;
-  const pctSfide = sfide.totali > 0 ? Math.min(1, sfide.fatte / sfide.totali) : 0;
-  // Lo streak non ha un "totale" naturale: scala decorativa fino a 8 settimane per riempire l'anello.
-  const pctStreak = Math.min(1, streakSettimane / 8);
+function anelliSvg({ training, challenges, feedback }) {
+  const pctTraining = training.totali > 0 ? Math.min(1, training.fatti / training.totali) : 0;
+  const pctChallenges = challenges.totali > 0 ? Math.min(1, challenges.fatte / challenges.totali) : 0;
+  const pctFeedback = feedback.totali > 0 ? Math.min(1, feedback.fatti / feedback.totali) : 0;
 
   const anelli = [
-    { r: 54, pct: pctAllenamenti, colore: "var(--accent)" },
-    { r: 40, pct: pctSfide, colore: "var(--sessione-extra)" },
-    { r: 26, pct: pctStreak, colore: "var(--livello-1)" },
+    { r: 54, pct: pctTraining, colore: "var(--accent)" },
+    { r: 40, pct: pctChallenges, colore: "var(--sessione-extra)" },
+    { r: 26, pct: pctFeedback, colore: "var(--livello-1)" },
   ];
 
   const cerchi = anelli
@@ -161,13 +243,19 @@ async function loadProgresso(el) {
 
     const legenda = `
       <div style="display:flex; flex-direction:column; gap:10px; justify-content:center">
-        <div><span style="color:var(--accent)">●</span> Allenamenti <strong>${anelli.allenamenti.fatti}/${anelli.allenamenti.totali}</strong></div>
-        <div><span style="color:var(--sessione-extra)">●</span> Sfide <strong>${anelli.sfide.fatte}/${anelli.sfide.totali}</strong></div>
-        <div><span style="color:var(--livello-1)">●</span> Streak <strong>${anelli.streakSettimane} sett.</strong></div>
+        <div><span style="color:var(--accent)">●</span> <span class="mono">TRAINING</span> <strong>${anelli.training.fatti}/${anelli.training.totali}</strong></div>
+        <div><span style="color:var(--sessione-extra)">●</span> <span class="mono">CHALLENGES</span> <strong>${anelli.challenges.fatte}/${anelli.challenges.totali}</strong></div>
+        <div><span style="color:var(--livello-1)">●</span> <span class="mono">FEEDBACK</span> <strong>${anelli.feedback.fatti}/${anelli.feedback.totali}</strong></div>
       </div>
     `;
 
-    let livelloHtml = `<p class="mono" style="color:var(--mute); margin-top:14px">Nessun livello ancora — chiudi l'anello allenamenti questa settimana per iniziare.</p>`;
+    const weekCompleteHtml = anelli.settimanaCompletata
+      ? `<div style="margin-top:14px; text-align:center; padding:10px; border-radius:10px; border:1px solid var(--accent); box-shadow:0 0 16px -4px var(--accent)">
+          <p style="font-weight:700; letter-spacing:1px">WEEK COMPLETE 🔥</p>
+        </div>`
+      : "";
+
+    let livelloHtml = `<p class="mono" style="color:var(--mute); margin-top:14px">Nessun livello ancora — completa la tua prima settimana per iniziare.</p>`;
     if (livello) {
       const { attuale, prossimo, settimaneCompletate } = livello;
       const range = prossimo ? prossimo.settimaneMin - attuale.settimaneMin : 0;
@@ -180,7 +268,7 @@ async function loadProgresso(el) {
         <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:14px">
           <p style="font-weight:600; color:${attuale.colore}">Livello ${attuale.numero} — ${attuale.nome}</p>
           <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">
-            ${settimaneCompletate} settimane totali con l'anello allenamenti chiuso.
+            ${settimaneCompletate} settimane completate.
             ${prossimo ? `Ancora ${prossimo.settimaneMin - settimaneCompletate} per salire a ${prossimo.nome}.` : "Livello massimo raggiunto."}
           </p>
           ${dots ? `<p style="letter-spacing:3px; color:${attuale.colore}; margin-top:8px">${dots}</p>` : ""}
@@ -189,11 +277,12 @@ async function loadProgresso(el) {
     }
 
     card.innerHTML = `
-      <p class="mono" style="color:var(--mute); font-size:13px">Questa settimana</p>
+      <p class="mono" style="color:var(--mute); font-size:13px; letter-spacing:1px">YOUR WEEK</p>
       <div style="display:flex; align-items:center; gap:20px; margin-top:10px">
         ${anelliSvg(anelli)}
         ${legenda}
       </div>
+      ${weekCompleteHtml}
       ${livelloHtml}
     `;
   } catch {

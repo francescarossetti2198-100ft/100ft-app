@@ -3,10 +3,8 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { oggi, sessioneOggi } from "../lib/oggi";
-import { calcolaAnelli } from "../lib/settimana";
-import { calcolaLivello } from "../lib/livelli";
-import { pubblicaPost } from "../lib/feed";
 import { assegnaMilestone } from "../lib/milestones";
+import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 
 type Variables = { user: SessionUser };
 const presenze = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -53,9 +51,7 @@ presenze.post("/conferma", requireAuth, async (c) => {
 
   if (esistente?.confermata) return c.json({ ok: true });
 
-  // Snapshot prima della conferma, per rilevare level up / streak da pubblicare nel feed.
-  const primaAnelli = await calcolaAnelli(c.env.DB, c.var.user.userId);
-  const livelloPrima = calcolaLivello(primaAnelli.settimaneChiuseTotali);
+  const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
 
   await c.env.DB.prepare(
     `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES (?, ?, ?, 1)
@@ -67,30 +63,10 @@ presenze.post("/conferma", requireAuth, async (c) => {
   // +10 XP per sessione completata (brief, sezione 4) — assegnato una sola volta alla conferma.
   await awardXp(c.env.DB, c.var.user.userId, "sessione_completata", 10);
 
-  // Post automatici nel feed: Level Up e Consistency (brief, sezione 11).
-  const dopoAnelli = await calcolaAnelli(c.env.DB, c.var.user.userId);
-  const livelloDopo = calcolaLivello(dopoAnelli.settimaneChiuseTotali);
+  const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);
+  await segnalaAvanzamento(c.env.DB, c.var.user.userId, prima, dopo);
 
-  if (livelloDopo && (!livelloPrima || livelloDopo.attuale.numero > livelloPrima.attuale.numero)) {
-    await pubblicaPost(
-      c.env.DB,
-      c.var.user.userId,
-      "level_up",
-      `Livello ${livelloDopo.attuale.numero} — ${livelloDopo.attuale.nome}`
-    );
-  }
-  if (dopoAnelli.streakSettimane > primaAnelli.streakSettimane && dopoAnelli.streakSettimane % 4 === 0) {
-    await pubblicaPost(
-      c.env.DB,
-      c.var.user.userId,
-      "consistency",
-      `${dopoAnelli.streakSettimane} settimane di fila con tutti gli allenamenti completati`
-    );
-  }
-
-  // Milestones legate alle presenze (brief, sezione 10) — "first_month" semplificato come
-  // il raggiungimento del Livello 2 (4 settimane chiuse), stessa semplificazione già
-  // dichiarata per il calcolo dei livelli.
+  // Milestones legate al numero di presenze (brief, sezione 10).
   const totalePresenze = await c.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`
   )
@@ -100,9 +76,6 @@ presenze.post("/conferma", requireAuth, async (c) => {
   if (totalePresenze?.n === 1) await assegnaMilestone(c.env.DB, c.var.user.userId, "first_session");
   if (totalePresenze?.n === 10) await assegnaMilestone(c.env.DB, c.var.user.userId, "10_sessions");
   if (totalePresenze?.n === 25) await assegnaMilestone(c.env.DB, c.var.user.userId, "25_sessions");
-  if (livelloDopo?.attuale.numero === 2 && (!livelloPrima || livelloPrima.attuale.numero < 2)) {
-    await assegnaMilestone(c.env.DB, c.var.user.userId, "first_month");
-  }
 
   return c.json({ ok: true });
 });

@@ -31,7 +31,7 @@ profilo.get("/me", requireAuth, async (c) => {
     nickname: profiloRow?.nickname ?? null,
     role: c.var.user.role,
     anelli,
-    livello: calcolaLivello(anelli.settimaneChiuseTotali),
+    livello: calcolaLivello(anelli.settimaneCompletateTotali),
     puntiTotali: punti?.totale ?? 0,
     sfideCompletate: sfideCompletate?.n ?? 0,
     presenzeTotali: presenzeTotali?.n ?? 0,

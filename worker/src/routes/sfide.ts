@@ -4,6 +4,7 @@ import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
 import { inizioSettimana } from "../lib/settimana";
+import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -85,6 +86,8 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   const fotoUrl = foto ? await salvaFoto(c.env.FOTO_SFIDE, "sfide", foto) : null;
 
+  const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
+
   await c.env.DB.prepare(
     `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati) VALUES (?, ?, ?, ?, ?, ?)`
   )
@@ -92,6 +95,11 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     .run();
 
   await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti);
+
+  // Completare una sfida chiude l'anello CHALLENGES del mese, che può chiudere una
+  // settimana (e far salire di livello) — non solo confermare la presenza.
+  const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);
+  await segnalaAvanzamento(c.env.DB, c.var.user.userId, prima, dopo);
 
   return c.json({ ok: true });
 });

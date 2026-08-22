@@ -21,9 +21,8 @@ export type StatoLivello = {
   settimaneCompletate: number;
 };
 
-// Semplificazione: "settimana chiusa" = almeno una presenza confermata in quella settimana.
-// Il brief parla di "tutti gli anelli settimanali chiusi" (allenamenti/sfide/streak) senza
-// specificare la regola esatta — da rivedere con Francesca insieme alle altre domande aperte.
+// "Settimana completata" = tutti e 3 gli anelli chiusi (Training/Challenges/Feedback),
+// calcolato in lib/settimana.ts — cumulativo, non richiede consecutività.
 export function calcolaLivello(settimaneCompletate: number): StatoLivello | null {
   if (settimaneCompletate <= 0) return null;
 
