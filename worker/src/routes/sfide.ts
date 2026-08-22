@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
+import { salvaFoto } from "../lib/storage";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -46,11 +47,10 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   }
 
   const sfidaId = Number(c.req.param("id"));
-  const body = await c.req.json<{ valore?: string }>().catch(() => ({}) as { valore?: string });
 
-  const sfida = await c.env.DB.prepare(`SELECT id, punti, data_fine FROM sfide WHERE id = ?`)
+  const sfida = await c.env.DB.prepare(`SELECT id, tipo, punti, data_fine FROM sfide WHERE id = ?`)
     .bind(sfidaId)
-    .first<{ id: number; punti: number; data_fine: string }>();
+    .first<{ id: number; tipo: string; punti: number; data_fine: string }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
 
   const oggi = new Date().toISOString().slice(0, 10);
@@ -61,10 +61,21 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     .first();
   if (esistente) return c.json({ error: "Hai già partecipato a questa sfida" }, 409);
 
+  // Le sfide foto vanno convalidate con una foto — niente autocertificazione.
+  const body = await c.req.parseBody();
+  const foto = body.foto instanceof File ? body.foto : null;
+  const valore = typeof body.valore === "string" ? body.valore : null;
+
+  if (sfida.tipo === "foto" && !foto) {
+    return c.json({ error: "Questa sfida richiede una foto per essere convalidata" }, 400);
+  }
+
+  const fotoUrl = foto ? await salvaFoto(c.env.FOTO_SFIDE, "sfide", foto) : null;
+
   await c.env.DB.prepare(
-    `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, data, punti_assegnati) VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati) VALUES (?, ?, ?, ?, ?, ?)`
   )
-    .bind(sfidaId, c.var.user.userId, body.valore ?? null, oggi, sfida.punti)
+    .bind(sfidaId, c.var.user.userId, valore, fotoUrl, oggi, sfida.punti)
     .run();
 
   await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti);

@@ -9,12 +9,20 @@ const feed = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 feed.get("/", requireAuth, async (c) => {
   const { results: posts } = await c.env.DB.prepare(
-    `SELECT p.id, p.tipo, p.testo, p.data, a.nome, a.nickname
+    `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl, p.data, a.nome, a.nickname
      FROM post_feed p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
      ORDER BY p.data DESC
      LIMIT 50`
-  ).all<{ id: number; tipo: string; testo: string; data: string; nome: string | null; nickname: string | null }>();
+  ).all<{
+    id: number;
+    tipo: string;
+    testo: string;
+    contenutoUrl: string | null;
+    data: string;
+    nome: string | null;
+    nickname: string | null;
+  }>();
 
   const { results: reazioni } = await c.env.DB.prepare(
     `SELECT post_id AS postId, emoji, COUNT(*) AS n,

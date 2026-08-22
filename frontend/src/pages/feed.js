@@ -71,6 +71,7 @@ async function loadFeed(el) {
               <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
             </p>
             <p style="margin-top:8px">${p.testo}</p>
+            ${p.contenutoUrl ? `<img src="${p.contenutoUrl}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
             <div style="display:flex; gap:6px; margin-top:10px">${reazioniHtml}</div>
           </div>
         `;

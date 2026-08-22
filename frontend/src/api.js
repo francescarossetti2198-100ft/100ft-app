@@ -27,9 +27,26 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Per upload di file (foto sfide/Daily Drop) — niente Content-Type esplicito, il browser
+// imposta multipart/form-data con il boundary corretto da solo.
+async function requestForm(path, formData) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new ApiError(data?.error ?? "Errore imprevisto", res.status);
+  }
+  return data;
+}
+
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: "POST", body }),
+  postForm: (path, formData) => requestForm(path, formData),
 };
 
 export { ApiError };
