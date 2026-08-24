@@ -9,7 +9,6 @@ const TABS = [
   { path: "/profilo", label: "Profilo", icon: "👤" },
 ];
 
-const TAB_MESSAGGI = { path: "/messaggi", label: "Messaggi", icon: "💬" };
 const TAB_COACH = { path: "/coach", label: "Coach", icon: "🎓" };
 
 export function renderTabbar() {
@@ -17,7 +16,7 @@ export function renderTabbar() {
   nav.className = "tabbar";
 
   const ruolo = getUser()?.role;
-  const tabs = ruolo === "coach" ? [...TABS, TAB_COACH] : [...TABS, TAB_MESSAGGI];
+  const tabs = ruolo === "coach" ? [...TABS, TAB_COACH] : TABS;
   const active = currentPath();
   for (const tab of tabs) {
     const a = document.createElement("a");

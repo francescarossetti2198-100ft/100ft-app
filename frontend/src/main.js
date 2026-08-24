@@ -11,7 +11,6 @@ import { renderSfide } from "./pages/sfide.js";
 import { renderFeed } from "./pages/feed.js";
 import { renderProfilo } from "./pages/profilo.js";
 import { renderCoach } from "./pages/coach.js";
-import { renderMessaggi } from "./pages/messaggi.js";
 
 registerRoute("/login", { render: renderLogin, protected: false });
 registerRoute("/registrati", { render: renderRegistrazione, protected: false });
@@ -23,7 +22,6 @@ registerRoute("/sfide", { render: renderSfide });
 registerRoute("/feed", { render: renderFeed });
 registerRoute("/profilo", { render: renderProfilo });
 registerRoute("/coach", { render: renderCoach });
-registerRoute("/messaggi", { render: renderMessaggi });
 
 async function bootstrap() {
   try {
