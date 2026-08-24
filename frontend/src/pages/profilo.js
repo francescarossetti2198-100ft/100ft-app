@@ -33,33 +33,28 @@ export function renderProfilo(appEl) {
   loadProfilo(el);
 }
 
+// I 6 livelli del brief (sezione 5) — le card grafiche sono definitive, qui si decide solo
+// quali mostrare sbloccate (fino al livello attuale incluso) e quali ancora bloccate.
+const NUMERO_LIVELLI = 6;
+
 function scalaLivelliHtml(livello) {
-  // I 6 livelli del brief (sezione 5), hardcoded qui solo per etichette/soglie —
-  // la fonte di verità resta worker/src/lib/livelli.ts.
-  const LIVELLI = [
-    { numero: 1, settimaneMin: 1 },
-    { numero: 2, settimaneMin: 4 },
-    { numero: 3, settimaneMin: 9 },
-    { numero: 4, settimaneMin: 16 },
-    { numero: 5, settimaneMin: 25 },
-    { numero: 6, settimaneMin: 35 },
-  ];
   const attualeNumero = livello?.attuale.numero ?? 0;
 
   return `
-    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px">
-      ${LIVELLI.map((l) => {
-        const stato = l.numero < attualeNumero ? "✓" : l.numero === attualeNumero ? "●" : "";
-        const prossimoMin = LIVELLI[l.numero]?.settimaneMin;
-        const range = prossimoMin ? `${l.settimaneMin}–${prossimoMin - 1}` : `${l.settimaneMin}+`;
-        return `
-          <div style="flex:0 0 auto; min-width:64px; text-align:center; padding:8px; border-radius:8px;
-                      border:1px solid ${l.numero === attualeNumero ? "var(--accent)" : "var(--border)"}">
-            <p class="mono" style="font-size:11px; color:var(--mute)">${range} sett.</p>
-            <p style="margin-top:4px">${stato || "&nbsp;"}</p>
-          </div>
-        `;
-      }).join("")}
+    <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:4px">
+      ${Array.from({ length: NUMERO_LIVELLI }, (_, i) => i + 1)
+        .map((n) => {
+          const sbloccato = n <= attualeNumero;
+          return `
+            <div style="flex:0 0 auto; text-align:center">
+              <img src="/cards/card_final_${n}.png" alt="Livello ${n}"
+                   style="width:64px; height:64px; border-radius:10px; object-fit:cover;
+                          ${sbloccato ? "" : "filter:grayscale(1); opacity:0.35"}" />
+              ${!sbloccato ? `<p style="margin-top:4px; font-size:13px">🔒</p>` : ""}
+            </div>
+          `;
+        })
+        .join("")}
     </div>
   `;
 }

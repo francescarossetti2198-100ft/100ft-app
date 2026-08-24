@@ -108,12 +108,16 @@ async function loadSettimana(el) {
       const pctBarra = prossimo ? Math.round((progresso / range) * 100) : 100;
 
       livelloHtml = `
-        <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
-          <p class="mono" style="color:var(--mute); font-size:11px">
-            ${settimaneCompletate} SETTIMANE COMPLETATE · <span style="color:${attuale.colore}">LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}</span>
-          </p>
-          <div style="background:var(--surface-2); border-radius:4px; height:4px; margin-top:6px; overflow:hidden">
-            <div style="background:${attuale.colore}; width:${pctBarra}%; height:100%"></div>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+          <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
+               style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0" />
+          <div style="flex:1; min-width:0">
+            <p class="mono" style="color:var(--mute); font-size:11px">
+              ${settimaneCompletate} SETTIMANE COMPLETATE · <span style="color:${attuale.colore}">LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}</span>
+            </p>
+            <div style="background:var(--surface-2); border-radius:4px; height:4px; margin-top:6px; overflow:hidden">
+              <div style="background:${attuale.colore}; width:${pctBarra}%; height:100%"></div>
+            </div>
           </div>
         </div>
       `;
