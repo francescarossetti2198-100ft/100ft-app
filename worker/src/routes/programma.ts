@@ -17,9 +17,13 @@ function sbloccato(mese: number, anno: number): boolean {
   return anno < c.anno || (anno === c.anno && mese <= c.mese);
 }
 
+// La vecchia stagione demo (set 2025 → lug 2026) resta nel DB ma non serve più mostrarla —
+// il Programma parte dalla stagione reale (set 2026 in poi).
 programma.get("/", requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, mese, anno, focus_tema AS focusTema FROM programma_mensile ORDER BY anno, mese`
+    `SELECT id, mese, anno, focus_tema AS focusTema FROM programma_mensile
+     WHERE anno > 2026 OR (anno = 2026 AND mese >= 9)
+     ORDER BY anno, mese`
   ).all<{ id: number; mese: number; anno: number; focusTema: string | null }>();
 
   // Il coach vede il focus di tutti i mesi (anche futuri) per poterli modificare — il lock
@@ -55,10 +59,10 @@ programma.get("/:id", requireAuth, async (c) => {
   }
 
   const { results: merende } = await c.env.DB.prepare(
-    `SELECT titolo, descrizione, link_url AS linkUrl FROM merende_fit WHERE programma_id = ? ORDER BY ordine`
+    `SELECT titolo, descrizione, link_url AS linkUrl, data FROM merende_fit WHERE programma_id = ? ORDER BY data IS NULL, data, ordine`
   )
     .bind(id)
-    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null }>();
+    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null }>();
 
   return c.json({ ...mese, merende });
 });
@@ -71,7 +75,7 @@ programma.post("/", requireCoach, async (c) => {
     focusTema?: string;
     descrizione?: string;
     lineeGuidaNutrizionali?: string;
-    merende?: { titolo: string; descrizione?: string; linkUrl?: string }[];
+    merende?: { titolo: string; descrizione?: string; linkUrl?: string; data?: string }[];
   }>();
   const { mese, anno, focusTema, descrizione, lineeGuidaNutrizionali, merende } = body;
 
@@ -98,9 +102,9 @@ programma.post("/", requireCoach, async (c) => {
     await c.env.DB.prepare(`DELETE FROM merende_fit WHERE programma_id = ?`).bind(programmaId.id).run();
     for (const [i, m] of merende.entries()) {
       await c.env.DB.prepare(
-        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine, link_url) VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine, link_url, data) VALUES (?, ?, ?, ?, ?, ?)`
       )
-        .bind(programmaId.id, m.titolo, m.descrizione ?? null, i, m.linkUrl ?? null)
+        .bind(programmaId.id, m.titolo, m.descrizione ?? null, i, m.linkUrl ?? null, m.data ?? null)
         .run();
     }
   }

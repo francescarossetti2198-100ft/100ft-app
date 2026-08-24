@@ -16,6 +16,18 @@ const MESI = [
   "Lug", "Ago", "Set", "Ott", "Nov", "Dic",
 ];
 
+const GIORNI_SETTIMANA = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
+
+// "2026-08-25" -> "Lunedì 25/08" — un'etichetta leggibile per la data assegnata a una merenda.
+function etichettaData(dataIso) {
+  const d = new Date(`${dataIso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  const giorno = GIORNI_SETTIMANA[d.getUTCDay()];
+  const gg = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${giorno} ${gg}/${mm}`;
+}
+
 export function renderProgramma(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -121,9 +133,11 @@ async function loadDettaglio(content, id) {
                 ${m.merende
                   .map((mf) => {
                     const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
+                    const data = mf.data ? etichettaData(mf.data) : null;
                     return `
                       <div class="card" style="flex:1 1 140px; background:var(--surface-2)">
-                        <p style="font-weight:600; font-size:14px">${mf.titolo}</p>
+                        ${data ? `<p class="mono" style="color:var(--accent); font-size:11px">${data}</p>` : ""}
+                        <p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${mf.titolo}</p>
                         ${mf.descrizione ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${mf.descrizione}</p>` : ""}
                         ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:6px">▶ Vedi la ricetta</a>` : ""}
                       </div>
@@ -134,10 +148,6 @@ async function loadDettaglio(content, id) {
             `
             : ""
         }
-
-        <p class="mono" style="color:var(--mute); font-size:11px; margin-top:20px; font-style:italic">
-          Indicazioni generali del coach, non una dieta personalizzata. Per esigenze specifiche, consulta un nutrizionista.
-        </p>
       </div>
     `;
   } catch (err) {

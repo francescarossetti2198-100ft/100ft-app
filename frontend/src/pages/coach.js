@@ -26,6 +26,10 @@ function oraCorrente() {
   return { mese: now.getUTCMonth() + 1, anno: now.getUTCFullYear() };
 }
 
+function oggiIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function renderCoach(appEl) {
   // Pannello riservato al coach — un atleta che arriva qui via URL diretto torna in Home.
   if (getUser()?.role !== "coach") {
@@ -42,6 +46,9 @@ export function renderCoach(appEl) {
 
     <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">NOTA DEL GIORNO</p>
+      <input id="nota-data" type="date" value="${oggiIso()}"
+        style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
+               border-radius:8px; padding:10px; color:var(--text); font-family:inherit" />
       <div id="nota-status" style="margin-top:8px"></div>
       <textarea id="nota-testo" rows="3"
         style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
@@ -73,13 +80,6 @@ export function renderCoach(appEl) {
           style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
                  padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
       </div>
-      <div class="field">
-        <label>Linee guida nutrizionali generali</label>
-        <textarea id="piano-nutrizione" rows="3"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:16px">MERENDE FIT</p>
       <div id="merende-rows" style="margin-top:8px; display:flex; flex-direction:column; gap:10px"></div>
       <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
@@ -148,22 +148,29 @@ export function renderCoach(appEl) {
 }
 
 function initNota(el) {
+  const dataInput = el.querySelector("#nota-data");
   const status = el.querySelector("#nota-status");
   const testo = el.querySelector("#nota-testo");
   const errorEl = el.querySelector("#nota-error");
   const successEl = el.querySelector("#nota-success");
 
-  api
-    .get("/nota-coach")
-    .then((r) => {
-      status.innerHTML = r.testo
-        ? `<p class="mono" style="color:var(--mute); font-size:13px">Nota attuale: “${r.testo}”</p>`
-        : `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna nota per oggi.</p>`;
-      if (r.testo) testo.value = r.testo;
-    })
-    .catch(() => {
-      status.innerHTML = "";
-    });
+  function carica() {
+    testo.value = "";
+    const oggi = dataInput.value === oggiIso();
+    api
+      .get(`/nota-coach?data=${dataInput.value}`)
+      .then((r) => {
+        status.innerHTML = r.testo
+          ? `<p class="mono" style="color:var(--mute); font-size:13px">Nota attuale: “${r.testo}”</p>`
+          : `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna nota per ${oggi ? "oggi" : "questa data"}.</p>`;
+        if (r.testo) testo.value = r.testo;
+      })
+      .catch(() => {
+        status.innerHTML = "";
+      });
+  }
+
+  dataInput.addEventListener("change", carica);
 
   el.querySelector("#nota-salva").addEventListener("click", async (e) => {
     errorEl.hidden = true;
@@ -175,9 +182,9 @@ function initNota(el) {
     }
     e.target.disabled = true;
     try {
-      await api.post("/nota-coach", { testo: testo.value.trim() });
+      await api.post("/nota-coach", { testo: testo.value.trim(), data: dataInput.value });
       successEl.hidden = false;
-      initNota(el);
+      carica();
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
       errorEl.hidden = false;
@@ -185,6 +192,8 @@ function initNota(el) {
       e.target.disabled = false;
     }
   });
+
+  carica();
 }
 
 function rigaMerenda(m = {}) {
@@ -198,6 +207,11 @@ function rigaMerenda(m = {}) {
       style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
     <input class="merenda-link" type="text" placeholder="Link ricetta/video (opzionale)" value="${m.linkUrl ?? ""}"
       style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
+    <div style="display:flex; align-items:center; gap:8px">
+      <label class="mono" style="font-size:12px; color:var(--mute)">Per il giorno</label>
+      <input class="merenda-data" type="date" value="${m.data ?? ""}"
+        style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
+    </div>
     <button type="button" class="link-btn merenda-rimuovi" style="align-self:flex-start; color:var(--livello-5)">Rimuovi</button>
   `;
   row.querySelector(".merenda-rimuovi").addEventListener("click", () => row.remove());
@@ -209,7 +223,6 @@ function initPiano(el) {
   const annoInput = el.querySelector("#piano-anno");
   const focusInput = el.querySelector("#piano-focus");
   const descrizioneInput = el.querySelector("#piano-descrizione");
-  const nutrizioneInput = el.querySelector("#piano-nutrizione");
   const merendeRows = el.querySelector("#merende-rows");
   const errorEl = el.querySelector("#piano-error");
   const successEl = el.querySelector("#piano-success");
@@ -219,7 +232,6 @@ function initPiano(el) {
     successEl.hidden = true;
     focusInput.value = "";
     descrizioneInput.value = "";
-    nutrizioneInput.value = "";
     merendeRows.innerHTML = "";
 
     const mese = Number(meseSel.value);
@@ -232,7 +244,6 @@ function initPiano(el) {
       const dettaglio = await api.get(`/programma/${esistente.id}`);
       focusInput.value = dettaglio.focusTema ?? "";
       descrizioneInput.value = dettaglio.descrizione ?? "";
-      nutrizioneInput.value = dettaglio.lineeGuidaNutrizionali ?? "";
       for (const m of dettaglio.merende ?? []) merendeRows.appendChild(rigaMerenda(m));
     } catch {
       // Nessun piano esistente per questo mese o errore di rete — form vuoto, si crea da capo.
@@ -252,6 +263,7 @@ function initPiano(el) {
         titolo: row.querySelector(".merenda-titolo").value.trim(),
         descrizione: row.querySelector(".merenda-descrizione").value.trim() || undefined,
         linkUrl: row.querySelector(".merenda-link").value.trim() || undefined,
+        data: row.querySelector(".merenda-data").value || undefined,
       }))
       .filter((m) => m.titolo);
 
@@ -262,7 +274,6 @@ function initPiano(el) {
         anno: Number(annoInput.value),
         focusTema: focusInput.value.trim() || undefined,
         descrizione: descrizioneInput.value.trim() || undefined,
-        lineeGuidaNutrizionali: nutrizioneInput.value.trim() || undefined,
         merende,
       });
       successEl.hidden = false;

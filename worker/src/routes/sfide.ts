@@ -42,14 +42,21 @@ sfide.get("/classifica", requireAuth, async (c) => {
 });
 
 sfide.get("/", requireAuth, async (c) => {
+  // Il coach può creare sfide in anticipo (es. tutta la settimana la domenica prima) —
+  // restano bloccate agli atleti finché data_inizio non arriva, stesso principio anti-spoiler
+  // già applicato al Programma mensile.
+  const isCoach = c.var.user.role === "coach";
+  const oggi = new Date().toISOString().slice(0, 10);
+
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.punti, s.data_inizio, s.data_fine,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
+     ${isCoach ? "" : "WHERE s.data_inizio <= ?"}
      ORDER BY s.data_fine DESC`
   )
-    .bind(c.var.user.userId)
+    .bind(...(isCoach ? [c.var.user.userId] : [c.var.user.userId, oggi]))
     .all();
 
   return c.json({ sfide: results });

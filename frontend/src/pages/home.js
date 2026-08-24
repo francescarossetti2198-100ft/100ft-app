@@ -142,13 +142,18 @@ async function loadTimeline(el) {
     const { sessioniSettimana } = await api.get("/profilo/me");
     const oggiIso = new Date().toISOString().slice(0, 10);
 
-    const righe = sessioniSettimana
-      .map((s) => {
-        const giorno = nomeGiorno(s.data).toUpperCase();
-        const orario = `${s.oraInizio} — ${s.oraFine}`;
+    // Passate/oggi restano righe piene una sotto l'altra; i giorni futuri (○, non
+    // cliccabili) vanno affiancati in una sola riga invece di impilati uno sotto l'altro.
+    const righe = [];
+    const future = [];
 
-        if (s.data < oggiIso) {
-          return s.confermata
+    sessioniSettimana.forEach((s) => {
+      const giorno = nomeGiorno(s.data).toUpperCase();
+      const orario = `${s.oraInizio} — ${s.oraFine}`;
+
+      if (s.data < oggiIso) {
+        righe.push(
+          s.confermata
             ? `
               <div style="padding:12px 0; border-top:1px solid var(--border)">
                 <p style="font-size:14px"><span style="color:var(--accent)">✓</span> ${giorno}</p>
@@ -162,54 +167,61 @@ async function loadTimeline(el) {
                 <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
                 <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">NON FREQUENTATA</p>
               </div>
-            `;
-        }
+            `
+        );
+        return;
+      }
 
-        if (s.data > oggiIso) {
-          return `
-            <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.4">
-              <p style="font-size:14px">○ ${giorno}</p>
-              <p class="mono" style="font-size:12px; margin-top:2px">${orario}</p>
-              <p class="mono" style="font-size:11px; letter-spacing:1px; margin-top:4px">DISPONIBILE PROSSIMAMENTE</p>
-            </div>
-          `;
-        }
-
-        // Oggi.
-        if (s.confermata) {
-          return `
-            <div style="padding:12px 0; border-top:1px solid var(--border)">
-              <p style="font-size:14px"><span style="color:var(--accent)">✓</span> ${giorno}</p>
-              <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-              <p class="mono" style="color:var(--accent); font-size:11px; letter-spacing:1px; margin-top:4px">PRESENTE</p>
-            </div>
-          `;
-        }
-
-        // Sessione di oggi già finita e mai confermata: non si può più segnare presente ora.
-        const finita = new Date(`${s.data}T${s.oraFine}:00Z`) <= new Date();
-        if (finita) {
-          return `
-            <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
-              <p style="font-size:14px">${giorno}</p>
-              <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-              <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">NON FREQUENTATA</p>
-            </div>
-          `;
-        }
-
-        return `
-          <div style="margin-top:12px; padding:14px; border-radius:12px; border:1px solid var(--accent)">
-            <p style="font-size:15px; font-weight:600"><span style="color:var(--accent)">●</span> ${giorno}</p>
-            <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-            <p class="mono" style="font-size:11px; letter-spacing:1px; margin-top:8px">CONFERMA LA TUA PRESENZA</p>
-            <button class="btn conferma-presenza-btn" data-sessione="${s.sessioneId}" style="width:100%; margin-top:10px">CI SONO</button>
+      if (s.data > oggiIso) {
+        future.push(`
+          <div style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; opacity:0.5">
+            <p style="font-size:14px">○ ${giorno}</p>
+            <p class="mono" style="font-size:12px; margin-top:2px">${orario}</p>
           </div>
-        `;
-      })
-      .join("");
+        `);
+        return;
+      }
 
-    card.innerHTML = sezione("QUESTA SETTIMANA", `<div style="margin-top:4px">${righe}</div>`);
+      // Oggi.
+      if (s.confermata) {
+        righe.push(`
+          <div style="padding:12px 0; border-top:1px solid var(--border)">
+            <p style="font-size:14px"><span style="color:var(--accent)">✓</span> ${giorno}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
+            <p class="mono" style="color:var(--accent); font-size:11px; letter-spacing:1px; margin-top:4px">PRESENTE</p>
+          </div>
+        `);
+        return;
+      }
+
+      // Sessione di oggi già finita e mai confermata: non si può più segnare presente ora.
+      const finita = new Date(`${s.data}T${s.oraFine}:00Z`) <= new Date();
+      if (finita) {
+        righe.push(`
+          <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
+            <p style="font-size:14px">${giorno}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
+            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">NON FREQUENTATA</p>
+          </div>
+        `);
+        return;
+      }
+
+      righe.push(`
+        <div style="margin-top:12px; padding:14px; border-radius:12px; border:1px solid var(--accent)">
+          <p style="font-size:15px; font-weight:600"><span style="color:var(--accent)">●</span> ${giorno}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
+          <p class="mono" style="font-size:11px; letter-spacing:1px; margin-top:8px">CONFERMA LA TUA PRESENZA</p>
+          <button class="btn conferma-presenza-btn" data-sessione="${s.sessioneId}" style="width:100%; margin-top:10px">CI SONO</button>
+        </div>
+      `);
+    });
+
+    const futureHtml = future.length
+      ? `<div style="display:flex; gap:10px; margin-top:12px">${future.join("")}</div>`
+      : "";
+
+    card.innerHTML = sezione("QUESTA SETTIMANA", `<div style="margin-top:4px">${righe.join("")}</div>${futureHtml}`);
 
     card.querySelector(".conferma-presenza-btn")?.addEventListener("click", async (e) => {
       e.target.disabled = true;
