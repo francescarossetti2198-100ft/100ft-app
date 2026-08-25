@@ -21,6 +21,10 @@ const CATEGORIA_LABEL = {
   Altro: "✏️ Altro",
 };
 
+// Stessa scala fissa delle 5 faccine di feedback usata in Home (frontend/src/pages/home.js) —
+// mai sostituita, stesso ordine.
+const FACCINA_EMOJI = { 1: "😫", 2: "😕", 3: "😐", 4: "🙂", 5: "🔥" };
+
 function oraCorrente() {
   const now = new Date();
   return { mese: now.getUTCMonth() + 1, anno: now.getUTCFullYear() };
@@ -43,6 +47,11 @@ export function renderCoach(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <h1>Coach</h1>
+
+    <div class="card" style="margin-top:16px" id="atleti-card">
+      <p class="mono" style="color:var(--mute); font-size:12px">ATLETI</p>
+      <div id="atleti-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+    </div>
 
     <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">NOTA DEL GIORNO</p>
@@ -134,10 +143,97 @@ export function renderCoach(appEl) {
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
+  initAtleti(el);
   initNota(el);
   initPiano(el);
   initSfida(el);
   initRichieste(el);
+}
+
+function giorniFa(dataIso) {
+  const giorni = Math.round((Date.now() - new Date(`${dataIso}T00:00:00Z`).getTime()) / 86400000);
+  if (giorni === 0) return "oggi";
+  if (giorni === 1) return "ieri";
+  return `${giorni}gg fa`;
+}
+
+function pagamentoBadgeHtml(userId, stato) {
+  const pagato = stato === "pagato";
+  const colore = pagato ? "var(--livello-1)" : "var(--livello-5)";
+  return `
+    <button type="button" class="link-btn pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
+      style="text-decoration:none; color:${colore}; font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+      ${pagato ? "PAGATO ✓" : "DA PAGARE"}
+    </button>
+  `;
+}
+
+// Insight per allievo (presenze recenti, livello, ultima reaction di feedback, ultime
+// richieste pre-allenamento, pagamento del mese) — non esisteva prima nessun elenco atleti
+// lato coach.
+function initAtleti(el) {
+  const list = el.querySelector("#atleti-list");
+
+  function carica() {
+    api
+      .get("/atleti")
+      .then(({ atleti }) => {
+        if (!atleti.length) {
+          list.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta ancora.</p>`;
+          return;
+        }
+
+        list.innerHTML = atleti
+          .map((a) => {
+            const nome = a.nickname || `${a.nome} ${a.cognome}`.trim();
+            const livelloHtml = a.livello
+              ? `<span class="mono" style="color:${a.livello.attuale.colore}">Livello ${a.livello.attuale.numero}</span>`
+              : `<span class="mono" style="color:var(--mute)">Nessun livello</span>`;
+            const feedbackHtml = a.ultimoFeedback
+              ? `${FACCINA_EMOJI[a.ultimoFeedback.faccina]} · ${giorniFa(a.ultimoFeedback.data)}`
+              : "Nessun feedback";
+            const richiesteHtml = a.richiesteRecenti.length
+              ? a.richiesteRecenti
+                  .map((r) => r.categoria ? (CATEGORIA_LABEL[r.categoria] ?? r.categoria) : (r.testoLibero ?? ""))
+                  .filter(Boolean)
+                  .join(" · ")
+              : "";
+
+            return `
+              <div style="border-top:1px solid var(--border); padding:10px 0">
+                <div style="display:flex; justify-content:space-between; align-items:baseline">
+                  <p style="font-size:14px; font-weight:600">${nome}</p>
+                  ${livelloHtml}
+                </div>
+                <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">
+                  ${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
+                </p>
+                ${richiesteHtml ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${richiesteHtml}</p>` : ""}
+                <div style="margin-top:6px">${pagamentoBadgeHtml(a.userId, a.pagamentoMese)}</div>
+              </div>
+            `;
+          })
+          .join("");
+
+        list.querySelectorAll(".pagamento-toggle").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const nuovoStato = btn.dataset.stato === "pagato" ? "non_pagato" : "pagato";
+            btn.disabled = true;
+            try {
+              await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovoStato });
+              carica();
+            } catch {
+              btn.disabled = false;
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      });
+  }
+
+  carica();
 }
 
 function initNota(el) {

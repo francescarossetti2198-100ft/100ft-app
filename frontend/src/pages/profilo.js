@@ -75,11 +75,70 @@ function achievementsHtml(milestones) {
   `;
 }
 
+// Profilo coach: identità + "LA MIA STAGIONE" aggregata sul gruppo, non le statistiche da
+// atleta (livello/scala/achievements non si applicano — la coach non si allena).
+function renderProfiloCoach(content, p) {
+  const nomeVisualizzato = [p.nome, p.cognome].filter(Boolean).join(" ") || "Coach";
+
+  content.innerHTML = `
+    <div class="card">
+      <p style="font-weight:600">${nomeVisualizzato}</p>
+      <p class="mono" style="color:var(--accent); font-size:12px; letter-spacing:1px; margin-top:4px">COACH · 100FT</p>
+      <textarea id="coach-bio" rows="2" placeholder="Due righe su di te (facoltativo)"
+        style="width:100%; margin-top:12px; background:var(--surface-2); border:1px solid var(--border);
+               border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical">${p.bio ?? ""}</textarea>
+      <p class="error-text" id="bio-error" hidden style="margin-top:6px"></p>
+      <p class="success-text" id="bio-success" hidden style="margin-top:6px">Salvata ✓</p>
+      <button class="btn" id="bio-salva" style="width:100%; margin-top:10px">Salva</button>
+    </div>
+    <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
+      <div>
+        <p style="font-weight:600; font-size:18px">${p.stagione.atletiTotali}</p>
+        <p class="mono" style="color:var(--mute); font-size:12px">Atleti</p>
+      </div>
+      <div>
+        <p style="font-weight:600; font-size:18px">${p.stagione.settimaneProgramma}</p>
+        <p class="mono" style="color:var(--mute); font-size:12px">Settimane</p>
+      </div>
+      <div>
+        <p style="font-weight:600; font-size:18px">${p.stagione.sessioniTotali}</p>
+        <p class="mono" style="color:var(--mute); font-size:12px">Sessioni</p>
+      </div>
+    </div>
+    <button class="btn" id="vai-dashboard" style="width:100%; margin-top:12px; background:var(--surface-2); color:var(--text)">Vai alla Coach Dashboard</button>
+  `;
+
+  content.querySelector("#vai-dashboard").addEventListener("click", () => navigate("/coach"));
+
+  content.querySelector("#bio-salva").addEventListener("click", async (e) => {
+    const errorEl = content.querySelector("#bio-error");
+    const successEl = content.querySelector("#bio-success");
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    e.target.disabled = true;
+    try {
+      await api.post("/profilo/bio", { bio: content.querySelector("#coach-bio").value.trim() });
+      successEl.hidden = false;
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+}
+
 async function loadProfilo(el) {
   const content = el.querySelector("#profilo-content");
   try {
     const p = await api.get("/profilo/me");
-    const nomeVisualizzato = p.nickname || p.nome || (p.role === "coach" ? "Coach" : "Atleta");
+
+    if (p.role === "coach") {
+      renderProfiloCoach(content, p);
+      return;
+    }
+
+    const nomeVisualizzato = p.nickname || p.nome || "Atleta";
 
     const statsHtml = `
       <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
