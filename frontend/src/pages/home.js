@@ -176,7 +176,7 @@ async function loadTimeline(el) {
               <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
                 <p style="font-size:14px">${giorno}</p>
                 <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-                <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">NON FREQUENTATA</p>
+                <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">ASSENTE</p>
               </div>
             `
         );
@@ -212,7 +212,7 @@ async function loadTimeline(el) {
           <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
             <p style="font-size:14px">${giorno}</p>
             <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">NON FREQUENTATA</p>
+            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">ASSENTE</p>
           </div>
         `);
         return;

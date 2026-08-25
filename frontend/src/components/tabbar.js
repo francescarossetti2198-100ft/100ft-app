@@ -1,5 +1,4 @@
 import { currentPath } from "../router.js";
-import { getUser } from "../auth.js";
 
 // Icone custom fornite da Francesca (Lucide) — stroke="currentColor" così restano bianche
 // dentro il box viola (.tab-icon-box in style.css) sia da attive che da inattive.
@@ -17,19 +16,18 @@ const TABS = [
   { path: "/profilo", label: "Profilo", icon: ICONA_PROFILO },
 ];
 
-const TAB_COACH = { path: "/coach", label: "Coach", icon: "🎓" };
-
 export function renderTabbar() {
   const nav = document.createElement("nav");
   nav.className = "tabbar";
 
-  const ruolo = getUser()?.role;
-  const tabs = ruolo === "coach" ? [...TABS, TAB_COACH] : TABS;
   const active = currentPath();
-  for (const tab of tabs) {
+  for (const tab of TABS) {
     const a = document.createElement("a");
+    // La coach vede la sua dashboard alla radice "/" (vedi main.js): il tab Home
+    // resta attivo anche quando la pagina montata è /coach.
+    const percorsoAttivo = tab.path === "/" ? active === "/" || active === "/coach" : tab.path === active;
     a.href = `#${tab.path}`;
-    a.className = tab.path === active ? "active" : "";
+    a.className = percorsoAttivo ? "active" : "";
     a.innerHTML = `<span class="tab-icon-box">${tab.icon}</span><span>${tab.label}</span>`;
     nav.appendChild(a);
   }

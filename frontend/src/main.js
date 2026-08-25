@@ -1,6 +1,6 @@
 import "./style.css";
 import { registerRoute, startRouter } from "./router.js";
-import { loadSession } from "./auth.js";
+import { loadSession, getUser } from "./auth.js";
 import { renderLogin } from "./pages/login.js";
 import { renderRegistrazione } from "./pages/registrazione.js";
 import { renderPasswordDimenticata } from "./pages/password-dimenticata.js";
@@ -16,7 +16,9 @@ registerRoute("/login", { render: renderLogin, protected: false });
 registerRoute("/registrati", { render: renderRegistrazione, protected: false });
 registerRoute("/password-dimenticata", { render: renderPasswordDimenticata, protected: false });
 registerRoute("/reset-password", { render: renderResetPassword, protected: false });
-registerRoute("/", { render: renderHome });
+// La coach non ha una sua Home da atleta (niente anelli/presente-assente):
+// alla radice vede direttamente la sua dashboard.
+registerRoute("/", { render: (appEl) => (getUser()?.role === "coach" ? renderCoach(appEl) : renderHome(appEl)) });
 registerRoute("/programma", { render: renderProgramma });
 registerRoute("/sfide", { render: renderSfide });
 registerRoute("/feed", { render: renderFeed });
