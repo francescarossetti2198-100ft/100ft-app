@@ -134,27 +134,51 @@ input {
 
 nav.tabbar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
   display: flex;
   justify-content: space-around;
   background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 10px 0;
 }
 
 nav.tabbar a {
   text-decoration: none;
-  color: var(--mute);
+  color: #fff;
   font-size: 11px;
   font-family: var(--font-mono);
+  text-transform: uppercase;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-nav.tabbar a.active {
-  color: var(--accent);
+nav.tabbar a .tab-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--mute);
+}
+
+/* Il tab attivo si solleva e prende uno sfondo pieno — l'animazione riparte ogni volta che
+   il tab viene rimontato (ogni pagina ricrea la tabbar da zero, non è un elemento persistente
+   tra le navigazioni), quindi "muoversi" è ottenuto con una keyframe animation al mount, non
+   con una transition che richiederebbe lo stesso nodo DOM prima/dopo. */
+nav.tabbar a.active .tab-icon-box {
+  background: var(--accent);
+  color: #000;
+  animation: tab-pop 0.25s ease;
+}
+
+@keyframes tab-pop {
+  0% { transform: translateY(0) scale(0.85); }
+  60% { transform: translateY(-8px) scale(1.15); }
+  100% { transform: translateY(-6px) scale(1); }
 }

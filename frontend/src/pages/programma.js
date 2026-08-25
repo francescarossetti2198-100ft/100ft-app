@@ -69,7 +69,7 @@ async function loadMesi(el) {
             style="flex:0 0 auto; min-width:56px; padding:10px 6px; border-radius:8px; border:1px solid var(--border);
                    background:${m.id === selezionato ? "var(--surface-2)" : "transparent"}; color:var(--text)">
             <div class="mono" style="font-size:12px">${MESI[m.mese - 1]}</div>
-            <div style="margin-top:4px">${m.sbloccato ? (m.id === selezionato ? "●" : "") : "🔒"}</div>
+            <div style="margin-top:4px">${m.sbloccato ? (m.id === selezionato ? "●" : "") : `<img src="/lucchetto.png" alt="Bloccato" style="width:12px; height:12px" />`}</div>
           </button>
         `
       )
@@ -82,7 +82,7 @@ async function loadMesi(el) {
         btn.style.background = attivo ? "var(--surface-2)" : "transparent";
         const dot = btn.querySelector("div:last-child");
         const mese = mesi.find((m) => m.id === Number(btn.dataset.id));
-        dot.textContent = mese.sbloccato ? (attivo ? "●" : "") : "🔒";
+        dot.innerHTML = mese.sbloccato ? (attivo ? "●" : "") : `<img src="/lucchetto.png" alt="Bloccato" style="width:12px; height:12px" />`;
       });
     };
 

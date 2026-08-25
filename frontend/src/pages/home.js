@@ -63,9 +63,9 @@ function anelliSvg({ training, challenges, feedback }) {
   const pctFeedback = feedback.totali > 0 ? Math.min(1, feedback.fatti / feedback.totali) : 0;
 
   const anelli = [
-    { r: 42, pct: pctTraining, colore: "var(--accent)" },
-    { r: 31, pct: pctChallenges, colore: "var(--sessione-extra)" },
-    { r: 20, pct: pctFeedback, colore: "var(--livello-1)" },
+    { r: 40, pct: pctTraining, colore: "var(--accent)" },
+    { r: 27, pct: pctChallenges, colore: "var(--sessione-extra)" },
+    { r: 14, pct: pctFeedback, colore: "var(--livello-1)" },
   ];
 
   const cerchi = anelli
@@ -73,8 +73,8 @@ function anelliSvg({ training, challenges, feedback }) {
       const circ = 2 * Math.PI * r;
       const dash = circ * pct;
       return `
-        <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="7" />
-        <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colore}" stroke-width="7" stroke-linecap="round"
+        <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colore}" stroke-width="12" opacity="0.22" />
+        <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colore}" stroke-width="12" stroke-linecap="round"
           stroke-dasharray="${circ}" stroke-dashoffset="${circ - dash}" transform="rotate(-90 50 50)" />
       `;
     })
@@ -92,11 +92,18 @@ async function loadSettimana(el) {
     const saluto = el.querySelector("#saluto-nome");
     if (saluto) saluto.textContent = [nome, cognome].filter(Boolean).join(" ").toUpperCase();
 
+    const rigaLegenda = (colore, etichetta, fatti, totali) => `
+      <div>
+        <p style="font-size:12px"><span style="color:${colore}">●</span> ${etichetta.toUpperCase()}</p>
+        <p style="margin-top:2px"><strong>${fatti} / ${totali}</strong> <span class="mono" style="color:var(--mute); font-size:12px">Attività</span></p>
+      </div>
+    `;
+
     const legenda = `
-      <div style="display:flex; flex-direction:column; gap:8px; justify-content:center">
-        <div><span style="color:var(--accent)">●</span> Allenamenti <strong>${anelli.training.fatti}/${anelli.training.totali}</strong></div>
-        <div><span style="color:var(--sessione-extra)">●</span> Sfide <strong>${anelli.challenges.fatte}/${anelli.challenges.totali}</strong></div>
-        <div><span style="color:var(--livello-1)">●</span> Feedback <strong>${anelli.feedback.fatti}/${anelli.feedback.totali}</strong></div>
+      <div style="display:flex; flex-direction:column; gap:10px; justify-content:center">
+        ${rigaLegenda("var(--accent)", "Allenamenti", anelli.training.fatti, anelli.training.totali)}
+        ${rigaLegenda("var(--sessione-extra)", "Sfide", anelli.challenges.fatte, anelli.challenges.totali)}
+        ${rigaLegenda("var(--livello-1)", "Feedback", anelli.feedback.fatti, anelli.feedback.totali)}
       </div>
     `;
 
@@ -359,7 +366,10 @@ async function loadFeedback(el) {
     if (!finita) {
       card.innerHTML = sezione(
         "DOPO L'ALLENAMENTO",
-        `<p style="margin-top:8px">🔒 <span class="mono" style="color:var(--mute); font-size:13px">Disponibile dopo la sessione</span></p>`
+        `<p style="margin-top:8px; display:flex; align-items:center; gap:6px">
+          <img src="/lucchetto.png" alt="Bloccato" style="width:16px; height:16px" />
+          <span class="mono" style="color:var(--mute); font-size:13px">Disponibile dopo la sessione</span>
+        </p>`
       );
       return;
     }

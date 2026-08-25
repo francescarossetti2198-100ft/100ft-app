@@ -50,7 +50,7 @@ function scalaLivelliHtml(livello) {
               <img src="/cards/card_final_${n}.png" alt="Livello ${n}"
                    style="width:64px; height:64px; border-radius:10px; object-fit:cover;
                           ${sbloccato ? "" : "filter:grayscale(1); opacity:0.35"}" />
-              ${!sbloccato ? `<p style="margin-top:4px; font-size:13px">🔒</p>` : ""}
+              ${!sbloccato ? `<img src="/lucchetto.png" alt="Bloccato" style="width:16px; height:16px; margin-top:4px" />` : ""}
             </div>
           `;
         })
