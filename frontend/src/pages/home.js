@@ -49,14 +49,26 @@ export function renderHome(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <style>
+      /* "Il tuo allenamento di oggi": un'unica card con dentro il messaggio della coach,
+         "Prima dell'allenamento" (richieste) e "Post allenamento" (feedback). Le sezioni
+         vuote spariscono; i separatori compaiono solo tra sezioni piene. */
+      #allenamento-oggi-card > .ao-sezione:empty { display: none; }
+      #allenamento-oggi-card #ao-coach { margin-top: 12px; }
+      #allenamento-oggi-card #ao-richieste { margin-top: 16px; }
+      #allenamento-oggi-card #ao-feedback {
+        margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
+      }
+      #allenamento-oggi-card #ao-coach:empty + #ao-richieste { margin-top: 12px; }
+      #allenamento-oggi-card #ao-richieste:empty + #ao-feedback { border-top: none; padding-top: 0; margin-top: 12px; }
+
       /* Feedback: "Com'è andata oggi?" — le 5 faccine su una linea sfumata. Solo la linea
          sta qui (pseudo-elemento); faccine e stato selezionato sono stile inline nel JS,
          come il resto della home (i <button> nativi ignorano box-shadow senza appearance). */
-      #feedback-card .fb-track {
+      #ao-feedback .fb-track {
         position: relative; display: flex; justify-content: space-between;
         align-items: center; padding: 6px 2px; margin-top: 12px;
       }
-      #feedback-card .fb-track::before {
+      #ao-feedback .fb-track::before {
         content: ""; position: absolute; left: 16px; right: 16px; top: 50%; height: 3px;
         transform: translateY(-50%); border-radius: 2px; opacity: 0.4;
         background: linear-gradient(90deg, var(--livello-5), var(--livello-3) 52%, var(--livello-1));
@@ -73,18 +85,32 @@ export function renderHome(appEl) {
     <div class="card" id="timeline-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
-    <div class="card" id="coach-card" style="margin-top:12px"></div>
-    <div id="richieste-card" class="card" style="margin-top:12px"></div>
-    <div id="feedback-card" class="card" style="margin-top:12px"></div>
+    <div class="card" id="allenamento-oggi-card" style="margin-top:12px">
+      <p class="mono" style="font-size:12px; letter-spacing:1px">IL TUO ALLENAMENTO DI OGGI</p>
+      <p class="mono" id="ao-empty" hidden style="color:var(--mute); font-size:13px; margin-top:8px">Oggi non è un giorno di allenamento.</p>
+      <div class="ao-sezione" id="ao-coach"></div>
+      <div class="ao-sezione" id="ao-richieste"></div>
+      <div class="ao-sezione" id="ao-feedback"></div>
+    </div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
   loadSettimana(el);
   loadTimeline(el);
-  loadCoach(el);
-  loadRichieste(el);
-  loadFeedback(el);
+  loadAllenamentoOggi(el);
+}
+
+// "Il tuo allenamento di oggi" — orchestra le tre sotto-sezioni nella card unica e mostra
+// il fallback se oggi non c'è nulla (niente sessione, niente messaggio della coach).
+async function loadAllenamentoOggi(el) {
+  await Promise.all([loadCoach(el), loadRichieste(el), loadFeedback(el)]);
+  const card = el.querySelector("#allenamento-oggi-card");
+  if (!card) return;
+  const vuoto = ["#ao-coach", "#ao-richieste", "#ao-feedback"].every(
+    (sel) => !card.querySelector(sel)?.innerHTML.trim()
+  );
+  card.querySelector("#ao-empty").hidden = !vuoto;
 }
 
 function anelliSvg({ training, challenges, feedback }) {
@@ -113,7 +139,7 @@ function anelliSvg({ training, challenges, feedback }) {
   return `<svg width="100" height="100" viewBox="0 0 100 100">${cerchi}</svg>`;
 }
 
-// Sezione 2: LA TUA SETTIMANA — i 3 anelli + livello. Logica invariata, solo presentazione.
+// LA TUA ATTIVITÀ — i 3 anelli + livello. Logica invariata, solo presentazione.
 async function loadSettimana(el) {
   const card = el.querySelector("#settimana-card");
   try {
@@ -161,7 +187,7 @@ async function loadSettimana(el) {
     }
 
     card.innerHTML = sezione(
-      "LA TUA SETTIMANA",
+      "LA TUA ATTIVITÀ",
       `
         <div style="display:flex; align-items:center; gap:16px; margin-top:10px">
           ${anelliSvg(anelli)}
@@ -280,31 +306,30 @@ async function loadTimeline(el) {
   }
 }
 
-// Sezione 6: INFO SULL'ALLENAMENTO DI OGGI — solo una frase introduttiva, mai il contenuto della lezione.
+// Messaggio della coach per oggi — dentro "Il tuo allenamento di oggi", mostrato solo
+// quando c'è davvero qualcosa da dire (mai il contenuto della lezione).
 async function loadCoach(el) {
-  const card = el.querySelector("#coach-card");
+  const box = el.querySelector("#ao-coach");
   try {
     const { testo } = await api.get("/nota-coach");
-    card.innerHTML = sezione(
-      "INFO SULL'ALLENAMENTO DI OGGI",
-      testo
-        ? `<p style="margin-top:8px; font-style:italic">"${testo}"</p>`
-        : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px">Nessun messaggio della coach per oggi.</p>`
-    );
+    box.innerHTML = testo
+      ? `<p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">DALLA COACH</p>
+         <p style="margin-top:6px; font-style:italic">"${esc(testo)}"</p>`
+      : "";
   } catch {
-    card.remove();
+    box.innerHTML = "";
   }
 }
 
 // Sezione 7: RICHIESTA DELL'ALLIEVO — chiude alle 13:00, poi resta visibile ma non interattiva.
 // Le richieste di oggi sono pubbliche tra gli atleti: ognuno vede cosa hanno chiesto gli altri.
 async function loadRichieste(el) {
-  const card = el.querySelector("#richieste-card");
+  const card = el.querySelector("#ao-richieste");
   try {
     const { sessione, aperte, inviata, richieste } = await api.get("/richieste/oggi");
 
     if (!sessione) {
-      card.remove();
+      card.innerHTML = "";
       return;
     }
 
@@ -388,19 +413,19 @@ async function loadRichieste(el) {
       }
     });
   } catch {
-    card.remove();
+    card.innerHTML = "";
   }
 }
 
-// Sezione 8/9: FEEDBACK — bloccato prima della fine sessione, assente niente questionario,
-// disponibile solo per chi era presente. Sempre visibile (card, non nascosta) nei giorni di sessione.
+// "Post allenamento" — feedback: bloccato prima della fine sessione, "sessione non
+// frequentata" per chi non c'era, il questionario a 2 domande per chi era presente.
 async function loadFeedback(el) {
-  const card = el.querySelector("#feedback-card");
+  const card = el.querySelector("#ao-feedback");
   try {
     const { sessione, confermata } = await api.get("/presenze/oggi");
 
     if (!sessione) {
-      card.remove();
+      card.innerHTML = "";
       return;
     }
 
@@ -408,7 +433,7 @@ async function loadFeedback(el) {
 
     if (!finita) {
       card.innerHTML = sezione(
-        "DOPO L'ALLENAMENTO",
+        "POST ALLENAMENTO",
         `<p style="margin-top:8px; display:flex; align-items:center; gap:6px">
           <img src="/lucchetto.png" alt="Bloccato" style="width:16px; height:16px" />
           <span class="mono" style="color:var(--mute); font-size:13px">Disponibile dopo la sessione</span>
@@ -419,7 +444,7 @@ async function loadFeedback(el) {
 
     if (!confermata) {
       card.innerHTML = sezione(
-        "DOPO L'ALLENAMENTO",
+        "POST ALLENAMENTO",
         `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px">SESSIONE NON FREQUENTATA</p>`
       );
       return;
@@ -429,7 +454,7 @@ async function loadFeedback(el) {
     const daDare = sessioni.find((s) => s.sessioneId === sessione.id) ?? null;
 
     if (!daDare) {
-      card.innerHTML = sezione("COM'È ANDATA OGGI?", `<p style="margin-top:8px">Feedback inviato ✓</p>`);
+      card.innerHTML = sezione("POST ALLENAMENTO", `<p style="margin-top:8px">Feedback inviato ✓</p>`);
       return;
     }
 
@@ -439,8 +464,9 @@ async function loadFeedback(el) {
       "flex:1; min-width:0; min-height:58px; padding:8px 3px; border:1px solid var(--border); border-radius:11px; background:var(--surface-2); color:var(--text); cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px";
 
     card.innerHTML = sezione(
-      "COM'È ANDATA OGGI?",
+      "POST ALLENAMENTO",
       `
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:10px">COM'È ANDATA OGGI?</p>
         <div class="fb-track">
           ${FACCE.map(
             (f) => `
