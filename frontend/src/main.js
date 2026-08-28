@@ -26,6 +26,19 @@ registerRoute("/feed", { render: renderFeed });
 registerRoute("/profilo", { render: renderProfilo });
 registerRoute("/coach", { render: renderCoach });
 
+// Quando un nuovo service worker prende il controllo (dopo un deploy, vedi src/sw.js),
+// ricarica una volta sola così l'utente vede subito la versione aggiornata invece della
+// pagina servita dalla cache vecchia. Il controllo su `controller` esclude la primissima
+// visita (nessun SW ancora installato), dove il claim non è un aggiornamento.
+if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+  let inRicarica = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (inRicarica) return;
+    inRicarica = true;
+    window.location.reload();
+  });
+}
+
 async function bootstrap() {
   try {
     await loadSession();
