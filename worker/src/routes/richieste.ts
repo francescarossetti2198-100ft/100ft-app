@@ -14,33 +14,36 @@ function apertoFinoAlle13(): boolean {
   return new Date().getUTCHours() < 13;
 }
 
-// Vista pubblica: aggregata e anonima, solo conteggi per categoria (brief, sezione 7 — il
-// mockup mostra i nomi pubblicamente ma il brief lo segnala come da correggere).
+// Vista pubblica CON i nomi: ogni atleta vede cosa ha chiesto ciascun altro per la sessione
+// di oggi (scelta esplicita di Francesca — supera la nota del brief sez. 7 che le voleva
+// anonime). La vista coach dedicata resta comunque (/oggi/coach).
 richieste.get("/oggi", requireAuth, async (c) => {
   const sessione = await sessioneOggi(c.env.DB);
-  if (!sessione) return c.json({ sessione: null, aperte: false, inviata: false, conteggi: {} });
+  if (!sessione) return c.json({ sessione: null, aperte: false, inviata: false, richieste: [] });
 
   const { data } = oggi();
-  const [mia, conteggi] = await Promise.all([
+  const [mia, elenco] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id FROM richieste_preallenamento WHERE user_id = ? AND sessione_id = ? AND data_sessione = ?`
     )
       .bind(c.var.user.userId, sessione.id, data)
       .first(),
     c.env.DB.prepare(
-      `SELECT categoria, COUNT(*) AS n FROM richieste_preallenamento
-       WHERE sessione_id = ? AND data_sessione = ? AND categoria IS NOT NULL
-       GROUP BY categoria`
+      `SELECT p.nome, p.nickname, r.categoria, r.testo_libero AS testoLibero
+       FROM richieste_preallenamento r
+       JOIN athlete_profile p ON p.user_id = r.user_id
+       WHERE r.sessione_id = ? AND r.data_sessione = ?
+       ORDER BY r.creata_il`
     )
       .bind(sessione.id, data)
-      .all<{ categoria: string; n: number }>(),
+      .all<{ nome: string; nickname: string | null; categoria: string | null; testoLibero: string | null }>(),
   ]);
 
   return c.json({
     sessione,
     aperte: apertoFinoAlle13(),
     inviata: !!mia,
-    conteggi: Object.fromEntries(conteggi.results.map((r) => [r.categoria, r.n])),
+    richieste: elenco.results,
   });
 });
 

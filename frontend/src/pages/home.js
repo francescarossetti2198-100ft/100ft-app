@@ -13,10 +13,14 @@ const FACCE = [
   { valore: 5, emoji: "🔥", titolo: "Fantastico" },
 ];
 
-// Pesi selezionabili nel feedback per parte alta/bassa del corpo — "Altro" apre un campo
-// libero, è l'unico modo di inserire un peso specifico non in lista.
-const PESI_PARTE_ALTA = ["3", "4", "5", "6", "8", "10", "12", "14"];
-const PESI_PARTE_BASSA = ["4", "5", "6", "8", "10", "12", "14", "15", "20"];
+// Seconda (e ultima) domanda del feedback: "Come ti è sembrato l'allenamento?" — 4 livelli,
+// faccina + parola. Distinte dalle 5 faccine fisse di "Com'è andata oggi?".
+const DIFFICOLTA = [
+  { valore: "facile", emoji: "😌", label: "Facile" },
+  { valore: "giusto", emoji: "💪", label: "Giusto" },
+  { valore: "impegnativo", emoji: "😤", label: "Impegnativo" },
+  { valore: "tostissimo", emoji: "🥵", label: "Tostissimo" },
+];
 
 const GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
 const MESI = [
@@ -33,13 +37,34 @@ function sezione(titolo, corpo) {
   return `<p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">${titolo}</p>${corpo}`;
 }
 
+// Le richieste di oggi (nome + testo libero) sono scritte dagli atleti e ora visibili a
+// tutto il gruppo: vanno messe nell'HTML come testo, non come markup.
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
 export function renderHome(appEl) {
   const oggi = new Date();
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
-    <h1 id="saluto-nome" style="letter-spacing:0.5px">&nbsp;</h1>
-    <p class="mono" style="color:var(--mute); font-size:13px; letter-spacing:1px">
+    <style>
+      /* Feedback: "Com'è andata oggi?" — le 5 faccine su una linea sfumata. Solo la linea
+         sta qui (pseudo-elemento); faccine e stato selezionato sono stile inline nel JS,
+         come il resto della home (i <button> nativi ignorano box-shadow senza appearance). */
+      #feedback-card .fb-track {
+        position: relative; display: flex; justify-content: space-between;
+        align-items: center; padding: 6px 2px; margin-top: 12px;
+      }
+      #feedback-card .fb-track::before {
+        content: ""; position: absolute; left: 16px; right: 16px; top: 50%; height: 3px;
+        transform: translateY(-50%); border-radius: 2px; opacity: 0.4;
+        background: linear-gradient(90deg, var(--livello-5), var(--livello-3) 52%, var(--livello-1));
+      }
+    </style>
+    <h1 style="letter-spacing:0.5px">100FT</h1>
+    <p id="saluto-nome" style="font-size:17px; margin-top:2px">&nbsp;</p>
+    <p class="mono" style="color:var(--mute); font-size:13px; letter-spacing:1px; margin-top:6px">
       ${GIORNI[(oggi.getDay() + 6) % 7].toUpperCase()} · ${oggi.getDate()} ${MESI[oggi.getMonth()].toUpperCase()}
     </p>
     <div class="card" id="settimana-card" style="margin-top:20px">
@@ -92,10 +117,10 @@ function anelliSvg({ training, challenges, feedback }) {
 async function loadSettimana(el) {
   const card = el.querySelector("#settimana-card");
   try {
-    const { nome, cognome, anelli, livello } = await api.get("/profilo/me");
+    const { nome, nickname, anelli, livello } = await api.get("/profilo/me");
 
     const saluto = el.querySelector("#saluto-nome");
-    if (saluto) saluto.textContent = [nome, cognome].filter(Boolean).join(" ").toUpperCase();
+    if (saluto) saluto.textContent = `Bentornato ${nickname || nome || ""}`.trim();
 
     const rigaLegenda = (colore, etichetta, fatti, totali) => `
       <div>
@@ -272,28 +297,40 @@ async function loadCoach(el) {
 }
 
 // Sezione 7: RICHIESTA DELL'ALLIEVO — chiude alle 13:00, poi resta visibile ma non interattiva.
+// Le richieste di oggi sono pubbliche tra gli atleti: ognuno vede cosa hanno chiesto gli altri.
 async function loadRichieste(el) {
   const card = el.querySelector("#richieste-card");
   try {
-    const { sessione, aperte, inviata, conteggi } = await api.get("/richieste/oggi");
+    const { sessione, aperte, inviata, richieste } = await api.get("/richieste/oggi");
 
     if (!sessione) {
       card.remove();
       return;
     }
 
-    const conteggiHtml = Object.keys(conteggi).length
-      ? `<div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px">
-          ${Object.entries(conteggi)
-            .map(([cat, n]) => `<span class="mono" style="font-size:12px; color:var(--mute)">${cat} (${n})</span>`)
+    const elencoHtml = richieste.length
+      ? `
+        <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:16px">LE RICHIESTE DI OGGI</p>
+        <div style="margin-top:2px">
+          ${richieste
+            .map(
+              (r) => `
+                <div style="border-top:1px solid var(--border); padding:8px 0">
+                  <p style="font-size:14px"><strong>${esc(r.nickname || r.nome)}</strong></p>
+                  ${r.categoria ? `<p class="mono" style="color:var(--accent); font-size:13px; margin-top:2px">${esc(r.categoria)}</p>` : ""}
+                  ${r.testoLibero ? `<p style="font-size:13px; margin-top:2px">${esc(r.testoLibero)}</p>` : ""}
+                </div>
+              `
+            )
             .join("")}
-        </div>`
+        </div>
+      `
       : "";
 
     if (inviata) {
       card.innerHTML = sezione(
         "PRIMA DELL'ALLENAMENTO",
-        `<p style="margin-top:8px">Richiesta inviata ✓</p>${conteggiHtml}`
+        `<p style="margin-top:8px">Richiesta inviata ✓</p>${elencoHtml}`
       );
       return;
     }
@@ -304,6 +341,7 @@ async function loadRichieste(el) {
         `
           <p style="margin-top:8px; font-weight:600">RICHIESTA CHIUSA</p>
           <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">La coach vedrà la tua richiesta prima della sessione.</p>
+          ${elencoHtml}
         `
       );
       return;
@@ -320,7 +358,7 @@ async function loadRichieste(el) {
                style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text)" />
         <p class="error-text" id="richiesta-error" hidden style="margin-top:6px"></p>
         <button class="btn" id="richiesta-submit" style="width:100%; margin-top:10px">Invia richiesta</button>
-        ${conteggiHtml}
+        ${elencoHtml}
       `
     );
 
@@ -395,72 +433,68 @@ async function loadFeedback(el) {
       return;
     }
 
-    const pesiRigaHtml = (gruppo, opzioni) => `
-      <div class="peso-scelte" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px">
-        ${opzioni
-          .map(
-            (p) => `
-              <button type="button" class="peso-btn" data-gruppo="${gruppo}" data-valore="${p}"
-                style="background:var(--surface-2); border:none; border-radius:8px; padding:6px 10px; font-size:13px; color:var(--text); cursor:pointer">
-                ${p}
-              </button>
-            `
-          )
-          .join("")}
-        <button type="button" class="peso-btn peso-altro-btn" data-gruppo="${gruppo}" data-valore="altro"
-          style="background:var(--surface-2); border:none; border-radius:8px; padding:6px 10px; font-size:13px; color:var(--text); cursor:pointer">
-          Altro
-        </button>
-      </div>
-      <input id="peso-${gruppo}-altro" type="text" inputmode="decimal" placeholder="Peso specifico" hidden
-             style="width:100%; margin-top:6px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
-    `;
+    const facciaStyle =
+      "position:relative; font-size:26px; line-height:1; width:42px; height:42px; border:none; border-radius:50%; background:var(--bg); cursor:pointer; padding:0; outline-offset:2px";
+    const diffStyle =
+      "flex:1; min-width:0; min-height:58px; padding:8px 3px; border:1px solid var(--border); border-radius:11px; background:var(--surface-2); color:var(--text); cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px";
 
     card.innerHTML = sezione(
       "COM'È ANDATA OGGI?",
       `
-        <div style="display:flex; justify-content:space-between; margin-top:12px">
+        <div class="fb-track">
           ${FACCE.map(
             (f) => `
-              <button type="button" class="faccia-btn" data-valore="${f.valore}" title="${f.titolo}"
-                style="background:none; border:none; font-size:30px; cursor:pointer; padding:4px; border-radius:8px">
-                ${f.emoji}
+              <button type="button" class="fb-faccia" data-valore="${f.valore}" data-label="${f.titolo}"
+                title="${f.titolo}" aria-label="${f.titolo}" style="${facciaStyle}">${f.emoji}</button>
+            `
+          ).join("")}
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; letter-spacing:1px; color:var(--mute); margin-top:6px; padding:0 2px" class="mono">
+          <span>Pessima</span><span>Fantastica</span>
+        </div>
+        <p class="mono" id="fb-current" style="text-align:center; margin-top:10px; font-size:14px; font-weight:600; min-height:1.2em"></p>
+
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:16px">COME TI È SEMBRATO L'ALLENAMENTO?</p>
+        <div style="display:flex; gap:6px; margin-top:8px">
+          ${DIFFICOLTA.map(
+            (d) => `
+              <button type="button" class="fb-diff-btn" data-valore="${d.valore}" aria-label="${d.label}" style="${diffStyle}">
+                <span style="font-size:22px; line-height:1">${d.emoji}</span>
+                <span class="fb-diff-l mono" style="font-size:10px; color:var(--mute); text-align:center">${d.label}</span>
               </button>
             `
           ).join("")}
         </div>
-        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:14px">PARTE ALTA — PESO USATO</p>
-        ${pesiRigaHtml("alta", PESI_PARTE_ALTA)}
-        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:14px">PARTE BASSA — PESO USATO</p>
-        ${pesiRigaHtml("bassa", PESI_PARTE_BASSA)}
+
         <input id="feedback-nota" type="text" placeholder="Nota facoltativa"
-               style="width:100%; margin-top:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
+               style="width:100%; margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
         <p class="error-text" id="feedback-error" hidden style="margin-top:6px"></p>
         <button class="btn" id="feedback-invia" style="width:100%; margin-top:10px">Invia feedback</button>
       `
     );
 
     let faccinaScelta = null;
-    const pesoScelto = { alta: null, bassa: null };
+    let difficoltaScelta = null;
 
-    card.querySelectorAll(".faccia-btn").forEach((btn) => {
+    card.querySelectorAll(".fb-faccia").forEach((btn) => {
       btn.addEventListener("click", () => {
         faccinaScelta = Number(btn.dataset.valore);
-        card.querySelectorAll(".faccia-btn").forEach((b) => (b.style.background = "none"));
-        btn.style.background = "var(--surface-2)";
+        card.querySelectorAll(".fb-faccia").forEach((b) => {
+          b.style.outline = b === btn ? "2px solid var(--accent)" : "none";
+        });
+        card.querySelector("#fb-current").textContent = btn.dataset.label;
       });
     });
 
-    card.querySelectorAll(".peso-btn").forEach((btn) => {
+    card.querySelectorAll(".fb-diff-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const gruppo = btn.dataset.gruppo;
-        pesoScelto[gruppo] = btn.dataset.valore;
-        card.querySelectorAll(`.peso-btn[data-gruppo="${gruppo}"]`).forEach((b) => (b.style.background = "var(--surface-2)"));
-        btn.style.background = "var(--accent)";
-
-        const altroInput = card.querySelector(`#peso-${gruppo}-altro`);
-        altroInput.hidden = btn.dataset.valore !== "altro";
-        if (btn.dataset.valore === "altro") altroInput.focus();
+        difficoltaScelta = btn.dataset.valore;
+        card.querySelectorAll(".fb-diff-btn").forEach((b) => {
+          const on = b === btn;
+          b.style.background = on ? "var(--accent)" : "var(--surface-2)";
+          b.style.borderColor = on ? "var(--accent)" : "var(--border)";
+          b.querySelector(".fb-diff-l").style.color = on ? "#fff" : "var(--mute)";
+        });
       });
     });
 
@@ -468,11 +502,8 @@ async function loadFeedback(el) {
       const errorEl = card.querySelector("#feedback-error");
       errorEl.hidden = true;
 
-      const pesoParteAlta = pesoScelto.alta === "altro" ? card.querySelector("#peso-alta-altro").value.trim() : pesoScelto.alta;
-      const pesoParteBassa = pesoScelto.bassa === "altro" ? card.querySelector("#peso-bassa-altro").value.trim() : pesoScelto.bassa;
-
-      if (!faccinaScelta || !pesoParteAlta || !pesoParteBassa) {
-        errorEl.textContent = "Scegli come è andata e i pesi usati (parte alta e bassa) prima di inviare";
+      if (!faccinaScelta || !difficoltaScelta) {
+        errorEl.textContent = "Scegli come è andata e come ti è sembrato l'allenamento prima di inviare";
         errorEl.hidden = false;
         return;
       }
@@ -483,8 +514,7 @@ async function loadFeedback(el) {
           sessioneId: sessione.id,
           data: daDare.data,
           faccina: faccinaScelta,
-          pesoParteAlta,
-          pesoParteBassa,
+          difficolta: difficoltaScelta,
           nota: card.querySelector("#feedback-nota").value,
         });
         loadFeedback(el);
