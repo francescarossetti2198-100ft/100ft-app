@@ -1,5 +1,5 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { api, ApiError } from "../api.js";
+import { api, ApiError, mediaUrl } from "../api.js";
 
 const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
@@ -72,7 +72,7 @@ async function loadFeed(el) {
               <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
             </p>
             <p style="margin-top:8px">${p.testo}</p>
-            ${p.contenutoUrl ? `<img src="${p.contenutoUrl}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
+            ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
             <div style="display:flex; gap:6px; margin-top:10px">${reazioniHtml}</div>
           </div>
         `;

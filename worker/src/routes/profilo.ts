@@ -12,9 +12,13 @@ profilo.get("/me", requireAuth, async (c) => {
   const userId = c.var.user.userId;
 
   // Profilo coach: niente livello/scala/achievements (la coach non si allena) — il tab
-  // Profilo per lei è lo STATO ABBONAMENTI (vedi GET /atleti), qui basta il ruolo.
+  // Profilo per lei è lo STATO ABBONAMENTI (vedi GET /atleti). Serve però la foto profilo:
+  // vale anche per la coach ed è mostrata in classifica accanto al nome.
   if (c.var.user.role === "coach") {
-    return c.json({ role: "coach" as const });
+    const row = await c.env.DB.prepare(`SELECT foto_url AS fotoUrl FROM athlete_profile WHERE user_id = ?`)
+      .bind(userId)
+      .first<{ fotoUrl: string | null }>();
+    return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
   }
 
   const [profiloRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione] = await Promise.all([

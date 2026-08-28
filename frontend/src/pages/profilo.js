@@ -1,7 +1,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { logout } from "../auth.js";
 import { navigate } from "../router.js";
-import { api, ApiError } from "../api.js";
+import { api, ApiError, mediaUrl } from "../api.js";
 import { statoNotifiche, attivaNotifiche, disattivaNotifiche, inviaNotificaDiProva } from "../push.js";
 
 const MILESTONE_LABEL = {
@@ -105,14 +105,59 @@ function pagamentoBadgeHtml(userId, stato) {
   `;
 }
 
+// Blocco foto profilo — usato sia dall'atleta sia dalla coach (il backend accetta la foto
+// per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
+// invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
+// apre il selettore quando viene attivato dalla label.
+function fotoProfiloHtml(fotoUrl, iniziale) {
+  return `
+    <div style="text-align:center">
+      <label for="foto-input" style="cursor:pointer; display:inline-block">
+        ${
+          fotoUrl
+            ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
+            : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${iniziale}</span>`
+        }
+        <p class="mono link-btn" style="margin-top:6px; font-size:12px">${fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
+      </label>
+      <input id="foto-input" type="file" accept="image/*"
+             style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden" />
+      <p class="error-text" id="foto-error" hidden style="margin-top:4px"></p>
+    </div>
+  `;
+}
+
+function attachFotoUpload(container, onDone) {
+  const input = container.querySelector("#foto-input");
+  if (!input) return;
+  input.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const errorEl = container.querySelector("#foto-error");
+    errorEl.hidden = true;
+    try {
+      const formData = new FormData();
+      formData.append("foto", file);
+      await api.postForm("/profilo/foto", formData);
+      onDone();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    }
+  });
+}
+
 // Profilo coach: non è la copia di quello atleta (niente livello/scala/achievements, la
 // coach non si allena) — è lo STATO ABBONAMENTI, l'elenco allievi con presenze/livello/
 // feedback/richieste recenti e lo stato di pagamento del mese, segnabile al volo.
-function renderProfiloCoach(content) {
+function renderProfiloCoach(content, p, onFotoCaricata) {
   content.innerHTML = `
+    <div class="card" style="margin-bottom:12px">${fotoProfiloHtml(p?.fotoUrl, "C")}</div>
     <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">STATO ABBONAMENTI</p>
     <div class="card" style="margin-top:10px" id="abbonamenti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
+
+  attachFotoUpload(content, onFotoCaricata ?? (() => {}));
 
   const list = content.querySelector("#abbonamenti-list");
 
@@ -335,26 +380,13 @@ async function loadProfilo(el) {
     const p = await api.get("/profilo/me");
 
     if (p.role === "coach") {
-      renderProfiloCoach(content);
+      renderProfiloCoach(content, p, () => loadProfilo(el));
       return;
     }
 
     const nomeVisualizzato = p.nickname || p.nome || "Atleta";
 
-    const fotoHtml = `
-      <div style="text-align:center">
-        <label for="foto-input" style="cursor:pointer; display:inline-block">
-          ${
-            p.fotoUrl
-              ? `<img src="${p.fotoUrl}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
-              : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${nomeVisualizzato[0]?.toUpperCase() ?? "?"}</span>`
-          }
-          <p class="mono link-btn" style="margin-top:6px; font-size:12px">${p.fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
-        </label>
-        <input id="foto-input" type="file" accept="image/*" hidden />
-        <p class="error-text" id="foto-error" hidden style="margin-top:4px"></p>
-      </div>
-    `;
+    const fotoHtml = fotoProfiloHtml(p.fotoUrl, nomeVisualizzato[0]?.toUpperCase() ?? "?");
 
     const statsHtml = `
       <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
@@ -424,21 +456,7 @@ async function loadProfilo(el) {
       `;
     }
 
-    content.querySelector("#foto-input").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const errorEl = content.querySelector("#foto-error");
-      errorEl.hidden = true;
-      try {
-        const formData = new FormData();
-        formData.append("foto", file);
-        await api.postForm("/profilo/foto", formData);
-        loadProfilo(el);
-      } catch (err) {
-        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
-        errorEl.hidden = false;
-      }
-    });
+    attachFotoUpload(content, () => loadProfilo(el));
 
     initNotifiche(content);
     initSicurezza(content);

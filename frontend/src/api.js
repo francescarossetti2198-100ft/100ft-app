@@ -50,4 +50,17 @@ export const api = {
   postForm: (path, formData) => requestForm(path, formData),
 };
 
+// I file caricati (foto profilo, feed, sfide) stanno su R2 e il worker li serve come
+// path relativo "/api/foto/...". In sviluppo il proxy Vite li risolve same-origin; in
+// produzione frontend (app.100-ft.com) e API (api.100-ft.com) sono su domini diversi,
+// quindi un <img src="/api/foto/..."> punterebbe al frontend e non troverebbe nulla.
+// mediaUrl ancora il path all'origine dell'API quando serve.
+const API_ORIGIN = /^https?:\/\//.test(BASE_URL) ? new URL(BASE_URL).origin : "";
+
+export function mediaUrl(path) {
+  if (!path) return "";
+  if (/^https?:\/\//.test(path)) return path;
+  return `${API_ORIGIN}${path}`;
+}
+
 export { ApiError };
