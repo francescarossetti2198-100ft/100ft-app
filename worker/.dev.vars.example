@@ -1,6 +1,10 @@
 FRONTEND_ORIGIN=http://localhost:5173
 SESSION_SECRET=cambia-questa-stringa-con-un-valore-casuale-lungo
 RESEND_API_KEY=
+VAPID_PRIVATE_KEY=
+
+# VAPID_PUBLIC_KEY non è un secret, sta in wrangler.toml [vars]. Per generare la coppia:
+#   node -e "..." (vedi commento in worker/src/lib/webPush.ts) e incolla qui la privata.
 
 # L'account coach non è un secret: dopo aver applicato le migrazioni, crealo con
 #   node scripts/create-coach-account.mjs "coach@esempio.it" "la-password-scelta"

@@ -7,6 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 # Aggiorna con l'URL reale del progetto Pages appena creato.
 [vars]
 FRONTEND_ORIGIN = "http://localhost:5173"
+# Chiave pubblica VAPID per le notifiche push (Daily Drop) — non è un segreto, il browser
+# la usa per verificare che il push arrivi da questo server. La privata sta tra i secrets.
+VAPID_PUBLIC_KEY = "BC4D7YS90_oPJgq6d1bbSLfKT5Zl5RUFm_Yc7NCwZJgwlRPgFCzlZqJgEMWZNmUGmYdfcsy1_ejey2RYieU53M8"
 
 # Database D1 — creare con: wrangler d1 create 100ft-db
 # poi incollare qui il database_id restituito.
@@ -21,9 +24,16 @@ migrations_dir = "migrations"
 binding = "FOTO_SFIDE"
 bucket_name = "100ft-foto"
 
+
+# Cron Trigger: controlla ogni minuto se è scattato il Daily Drop e manda il push a chi è
+# iscritto — stesso orario "a sorpresa" già calcolato in lib/dailyDropOrario.ts.
+[triggers]
+crons = ["* * * * *"]
+
 # Secrets da impostare con `wrangler secret put <NOME>` (mai in questo file):
-#   SESSION_SECRET  - stringa casuale lunga, usata per firmare i cookie di sessione
-#   RESEND_API_KEY  - chiave API resend.com per l'invio email di reset password
+#   SESSION_SECRET   - stringa casuale lunga, usata per firmare i cookie di sessione
+#   RESEND_API_KEY   - chiave API resend.com per l'invio email di reset password
+#   VAPID_PRIVATE_KEY - chiave privata VAPID per firmare le notifiche push (Daily Drop)
 #
 # L'account coach non è un secret: si crea come riga nella tabella `users` (ruolo "coach")
 # con worker/scripts/create-coach-account.mjs.

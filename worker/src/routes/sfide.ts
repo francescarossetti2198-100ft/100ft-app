@@ -28,7 +28,7 @@ sfide.get("/classifica", requireAuth, async (c) => {
   // periodo === "totale" -> nessun filtro sulla data
 
   const { results } = await c.env.DB.prepare(
-    `SELECT u.id AS userId, p.nome, p.nickname, COALESCE(SUM(x.xp_assegnati), 0) AS punti
+    `SELECT u.id AS userId, p.nome, p.nickname, p.foto_url AS fotoUrl, COALESCE(SUM(x.xp_assegnati), 0) AS punti
      FROM users u
      JOIN athlete_profile p ON p.user_id = u.id
      LEFT JOIN xp_log x ON x.user_id = u.id ${dataMinima ? "AND x.data >= ?" : ""}
@@ -69,9 +69,9 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   const sfidaId = Number(c.req.param("id"));
 
-  const sfida = await c.env.DB.prepare(`SELECT id, tipo, punti, data_fine FROM sfide WHERE id = ?`)
+  const sfida = await c.env.DB.prepare(`SELECT id, titolo, tipo, punti, data_fine FROM sfide WHERE id = ?`)
     .bind(sfidaId)
-    .first<{ id: number; tipo: string; punti: number; data_fine: string }>();
+    .first<{ id: number; titolo: string; tipo: string; punti: number; data_fine: string }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
 
   const oggi = new Date().toISOString().slice(0, 10);
@@ -102,6 +102,14 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     .run();
 
   await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti);
+
+  // Le sfide-foto finiscono anche nel Feed (come il Daily Drop) — le altre (presenza,
+  // valore_manuale) non hanno una foto da mostrare, restano solo in classifica.
+  if (fotoUrl) {
+    await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
+      .bind(c.var.user.userId, fotoUrl, sfida.titolo)
+      .run();
+  }
 
   // Completare una sfida chiude l'anello CHALLENGES del mese, che può chiudere una
   // settimana (e far salire di livello) — non solo confermare la presenza.

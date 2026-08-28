@@ -2,6 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError } from "../api.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
 
 const MILESTONE_LABEL = {
   first_session: "Prima sessione 🎬",
@@ -11,6 +12,17 @@ const MILESTONE_LABEL = {
   hydration_hero: "Hydration Hero 💧",
   team_player: "Team Player 🤝",
 };
+
+const CATEGORIA_LABEL = {
+  Mobilità: "🧘 Mobilità",
+  Gambe: "🦵 Gambe",
+  "Parte superiore": "💪 Parte superiore",
+  Altro: "✏️ Altro",
+};
+
+// Stessa scala fissa delle 5 faccine di feedback usata in Home (frontend/src/pages/home.js) —
+// mai sostituita, stesso ordine.
+const FACCINA_EMOJI = { 1: "😫", 2: "😕", 3: "😐", 4: "🙂", 5: "🔥" };
 
 // TODO: dati pubblici vs privati, stato pagamento (brief, sezione 14) — servono la Coach
 // Dashboard e una decisione su come gestire i dati privati dell'atleta.
@@ -75,55 +87,125 @@ function achievementsHtml(milestones) {
   `;
 }
 
-// Profilo coach: identità + "LA MIA STAGIONE" aggregata sul gruppo, non le statistiche da
-// atleta (livello/scala/achievements non si applicano — la coach non si allena).
-function renderProfiloCoach(content, p) {
-  const nomeVisualizzato = [p.nome, p.cognome].filter(Boolean).join(" ") || "Coach";
+function giorniFa(dataIso) {
+  const giorni = Math.round((Date.now() - new Date(`${dataIso}T00:00:00Z`).getTime()) / 86400000);
+  if (giorni === 0) return "oggi";
+  if (giorni === 1) return "ieri";
+  return `${giorni}gg fa`;
+}
 
+function pagamentoBadgeHtml(userId, stato) {
+  const pagato = stato === "pagato";
+  const colore = pagato ? "var(--livello-1)" : "var(--livello-5)";
+  return `
+    <button type="button" class="link-btn pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
+      style="text-decoration:none; color:${colore}; font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+      ${pagato ? "PAGATO ✓" : "DA PAGARE"}
+    </button>
+  `;
+}
+
+// Profilo coach: non è la copia di quello atleta (niente livello/scala/achievements, la
+// coach non si allena) — è lo STATO ABBONAMENTI, l'elenco allievi con presenze/livello/
+// feedback/richieste recenti e lo stato di pagamento del mese, segnabile al volo.
+function renderProfiloCoach(content) {
   content.innerHTML = `
-    <div class="card">
-      <p style="font-weight:600">${nomeVisualizzato}</p>
-      <p class="mono" style="color:var(--accent); font-size:12px; letter-spacing:1px; margin-top:4px">COACH · 100FT</p>
-      <textarea id="coach-bio" rows="2" placeholder="Due righe su di te (facoltativo)"
-        style="width:100%; margin-top:12px; background:var(--surface-2); border:1px solid var(--border);
-               border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical">${p.bio ?? ""}</textarea>
-      <p class="error-text" id="bio-error" hidden style="margin-top:6px"></p>
-      <p class="success-text" id="bio-success" hidden style="margin-top:6px">Salvata ✓</p>
-      <button class="btn" id="bio-salva" style="width:100%; margin-top:10px">Salva</button>
-    </div>
-    <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
-      <div>
-        <p style="font-weight:600; font-size:18px">${p.stagione.atletiTotali}</p>
-        <p class="mono" style="color:var(--mute); font-size:12px">Atleti</p>
-      </div>
-      <div>
-        <p style="font-weight:600; font-size:18px">${p.stagione.settimaneProgramma}</p>
-        <p class="mono" style="color:var(--mute); font-size:12px">Settimane</p>
-      </div>
-      <div>
-        <p style="font-weight:600; font-size:18px">${p.stagione.sessioniTotali}</p>
-        <p class="mono" style="color:var(--mute); font-size:12px">Sessioni</p>
-      </div>
-    </div>
-    <button class="btn" id="vai-dashboard" style="width:100%; margin-top:12px; background:var(--surface-2); color:var(--text)">Vai alla Coach Dashboard</button>
+    <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">STATO ABBONAMENTI</p>
+    <div class="card" style="margin-top:10px" id="abbonamenti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
 
-  content.querySelector("#vai-dashboard").addEventListener("click", () => navigate("/coach"));
+  const list = content.querySelector("#abbonamenti-list");
 
-  content.querySelector("#bio-salva").addEventListener("click", async (e) => {
-    const errorEl = content.querySelector("#bio-error");
-    const successEl = content.querySelector("#bio-success");
-    errorEl.hidden = true;
-    successEl.hidden = true;
+  function carica() {
+    api
+      .get("/atleti")
+      .then(({ atleti }) => {
+        if (!atleti.length) {
+          list.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta ancora.</p>`;
+          return;
+        }
+
+        list.innerHTML = atleti
+          .map((a, i) => {
+            const nome = a.nickname || `${a.nome} ${a.cognome}`.trim();
+            const livelloHtml = a.livello
+              ? `<span class="mono" style="color:${a.livello.attuale.colore}">Livello ${a.livello.attuale.numero}</span>`
+              : `<span class="mono" style="color:var(--mute)">Nessun livello</span>`;
+            const feedbackHtml = a.ultimoFeedback
+              ? `${FACCINA_EMOJI[a.ultimoFeedback.faccina]} · ${giorniFa(a.ultimoFeedback.data)}`
+              : "Nessun feedback";
+            const richiesteHtml = a.richiesteRecenti.length
+              ? a.richiesteRecenti
+                  .map((r) => r.categoria ? (CATEGORIA_LABEL[r.categoria] ?? r.categoria) : (r.testoLibero ?? ""))
+                  .filter(Boolean)
+                  .join(" · ")
+              : "";
+
+            return `
+              <div style="${i === 0 ? "" : "border-top:1px solid var(--border);"} padding:10px 0">
+                <div style="display:flex; justify-content:space-between; align-items:baseline">
+                  <p style="font-size:14px; font-weight:600">${nome}</p>
+                  ${livelloHtml}
+                </div>
+                <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">
+                  ${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
+                </p>
+                ${richiesteHtml ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${richiesteHtml}</p>` : ""}
+                <div style="margin-top:6px">${pagamentoBadgeHtml(a.userId, a.pagamentoMese)}</div>
+              </div>
+            `;
+          })
+          .join("");
+
+        list.querySelectorAll(".pagamento-toggle").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const nuovoStato = btn.dataset.stato === "pagato" ? "non_pagato" : "pagato";
+            btn.disabled = true;
+            try {
+              await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovoStato });
+              carica();
+            } catch {
+              btn.disabled = false;
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      });
+  }
+
+  carica();
+}
+
+async function initNotifiche(content) {
+  const box = content.querySelector("#notifiche-stato");
+  const stato = await statoNotifiche().catch(() => "non-supportato");
+
+  if (stato === "non-supportato") {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Non disponibili su questo dispositivo/browser — su iPhone serve aver aggiunto l'app alla schermata Home da Safari.</p>`;
+    return;
+  }
+  if (stato === "negato") {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Bloccate dalle impostazioni del telefono — vanno riattivate da lì per questa app.</p>`;
+    return;
+  }
+
+  box.innerHTML =
+    stato === "attive"
+      ? `<p style="font-size:13px">Attive ✓</p>
+         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>`
+      : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
+         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px">Attiva notifiche</button>`;
+
+  content.querySelector("#notifiche-toggle").addEventListener("click", async (e) => {
     e.target.disabled = true;
     try {
-      await api.post("/profilo/bio", { bio: content.querySelector("#coach-bio").value.trim() });
-      successEl.hidden = false;
+      if (stato === "attive") await disattivaNotifiche();
+      else await attivaNotifiche();
+      initNotifiche(content);
     } catch (err) {
-      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
-      errorEl.hidden = false;
-    } finally {
-      e.target.disabled = false;
+      box.innerHTML = `<p class="error-text">${err.message}</p>`;
     }
   });
 }
@@ -134,11 +216,26 @@ async function loadProfilo(el) {
     const p = await api.get("/profilo/me");
 
     if (p.role === "coach") {
-      renderProfiloCoach(content, p);
+      renderProfiloCoach(content);
       return;
     }
 
     const nomeVisualizzato = p.nickname || p.nome || "Atleta";
+
+    const fotoHtml = `
+      <div style="text-align:center">
+        <label for="foto-input" style="cursor:pointer; display:inline-block">
+          ${
+            p.fotoUrl
+              ? `<img src="${p.fotoUrl}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
+              : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${nomeVisualizzato[0]?.toUpperCase() ?? "?"}</span>`
+          }
+          <p class="mono link-btn" style="margin-top:6px; font-size:12px">${p.fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
+        </label>
+        <input id="foto-input" type="file" accept="image/*" hidden />
+        <p class="error-text" id="foto-error" hidden style="margin-top:4px"></p>
+      </div>
+    `;
 
     const statsHtml = `
       <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
@@ -151,8 +248,8 @@ async function loadProfilo(el) {
           <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
         </div>
         <div>
-          <p style="font-weight:600; font-size:18px">${p.puntiTotali}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Punti totali</p>
+          <p style="font-weight:600; font-size:18px">${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}</p>
+          <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
         </div>
       </div>
     `;
@@ -164,23 +261,33 @@ async function loadProfilo(el) {
       </div>
     `;
 
+    const notificheCard = `
+      <div class="card" style="margin-top:12px" id="notifiche-card">
+        <p class="mono" style="color:var(--mute); font-size:12px">NOTIFICHE PUSH</p>
+        <div id="notifiche-stato" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+      </div>
+    `;
+
     if (!p.livello) {
       content.innerHTML = `
         <div class="card">
-          <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
+          ${fotoHtml}
+          <p style="font-weight:600; margin-top:10px; text-align:center">${nomeVisualizzato} ${p.cognome ?? ""}</p>
           <p class="mono" style="color:var(--mute); margin-top:8px">
             Nessun livello ancora — completa la tua prima settimana (Training + Challenges + Feedback) per sbloccarlo.
           </p>
         </div>
         ${statsHtml}
         ${achievementsCard}
+        ${notificheCard}
       `;
     } else {
       const { attuale } = p.livello;
       content.innerHTML = `
         <div class="card">
-          <p style="font-weight:600">${nomeVisualizzato} ${p.cognome ?? ""}</p>
-          <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px">Livello ${attuale.numero} — ${attuale.nome}</p>
+          ${fotoHtml}
+          <p style="font-weight:600; margin-top:10px; text-align:center">${nomeVisualizzato} ${p.cognome ?? ""}</p>
+          <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${attuale.numero} — ${attuale.nome}</p>
         </div>
         <div class="card" style="margin-top:12px; text-align:center">
           <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
@@ -190,8 +297,27 @@ async function loadProfilo(el) {
         </div>
         ${statsHtml}
         ${achievementsCard}
+        ${notificheCard}
       `;
     }
+
+    content.querySelector("#foto-input").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const errorEl = content.querySelector("#foto-error");
+      errorEl.hidden = true;
+      try {
+        const formData = new FormData();
+        formData.append("foto", file);
+        await api.postForm("/profilo/foto", formData);
+        loadProfilo(el);
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+      }
+    });
+
+    initNotifiche(content);
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }

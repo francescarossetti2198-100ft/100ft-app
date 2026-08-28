@@ -7,6 +7,7 @@ const TIPO_INFO = {
   consistency: { icona: "🔥", azione: "ha raggiunto un traguardo di costanza" },
   athlete_of_week: { icona: "⭐", azione: "è Atleta della Settimana" },
   daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
+  sfida: { icona: "🏆", azione: "ha completato una sfida" },
   annuncio_coach: { icona: "📣", azione: "" },
 };
 

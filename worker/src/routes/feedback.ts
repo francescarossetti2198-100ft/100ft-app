@@ -41,10 +41,21 @@ feedback.get("/da-dare", requireAuth, async (c) => {
 feedback.post("/", requireAuth, async (c) => {
   if (c.var.user.role !== "atleta") return c.json({ error: "Solo gli atleti possono lasciare feedback" }, 403);
 
-  const body = await c.req.json<{ sessioneId?: number; data?: string; faccina?: number; nota?: string }>();
+  const body = await c.req.json<{
+    sessioneId?: number;
+    data?: string;
+    faccina?: number;
+    pesoParteAlta?: string;
+    pesoParteBassa?: string;
+    nota?: string;
+  }>();
   const { sessioneId, data, faccina, nota } = body;
+  const pesoParteAlta = body.pesoParteAlta?.trim();
+  const pesoParteBassa = body.pesoParteBassa?.trim();
 
-  if (!sessioneId || !data || !faccina) return c.json({ error: "Dati mancanti" }, 400);
+  if (!sessioneId || !data || !faccina || !pesoParteAlta || !pesoParteBassa) {
+    return c.json({ error: "Dati mancanti" }, 400);
+  }
   if (!FACCE.includes(faccina)) return c.json({ error: "Faccina non valida" }, 400);
 
   const presenza = await c.env.DB.prepare(
@@ -71,9 +82,10 @@ feedback.post("/", requireAuth, async (c) => {
   const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
 
   await c.env.DB.prepare(
-    `INSERT INTO feedback_allenamento (user_id, sessione_id, data, faccina, nota) VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO feedback_allenamento (user_id, sessione_id, data, faccina, peso_parte_alta, peso_parte_bassa, nota)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(c.var.user.userId, sessioneId, data, faccina, nota?.trim() || null)
+    .bind(c.var.user.userId, sessioneId, data, faccina, pesoParteAlta, pesoParteBassa, nota?.trim() || null)
     .run();
 
   const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);

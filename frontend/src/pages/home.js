@@ -13,6 +13,11 @@ const FACCE = [
   { valore: 5, emoji: "🔥", titolo: "Fantastico" },
 ];
 
+// Pesi selezionabili nel feedback per parte alta/bassa del corpo — "Altro" apre un campo
+// libero, è l'unico modo di inserire un peso specifico non in lista.
+const PESI_PARTE_ALTA = ["3", "4", "5", "6", "8", "10", "12", "14"];
+const PESI_PARTE_BASSA = ["4", "5", "6", "8", "10", "12", "14", "15", "20"];
+
 const GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -390,6 +395,27 @@ async function loadFeedback(el) {
       return;
     }
 
+    const pesiRigaHtml = (gruppo, opzioni) => `
+      <div class="peso-scelte" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px">
+        ${opzioni
+          .map(
+            (p) => `
+              <button type="button" class="peso-btn" data-gruppo="${gruppo}" data-valore="${p}"
+                style="background:var(--surface-2); border:none; border-radius:8px; padding:6px 10px; font-size:13px; color:var(--text); cursor:pointer">
+                ${p}
+              </button>
+            `
+          )
+          .join("")}
+        <button type="button" class="peso-btn peso-altro-btn" data-gruppo="${gruppo}" data-valore="altro"
+          style="background:var(--surface-2); border:none; border-radius:8px; padding:6px 10px; font-size:13px; color:var(--text); cursor:pointer">
+          Altro
+        </button>
+      </div>
+      <input id="peso-${gruppo}-altro" type="text" inputmode="decimal" placeholder="Peso specifico" hidden
+             style="width:100%; margin-top:6px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
+    `;
+
     card.innerHTML = sezione(
       "COM'È ANDATA OGGI?",
       `
@@ -403,33 +429,71 @@ async function loadFeedback(el) {
             `
           ).join("")}
         </div>
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:14px">PARTE ALTA — PESO USATO</p>
+        ${pesiRigaHtml("alta", PESI_PARTE_ALTA)}
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-top:14px">PARTE BASSA — PESO USATO</p>
+        ${pesiRigaHtml("bassa", PESI_PARTE_BASSA)}
         <input id="feedback-nota" type="text" placeholder="Nota facoltativa"
-               style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
+               style="width:100%; margin-top:14px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px" />
         <p class="error-text" id="feedback-error" hidden style="margin-top:6px"></p>
+        <button class="btn" id="feedback-invia" style="width:100%; margin-top:10px">Invia feedback</button>
       `
     );
 
-    card.querySelectorAll(".faccia-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const errorEl = card.querySelector("#feedback-error");
-        errorEl.hidden = true;
-        card.querySelectorAll(".faccia-btn").forEach((b) => (b.disabled = true));
+    let faccinaScelta = null;
+    const pesoScelto = { alta: null, bassa: null };
 
-        try {
-          await api.post("/feedback", {
-            sessioneId: sessione.id,
-            data: daDare.data,
-            faccina: Number(btn.dataset.valore),
-            nota: card.querySelector("#feedback-nota").value,
-          });
-          loadFeedback(el);
-          loadSettimana(el);
-        } catch (err) {
-          errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
-          errorEl.hidden = false;
-          card.querySelectorAll(".faccia-btn").forEach((b) => (b.disabled = false));
-        }
+    card.querySelectorAll(".faccia-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        faccinaScelta = Number(btn.dataset.valore);
+        card.querySelectorAll(".faccia-btn").forEach((b) => (b.style.background = "none"));
+        btn.style.background = "var(--surface-2)";
       });
+    });
+
+    card.querySelectorAll(".peso-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gruppo = btn.dataset.gruppo;
+        pesoScelto[gruppo] = btn.dataset.valore;
+        card.querySelectorAll(`.peso-btn[data-gruppo="${gruppo}"]`).forEach((b) => (b.style.background = "var(--surface-2)"));
+        btn.style.background = "var(--accent)";
+
+        const altroInput = card.querySelector(`#peso-${gruppo}-altro`);
+        altroInput.hidden = btn.dataset.valore !== "altro";
+        if (btn.dataset.valore === "altro") altroInput.focus();
+      });
+    });
+
+    card.querySelector("#feedback-invia").addEventListener("click", async (e) => {
+      const errorEl = card.querySelector("#feedback-error");
+      errorEl.hidden = true;
+
+      const pesoParteAlta = pesoScelto.alta === "altro" ? card.querySelector("#peso-alta-altro").value.trim() : pesoScelto.alta;
+      const pesoParteBassa = pesoScelto.bassa === "altro" ? card.querySelector("#peso-bassa-altro").value.trim() : pesoScelto.bassa;
+
+      if (!faccinaScelta || !pesoParteAlta || !pesoParteBassa) {
+        errorEl.textContent = "Scegli come è andata e i pesi usati (parte alta e bassa) prima di inviare";
+        errorEl.hidden = false;
+        return;
+      }
+
+      e.target.disabled = true;
+      try {
+        await api.post("/feedback", {
+          sessioneId: sessione.id,
+          data: daDare.data,
+          faccina: faccinaScelta,
+          pesoParteAlta,
+          pesoParteBassa,
+          nota: card.querySelector("#feedback-nota").value,
+        });
+        loadFeedback(el);
+        loadSettimana(el);
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+        e.target.disabled = false;
+      }
     });
   } catch (err) {
     card.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;

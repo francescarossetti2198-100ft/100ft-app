@@ -46,6 +46,7 @@ async function requestForm(path, formData) {
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: "POST", body }),
+  del: (path, body) => request(path, { method: "DELETE", body }),
   postForm: (path, formData) => requestForm(path, formData),
 };
 

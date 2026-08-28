@@ -13,6 +13,16 @@ const PERIODI = [
   { valore: "totale", label: "Totale" },
 ];
 
+// Foto profilo se c'è, altrimenti un cerchio con l'iniziale — così la classifica resta
+// leggibile anche per chi non ha ancora caricato una foto.
+function avatarHtml(a) {
+  const nome = a.nickname || a.nome || "?";
+  if (a.fotoUrl) {
+    return `<img src="${a.fotoUrl}" alt="" style="width:22px; height:22px; border-radius:50%; object-fit:cover" />`;
+  }
+  return `<span style="width:22px; height:22px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--mute)">${nome[0].toUpperCase()}</span>`;
+}
+
 // TODO: classifica Season e Improvement (basata sul miglioramento personale, brief sezione 10).
 export function renderSfide(appEl) {
   const el = document.createElement("div");
@@ -102,7 +112,6 @@ async function loadClassifica(el, periodo) {
   const box = el.querySelector("#classifica");
   try {
     const { classifica } = await api.get(`/sfide/classifica?periodo=${periodo}`);
-    const top = classifica.slice(0, 5);
 
     const tabsHtml = `
       <div style="display:flex; gap:6px; margin-bottom:10px">
@@ -123,12 +132,14 @@ async function loadClassifica(el, periodo) {
         ${tabsHtml}
         <div style="display:flex; flex-direction:column; gap:8px">
           ${
-            top.length
-              ? top
+            classifica.length
+              ? classifica
                   .map(
                     (a, i) => `
-                      <div style="display:flex; justify-content:space-between">
-                        <span>${i + 1}. ${a.nickname || a.nome}</span>
+                      <div style="display:flex; align-items:center; justify-content:space-between">
+                        <span style="display:flex; align-items:center; gap:8px">
+                          ${i + 1}. ${avatarHtml(a)} ${a.nickname || a.nome}
+                        </span>
                         <strong>${a.punti} PT</strong>
                       </div>
                     `

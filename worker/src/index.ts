@@ -15,6 +15,9 @@ import foto from "./routes/foto";
 import feedback from "./routes/feedback";
 import atleti from "./routes/atleti";
 import pagamenti from "./routes/pagamenti";
+import push from "./routes/push";
+import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
+import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -50,9 +53,18 @@ app.route("/api/foto", foto);
 app.route("/api/feedback", feedback);
 app.route("/api/atleti", atleti);
 app.route("/api/pagamenti", pagamenti);
+app.route("/api/push", push);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).
 app.get("/api/ping", requireAuth, (c) => c.json({ user: c.var.user }));
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Cron Trigger (wrangler.toml [triggers]) — controlla ogni minuto se è ora del Daily Drop
+  // di oggi e manda il push a chi è iscritto (vedi lib/dailyDropPush.ts).
+  scheduled: async (_event: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
+    ctx.waitUntil(inviaDailyDropSeAttivo(env));
+    ctx.waitUntil(inviaPromemoriaAllenamentoSeAttivo(env));
+  },
+};
