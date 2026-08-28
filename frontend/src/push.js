@@ -40,6 +40,11 @@ export async function attivaNotifiche() {
   await api.post("/push", { endpoint: json.endpoint, keys: json.keys });
 }
 
+// Notifica di prova verso i propri dispositivi iscritti.
+export async function inviaNotificaDiProva() {
+  return api.post("/push/test");
+}
+
 export async function disattivaNotifiche() {
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();

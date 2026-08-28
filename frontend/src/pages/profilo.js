@@ -2,7 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError } from "../api.js";
-import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche, inviaNotificaDiProva } from "../push.js";
 
 const MILESTONE_LABEL = {
   first_session: "Prima sessione 🎬",
@@ -293,6 +293,8 @@ async function initNotifiche(content) {
   box.innerHTML =
     stato === "attive"
       ? `<p style="font-size:13px">Attive ✓</p>
+         <button class="btn" id="notifiche-prova" style="width:100%; margin-top:8px">Invia notifica di prova</button>
+         <p class="mono" id="notifiche-prova-esito" style="font-size:12px; color:var(--mute); margin-top:6px" hidden></p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>`
       : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px">Attiva notifiche</button>`;
@@ -307,6 +309,24 @@ async function initNotifiche(content) {
       box.innerHTML = `<p class="error-text">${err.message}</p>`;
     }
   });
+
+  const prova = content.querySelector("#notifiche-prova");
+  if (prova) {
+    prova.addEventListener("click", async () => {
+      const esito = content.querySelector("#notifiche-prova-esito");
+      prova.disabled = true;
+      esito.hidden = false;
+      esito.textContent = "Invio…";
+      try {
+        await inviaNotificaDiProva();
+        esito.textContent = "Inviata — dovrebbe arrivarti tra pochi secondi.";
+      } catch (err) {
+        esito.textContent = err instanceof ApiError ? err.message : "Errore nell'invio";
+      } finally {
+        prova.disabled = false;
+      }
+    });
+  }
 }
 
 async function loadProfilo(el) {

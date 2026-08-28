@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
+import { sendWebPush } from "../lib/webPush";
 
 type Variables = { user: SessionUser };
 const push = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -23,6 +24,41 @@ push.post("/", requireAuth, async (c) => {
     .run();
 
   return c.json({ ok: true }, 201);
+});
+
+// Notifica di prova verso i propri dispositivi — per verificare che il permesso sia
+// concesso e il canale funzioni senza aspettare il Daily Drop o il promemoria del giorno.
+push.post("/test", requireAuth, async (c) => {
+  const { results: iscrizioni } = await c.env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`
+  )
+    .bind(c.var.user.userId)
+    .all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
+
+  if (iscrizioni.length === 0) return c.json({ error: "Nessun dispositivo iscritto" }, 400);
+
+  let inviate = 0;
+  await Promise.all(
+    iscrizioni.map(async (s) => {
+      try {
+        const res = await sendWebPush(
+          { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
+          c.env.VAPID_PUBLIC_KEY,
+          c.env.VAPID_PRIVATE_KEY,
+          { title: "100FT", body: "Notifica di prova — funziona! 🎉", url: "/" }
+        );
+        if (res.status === 404 || res.status === 410) {
+          await c.env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();
+        } else if (res.ok) {
+          inviate++;
+        }
+      } catch {
+        // ignora il singolo invio fallito
+      }
+    })
+  );
+
+  return c.json({ ok: true, inviate });
 });
 
 push.delete("/", requireAuth, async (c) => {
