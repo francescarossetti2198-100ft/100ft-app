@@ -3,10 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Origine del frontend Pages, per CORS + cookie di sessione.
-# Aggiorna con l'URL reale del progetto Pages appena creato.
+# Dominio custom dell'API (la zona 100-ft.com è sullo stesso account Cloudflare:
+# il record DNS e il certificato vengono creati in automatico al deploy).
+routes = [
+  { pattern = "api.100-ft.com", custom_domain = true },
+]
+
+# Origine del frontend Pages, per CORS + cookie di sessione (dominio custom su Cloudflare Pages).
 [vars]
-FRONTEND_ORIGIN = "http://localhost:5173"
+FRONTEND_ORIGIN = "https://app.100-ft.com"
 # Mittente email di reset password — deve usare un dominio verificato su Resend.
 EMAIL_FROM = "100FT <no-reply@100-ft.com>"
 # Chiave pubblica VAPID per le notifiche push (Daily Drop) — non è un segreto, il browser
@@ -18,7 +23,7 @@ VAPID_PUBLIC_KEY = "BC4D7YS90_oPJgq6d1bbSLfKT5Zl5RUFm_Yc7NCwZJgwlRPgFCzlZqJgEMWZ
 [[d1_databases]]
 binding = "DB"
 database_name = "100ft-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "6458022a-1450-4482-928b-b996d5f9b852"
 migrations_dir = "migrations"
 
 # Bucket R2 per le foto della sfida Daily Drop — creare con: wrangler r2 bucket create 100ft-foto
