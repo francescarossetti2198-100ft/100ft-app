@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0A0A" />
     <title>100FT — Functional Training</title>
+    <!-- Applica il tema salvato (o quello di sistema) prima del primo paint, per non
+         mostrare un lampo del tema sbagliato al caricamento. Logica completa in src/theme.js. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("100ft-theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+          }
+          document.documentElement.dataset.theme = t;
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.content = t === "light" ? "#ffffff" : "#0A0A0A";
+        } catch (e) {}
+      })();
+    </script>
     <!-- Icona "Aggiungi a Home" su iPhone: Safari usa questa, non le icons del manifest. -->
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!-- Favicon nel tab del browser, chiara/scura secondo le preferenze di sistema — l'icona

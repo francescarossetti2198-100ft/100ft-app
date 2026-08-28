@@ -1,5 +1,6 @@
 import "./style.css";
 import { registerRoute, startRouter } from "./router.js";
+import { mountThemeToggle } from "./theme.js";
 import { loadSession, getUser } from "./auth.js";
 import { renderLogin } from "./pages/login.js";
 import { renderRegistrazione } from "./pages/registrazione.js";
@@ -33,6 +34,7 @@ async function bootstrap() {
     // sta riavviando in dev) — meglio far vedere il login e permettere di riprovare, che
     // bloccare l'app per sempre senza più rispondere alla navigazione.
   }
+  mountThemeToggle();
   startRouter(document.getElementById("app"));
 }
 

@@ -1,6 +1,9 @@
 FRONTEND_ORIGIN=http://localhost:5173
 SESSION_SECRET=cambia-questa-stringa-con-un-valore-casuale-lungo
 RESEND_API_KEY=
+# Mittente delle email di reset password. DEVE usare un dominio verificato su Resend.
+# Senza dominio verificato, per i soli test verso la TUA email: "100FT <onboarding@resend.dev>"
+EMAIL_FROM=100FT <no-reply@100-ft.com>
 VAPID_PRIVATE_KEY=
 
 # VAPID_PUBLIC_KEY non è un secret, sta in wrangler.toml [vars]. Per generare la coppia:

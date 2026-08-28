@@ -4,6 +4,7 @@ export type Env = {
   FRONTEND_ORIGIN: string;
   SESSION_SECRET: string;
   RESEND_API_KEY: string;
+  EMAIL_FROM?: string;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
 };

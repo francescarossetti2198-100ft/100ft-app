@@ -151,7 +151,14 @@ function renderProfiloCoach(content) {
                   ${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
                 </p>
                 ${richiesteHtml ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${richiesteHtml}</p>` : ""}
-                <div style="margin-top:6px">${pagamentoBadgeHtml(a.userId, a.pagamentoMese)}</div>
+                <div style="margin-top:6px; display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+                  ${pagamentoBadgeHtml(a.userId, a.pagamentoMese)}
+                  <button type="button" class="link-btn reset-password-btn" data-user-id="${a.userId}" data-nome="${nome.replace(/"/g, "&quot;")}"
+                    style="text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+                    RESET PASSWORD
+                  </button>
+                </div>
+                <div class="reset-password-esito" data-user-id="${a.userId}" style="margin-top:6px"></div>
               </div>
             `;
           })
@@ -169,6 +176,31 @@ function renderProfiloCoach(content) {
             }
           });
         });
+
+        list.querySelectorAll(".reset-password-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const userId = Number(btn.dataset.userId);
+            const nome = btn.dataset.nome;
+            if (!confirm(`Reimpostare la password di ${nome}? Verrà disconnesso da tutti i dispositivi.`)) return;
+            const esito = list.querySelector(`.reset-password-esito[data-user-id="${userId}"]`);
+            btn.disabled = true;
+            try {
+              const { passwordTemporanea } = await api.post(`/atleti/${userId}/reset-password`);
+              esito.innerHTML = `
+                <p class="mono" style="font-size:12px; color:var(--text)">
+                  Password temporanea: <strong style="letter-spacing:1px">${passwordTemporanea}</strong>
+                </p>
+                <p class="mono" style="font-size:11px; color:var(--mute); margin-top:2px">
+                  Comunicagliela: potrà cambiarla dal suo Profilo → Sicurezza.
+                </p>
+              `;
+            } catch (err) {
+              esito.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
       })
       .catch((err) => {
         list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
@@ -176,6 +208,73 @@ function renderProfiloCoach(content) {
   }
 
   carica();
+}
+
+function sicurezzaCardHtml() {
+  return `
+    <div class="card" style="margin-top:12px" id="sicurezza-card">
+      <p class="mono" style="color:var(--mute); font-size:12px">SICUREZZA</p>
+      <button class="link-btn" id="apri-cambio-password" style="margin-top:8px">Cambia password</button>
+      <form id="cambio-password-form" hidden style="margin-top:12px">
+        <div class="field">
+          <label for="pw-attuale">Password attuale</label>
+          <input id="pw-attuale" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="field">
+          <label for="pw-nuova">Nuova password</label>
+          <input id="pw-nuova" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <div class="field">
+          <label for="pw-conferma">Conferma nuova password</label>
+          <input id="pw-conferma" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <p class="error-text" id="pw-error" hidden></p>
+        <p class="success-text" id="pw-success" hidden>Password aggiornata.</p>
+        <button class="btn" type="submit" style="width:100%">Salva nuova password</button>
+      </form>
+    </div>
+  `;
+}
+
+function initSicurezza(content) {
+  const card = content.querySelector("#sicurezza-card");
+  if (!card) return;
+  const apri = card.querySelector("#apri-cambio-password");
+  const form = card.querySelector("#cambio-password-form");
+  const errorEl = card.querySelector("#pw-error");
+  const successEl = card.querySelector("#pw-success");
+
+  apri.addEventListener("click", () => {
+    form.hidden = !form.hidden;
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    const attuale = card.querySelector("#pw-attuale").value;
+    const nuova = card.querySelector("#pw-nuova").value;
+    const conferma = card.querySelector("#pw-conferma").value;
+
+    if (nuova !== conferma) {
+      errorEl.textContent = "Le nuove password non coincidono";
+      errorEl.hidden = false;
+      return;
+    }
+
+    const submitBtn = form.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    try {
+      await api.post("/auth/change-password", { attuale, nuova });
+      form.reset();
+      successEl.hidden = false;
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
 }
 
 async function initNotifiche(content) {
@@ -268,6 +367,8 @@ async function loadProfilo(el) {
       </div>
     `;
 
+    const sicurezzaCard = sicurezzaCardHtml();
+
     if (!p.livello) {
       content.innerHTML = `
         <div class="card">
@@ -280,6 +381,7 @@ async function loadProfilo(el) {
         ${statsHtml}
         ${achievementsCard}
         ${notificheCard}
+        ${sicurezzaCard}
       `;
     } else {
       const { attuale } = p.livello;
@@ -298,6 +400,7 @@ async function loadProfilo(el) {
         ${statsHtml}
         ${achievementsCard}
         ${notificheCard}
+        ${sicurezzaCard}
       `;
     }
 
@@ -318,6 +421,7 @@ async function loadProfilo(el) {
     });
 
     initNotifiche(content);
+    initSicurezza(content);
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }

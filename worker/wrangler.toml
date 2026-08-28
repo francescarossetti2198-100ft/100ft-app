@@ -7,6 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 # Aggiorna con l'URL reale del progetto Pages appena creato.
 [vars]
 FRONTEND_ORIGIN = "http://localhost:5173"
+# Mittente email di reset password — deve usare un dominio verificato su Resend.
+EMAIL_FROM = "100FT <no-reply@100-ft.com>"
 # Chiave pubblica VAPID per le notifiche push (Daily Drop) — non è un segreto, il browser
 # la usa per verificare che il push arrivi da questo server. La privata sta tra i secrets.
 VAPID_PUBLIC_KEY = "BC4D7YS90_oPJgq6d1bbSLfKT5Zl5RUFm_Yc7NCwZJgwlRPgFCzlZqJgEMWZNmUGmYdfcsy1_ejey2RYieU53M8"

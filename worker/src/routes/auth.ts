@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from "../lib/password";
 import { createSession, deleteSession, SESSION_COOKIE_NAME } from "../lib/session";
 import { sessionCookieOptions } from "../lib/cookies";
 import { sendResetPasswordEmail } from "../lib/email";
+import { requireAuth } from "../middleware/auth";
 
 type Variables = { user: SessionUser };
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -105,8 +106,37 @@ auth.post("/forgot-password", async (c) => {
 
     // Router del frontend è hash-based (SPA su Cloudflare Pages, niente rotte server-side).
     const resetUrl = `${c.env.FRONTEND_ORIGIN}/#/reset-password?token=${token}`;
-    await sendResetPasswordEmail(c.env, email, resetUrl);
+    try {
+      await sendResetPasswordEmail(c.env, email, resetUrl);
+    } catch (err) {
+      // Finché non c'è un dominio mittente verificato su Resend l'invio fallisce: non deve
+      // far crashare la richiesta (l'utente vedrebbe un errore). In quel caso il recupero
+      // passa dalla coach (POST /api/atleti/:id/reset-password).
+      console.error("Invio email di reset password fallito:", err);
+    }
   }
+
+  return c.json({ ok: true });
+});
+
+// Cambio password da loggati (l'utente conosce quella attuale) — vale per atleti e coach.
+auth.post("/change-password", requireAuth, async (c) => {
+  const { attuale, nuova } = await c.req.json<{ attuale?: string; nuova?: string }>();
+  if (!attuale || !nuova) return c.json({ error: "Password attuale e nuova sono obbligatorie" }, 400);
+  if (nuova.length < 8) return c.json({ error: "La nuova password deve avere almeno 8 caratteri" }, 400);
+
+  const row = await c.env.DB.prepare(`SELECT password_hash FROM users WHERE id = ?`)
+    .bind(c.var.user.userId)
+    .first<{ password_hash: string }>();
+
+  if (!row || !(await verifyPassword(attuale, row.password_hash))) {
+    return c.json({ error: "La password attuale non è corretta" }, 400);
+  }
+
+  const passwordHash = await hashPassword(nuova);
+  await c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`)
+    .bind(passwordHash, c.var.user.userId)
+    .run();
 
   return c.json({ ok: true });
 });

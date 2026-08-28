@@ -23,6 +23,16 @@ function avatarHtml(a) {
   return `<span style="width:22px; height:22px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--mute)">${nome[0].toUpperCase()}</span>`;
 }
 
+// Movimento rispetto al periodo precedente: freccia verde su se sale in classifica,
+// rossa giù se scende. Niente freccia se è fermo o non era ancora in classifica.
+// Va messa subito prima dei punti ("▲ 90 PT").
+function variazioneHtml(v) {
+  if (v == null || v === 0) return "";
+  const su = v > 0;
+  const colore = su ? "var(--livello-1)" : "var(--livello-5)";
+  return `<span style="color:${colore}; margin-right:5px" title="${su ? "+" : ""}${v} posizioni">${su ? "▲" : "▼"}</span>`;
+}
+
 // TODO: classifica Season e Improvement (basata sul miglioramento personale, brief sezione 10).
 export function renderSfide(appEl) {
   const el = document.createElement("div");
@@ -138,9 +148,9 @@ async function loadClassifica(el, periodo) {
                     (a, i) => `
                       <div style="display:flex; align-items:center; justify-content:space-between">
                         <span style="display:flex; align-items:center; gap:8px">
-                          ${i + 1}. ${avatarHtml(a)} ${a.nickname || a.nome}
+                          ${a.posizione ?? i + 1}. ${avatarHtml(a)} ${a.nickname || a.nome}
                         </span>
-                        <strong>${a.punti} PT</strong>
+                        <strong>${variazioneHtml(a.variazione)}${a.punti} PT</strong>
                       </div>
                     `
                   )

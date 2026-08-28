@@ -3,6 +3,15 @@ import type { Env, SessionUser } from "../types";
 import { requireCoach } from "../middleware/auth";
 import { calcolaAnelli } from "../lib/settimana";
 import { calcolaLivello } from "../lib/livelli";
+import { hashPassword } from "../lib/password";
+
+// Password temporanea leggibile da dettare a voce/WhatsApp: niente caratteri ambigui
+// (0/O, 1/l/I). 10 caratteri -> ben oltre il minimo di 8.
+function generaPasswordTemporanea(): string {
+  const alfabeto = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (b) => alfabeto[b % alfabeto.length]).join("");
+}
 
 type Variables = { user: SessionUser };
 const atleti = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -67,6 +76,38 @@ atleti.get("/", requireCoach, async (c) => {
   );
 
   return c.json({ atleti: risultato, mese, anno });
+});
+
+// Reset password gestito dalla coach — l'unico recupero possibile finché non c'è un
+// dominio email verificato per i link di reset. Genera una password temporanea, la
+// restituisce UNA volta (la coach la comunica all'atleta) e chiude le sue sessioni
+// aperte, così un eventuale accesso non autorizzato viene interrotto.
+atleti.post("/:id/reset-password", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "ID atleta non valido" }, 400);
+
+  const target = await c.env.DB.prepare(
+    `SELECT u.id, p.nome, p.cognome, p.nickname
+     FROM users u JOIN athlete_profile p ON p.user_id = u.id
+     WHERE u.id = ? AND u.role = 'atleta'`
+  )
+    .bind(id)
+    .first<{ id: number; nome: string; cognome: string; nickname: string | null }>();
+
+  if (!target) return c.json({ error: "Atleta non trovato" }, 404);
+
+  const passwordTemporanea = generaPasswordTemporanea();
+  const passwordHash = await hashPassword(passwordTemporanea);
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).bind(passwordHash, id),
+    c.env.DB.prepare(`DELETE FROM sessioni_login WHERE user_id = ?`).bind(id),
+  ]);
+
+  return c.json({
+    passwordTemporanea,
+    atleta: target.nickname || `${target.nome} ${target.cognome}`.trim(),
+  });
 });
 
 export default atleti;

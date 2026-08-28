@@ -7,6 +7,11 @@
   --mute: #f5f5f5;
   --border: #2a2a2a;
 
+  /* Chrome della tabbar: tenuti come token così il tema chiaro può ridefinirli
+     senza cambiare l'aspetto in scuro (la tabbar non si ridisegna). */
+  --tabbar-fg: #ffffff;
+  --tabbar-active-fg: #000000;
+
   /* Tag colore sessioni, coerenti con le schede PDF esistenti */
   --sessione-a: #ff7a29; /* arancio */
   --sessione-b: #8bc53f; /* verde */
@@ -23,6 +28,23 @@
 
   --font-ui: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+/* Tema chiaro — attivato da <html data-theme="light"> (vedi frontend/src/theme.js
+   e lo script inline in index.html che lo applica prima del primo paint).
+   Ridefinisce solo le tinte neutre: i colori di livelli/sessioni restano identici
+   perché sono colori di brand e funzionano su entrambi i fondi. */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --surface-2: #e8e8ec;
+  --accent: #7c3aed;
+  --text: #16161a;
+  --mute: #6b6b73;
+  --border: #d9d9de;
+
+  --tabbar-fg: #16161a;
+  --tabbar-active-fg: #ffffff;
 }
 
 * {
@@ -60,6 +82,11 @@ a {
 .screen {
   flex: 1;
   padding: 20px 16px 90px;
+}
+
+/* Lascia spazio all'interruttore tema fisso in alto a destra */
+.screen > h1:first-child {
+  padding-right: 48px;
 }
 
 button,
@@ -132,6 +159,31 @@ input {
   text-decoration: underline;
 }
 
+/* Interruttore tema chiaro/scuro — montato una volta su <body> (frontend/src/theme.js),
+   fuori da #app così sopravvive ai cambi di pagina del router. */
+.theme-toggle {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: 14px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 nav.tabbar {
   position: fixed;
   bottom: calc(12px + env(safe-area-inset-bottom));
@@ -147,7 +199,7 @@ nav.tabbar {
 
 nav.tabbar a {
   text-decoration: none;
-  color: #fff;
+  color: var(--tabbar-fg);
   font-size: 11px;
   font-family: var(--font-mono);
   text-transform: uppercase;
@@ -173,7 +225,7 @@ nav.tabbar a .tab-icon-box {
    con una transition che richiederebbe lo stesso nodo DOM prima/dopo. */
 nav.tabbar a.active .tab-icon-box {
   background: var(--accent);
-  color: #000;
+  color: var(--tabbar-active-fg);
   animation: tab-pop 0.25s ease;
 }
 
