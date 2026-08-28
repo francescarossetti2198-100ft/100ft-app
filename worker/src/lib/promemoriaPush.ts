@@ -25,8 +25,9 @@ function oggiRoma(): { data: string; oraMinuti: string; giornoSettimana: number 
   return { data, oraMinuti, giornoSettimana };
 }
 
-// Promemoria "Ti alleni oggi?" — ogni giorno di allenamento, alle 13:00 (ora di Roma), a
-// tutti gli atleti iscritti. Diverso dal Daily Drop: sempre, non ~1 giorno su 3, orario fisso.
+// Promemoria di registrare la presenza — ogni giorno di allenamento, alle 13:00 (ora di
+// Roma), a tutti gli atleti iscritti. Diverso dal Daily Drop: sempre (non ~1 giorno su 3),
+// orario fisso.
 export async function inviaPromemoriaAllenamentoSeAttivo(env: Env): Promise<void> {
   const { data, oraMinuti, giornoSettimana } = oggiRoma();
   if (oraMinuti !== "13:00") return;
@@ -55,7 +56,11 @@ export async function inviaPromemoriaAllenamentoSeAttivo(env: Env): Promise<void
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           env.VAPID_PUBLIC_KEY,
           env.VAPID_PRIVATE_KEY,
-          { title: "100FT", body: "Ti alleni oggi?", url: "/" }
+          {
+            title: "100FT — Ti alleni oggi?",
+            body: "Ricordati di registrare la presenza nell'app 💪",
+            url: "/",
+          }
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();
