@@ -49,6 +49,21 @@ export function renderHome(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <style>
+      /* QUESTA SETTIMANA: le 3 sessioni affiancate. Quella di oggi è un <button> toccabile. */
+      #timeline-card .giorni-riga { display: flex; gap: 8px; margin-top: 10px; }
+      #timeline-card .giorno-tile {
+        flex: 1; min-width: 0; text-align: center; padding: 12px 4px;
+        border: 1px solid var(--border); border-radius: 12px;
+        background: none; color: inherit; font-family: inherit;
+      }
+      #timeline-card .giorno-tile.oggi { border-color: var(--accent); cursor: pointer; }
+      #timeline-card .giorno-tile.dim { opacity: 0.5; }
+      #timeline-card .giorno-tile:disabled { opacity: 0.5; cursor: default; }
+      #timeline-card .gt-nome { font-size: 14px; font-weight: 600; margin: 0; }
+      #timeline-card .gt-ora { font-size: 10px; color: var(--mute); margin: 3px 0 0; }
+      #timeline-card .gt-stato { font-size: 10px; letter-spacing: 1px; margin: 6px 0 0; }
+      #timeline-card .gt-hint { font-size: 9px; color: var(--mute); opacity: 0.75; margin: 4px 0 0; }
+
       /* "Il tuo allenamento di oggi": un'unica card con dentro il messaggio della coach,
          "Prima dell'allenamento" (richieste) e "Post allenamento" (feedback). Le sezioni
          vuote spariscono; i separatori compaiono solo tra sezioni piene. */
@@ -201,104 +216,67 @@ async function loadSettimana(el) {
   }
 }
 
-// Sezione 3/4/5: QUESTA SETTIMANA — timeline verticale Lun/Mer/Ven, state-driven:
-// passata+presente (✓), oggi da confermare (● + bottone CI SONO), futura (○, non cliccabile).
+// QUESTA SETTIMANA — le 3 sessioni (Lun/Mer/Ven) affiancate su una riga. La sessione di
+// OGGI è sempre toccabile per cambiare presenza/assenza nel giorno stesso; passate e future
+// sono solo di lettura.
 async function loadTimeline(el) {
   const card = el.querySelector("#timeline-card");
   try {
     const { sessioniSettimana } = await api.get("/profilo/me");
     const oggiIso = new Date().toISOString().slice(0, 10);
 
-    // Passate/oggi restano righe piene una sotto l'altra; i giorni futuri (○, non
-    // cliccabili) vanno affiancati in una sola riga invece di impilati uno sotto l'altro.
-    const righe = [];
-    const future = [];
+    const tassello = (s) => {
+      const giorno = nomeGiorno(s.data).slice(0, 3).toUpperCase(); // LUN / MER / VEN
+      const orario = `${s.oraInizio}–${s.oraFine}`;
+      const passato = s.data < oggiIso;
+      const futuro = s.data > oggiIso;
+      const oggi = !passato && !futuro;
 
-    sessioniSettimana.forEach((s) => {
-      const giorno = nomeGiorno(s.data).toUpperCase();
-      const orario = `${s.oraInizio} — ${s.oraFine}`;
-
-      if (s.data < oggiIso) {
-        righe.push(
-          s.confermata
-            ? `
-              <div style="padding:12px 0; border-top:1px solid var(--border)">
-                <p style="font-size:14px"><span style="color:var(--accent)">✓</span> ${giorno}</p>
-                <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-                <p class="mono" style="color:var(--accent); font-size:11px; letter-spacing:1px; margin-top:4px">PRESENTE</p>
-              </div>
-            `
-            : `
-              <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
-                <p style="font-size:14px">${giorno}</p>
-                <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-                <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">ASSENTE</p>
-              </div>
-            `
-        );
-        return;
+      let segno = "";
+      let stato = "";
+      let statoColore = "var(--mute)";
+      if (s.stato === "presente") {
+        segno = "✓ ";
+        stato = "PRESENTE";
+        statoColore = "var(--accent)";
+      } else if (s.stato === "assente") {
+        stato = "ASSENTE";
+      } else {
+        segno = oggi ? "● " : "○ ";
+        stato = oggi ? "CI SEI?" : "—";
       }
 
-      if (s.data > oggiIso) {
-        future.push(`
-          <div style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; opacity:0.5">
-            <p style="font-size:14px">○ ${giorno}</p>
-            <p class="mono" style="font-size:12px; margin-top:2px">${orario}</p>
-          </div>
-        `);
-        return;
-      }
+      const dim = futuro || (!oggi && s.stato !== "presente");
+      const cls = `giorno-tile${oggi ? " oggi" : ""}${dim ? " dim" : ""}`;
 
-      // Oggi.
-      if (s.confermata) {
-        righe.push(`
-          <div style="padding:12px 0; border-top:1px solid var(--border)">
-            <p style="font-size:14px"><span style="color:var(--accent)">✓</span> ${giorno}</p>
-            <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-            <p class="mono" style="color:var(--accent); font-size:11px; letter-spacing:1px; margin-top:4px">PRESENTE</p>
-          </div>
-        `);
-        return;
-      }
+      const corpo = `
+        <p class="gt-nome">${segno}${giorno}</p>
+        <p class="gt-ora mono">${orario}</p>
+        <p class="gt-stato mono" style="color:${statoColore}">${stato}</p>
+        ${oggi ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per confermare" : "tocca per cambiare"}</p>` : ""}
+      `;
 
-      // Sessione di oggi già finita e mai confermata: non si può più segnare presente ora.
-      const finita = new Date(`${s.data}T${s.oraFine}:00Z`) <= new Date();
-      if (finita) {
-        righe.push(`
-          <div style="padding:12px 0; border-top:1px solid var(--border); opacity:0.6">
-            <p style="font-size:14px">${giorno}</p>
-            <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:4px">ASSENTE</p>
-          </div>
-        `);
-        return;
-      }
+      return oggi
+        ? `<button type="button" class="${cls}" data-stato="${s.stato}">${corpo}</button>`
+        : `<div class="${cls}">${corpo}</div>`;
+    };
 
-      righe.push(`
-        <div style="margin-top:12px; padding:14px; border-radius:12px; border:1px solid var(--accent)">
-          <p style="font-size:15px; font-weight:600"><span style="color:var(--accent)">●</span> ${giorno}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${orario}</p>
-          <p class="mono" style="font-size:11px; letter-spacing:1px; margin-top:8px">CONFERMA LA TUA PRESENZA</p>
-          <button class="btn conferma-presenza-btn" data-sessione="${s.sessioneId}" style="width:100%; margin-top:10px">CI SONO</button>
-        </div>
-      `);
-    });
+    card.innerHTML = sezione(
+      "QUESTA SETTIMANA",
+      `<div class="giorni-riga">${sessioniSettimana.map(tassello).join("")}</div>`
+    );
 
-    const futureHtml = future.length
-      ? `<div style="display:flex; gap:10px; margin-top:12px">${future.join("")}</div>`
-      : "";
-
-    card.innerHTML = sezione("QUESTA SETTIMANA", `<div style="margin-top:4px">${righe.join("")}</div>${futureHtml}`);
-
-    card.querySelector(".conferma-presenza-btn")?.addEventListener("click", async (e) => {
-      e.target.disabled = true;
+    card.querySelector(".giorno-tile.oggi")?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const presente = btn.dataset.stato !== "presente"; // presente ⇄ assente; da "indeciso" → presente
+      btn.disabled = true;
       try {
-        await api.post("/presenze/conferma");
+        await api.post("/presenze/conferma", { presente });
         loadSettimana(el);
         loadTimeline(el);
         loadFeedback(el);
       } catch {
-        e.target.disabled = false;
+        btn.disabled = false;
       }
     });
   } catch (err) {
@@ -312,10 +290,7 @@ async function loadCoach(el) {
   const box = el.querySelector("#ao-coach");
   try {
     const { testo } = await api.get("/nota-coach");
-    box.innerHTML = testo
-      ? `<p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">DALLA COACH</p>
-         <p style="margin-top:6px; font-style:italic">"${esc(testo)}"</p>`
-      : "";
+    box.innerHTML = testo ? `<p style="font-style:italic">"${esc(testo)}"</p>` : "";
   } catch {
     box.innerHTML = "";
   }
@@ -353,39 +328,30 @@ async function loadRichieste(el) {
       : "";
 
     if (inviata) {
-      card.innerHTML = sezione(
-        "PRIMA DELL'ALLENAMENTO",
-        `<p style="margin-top:8px">Richiesta inviata ✓</p>${elencoHtml}`
-      );
+      card.innerHTML = `<p>Richiesta inviata ✓</p>${elencoHtml}`;
       return;
     }
 
     if (!aperte) {
-      card.innerHTML = sezione(
-        "PRIMA DELL'ALLENAMENTO",
-        `
-          <p style="margin-top:8px; font-weight:600">RICHIESTA CHIUSA</p>
-          <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">La coach vedrà la tua richiesta prima della sessione.</p>
-          ${elencoHtml}
-        `
-      );
+      card.innerHTML = `
+        <p style="font-weight:600">RICHIESTA CHIUSA</p>
+        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">La coach vedrà la tua richiesta prima della sessione.</p>
+        ${elencoHtml}
+      `;
       return;
     }
 
-    card.innerHTML = sezione(
-      "PRIMA DELL'ALLENAMENTO",
-      `
-        <p style="margin-top:8px">C'è qualcosa su cui vorresti lavorare oggi?</p>
-        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px" id="categoria-scelte">
-          ${CATEGORIE.map((c) => `<button type="button" class="btn categoria-btn" data-cat="${c}" style="background:var(--surface-2); padding:6px 10px; font-size:12px; text-transform:uppercase">${c}</button>`).join("")}
-        </div>
-        <input id="richiesta-testo" type="text" placeholder="Oppure scrivi una richiesta libera"
-               style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text)" />
-        <p class="error-text" id="richiesta-error" hidden style="margin-top:6px"></p>
-        <button class="btn" id="richiesta-submit" style="width:100%; margin-top:10px">Invia richiesta</button>
-        ${elencoHtml}
-      `
-    );
+    card.innerHTML = `
+      <p>C'è qualcosa su cui vorresti lavorare oggi?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px" id="categoria-scelte">
+        ${CATEGORIE.map((c) => `<button type="button" class="btn categoria-btn" data-cat="${c}" style="background:var(--surface-2); padding:6px 10px; font-size:12px; text-transform:uppercase">${c}</button>`).join("")}
+      </div>
+      <input id="richiesta-testo" type="text" placeholder="Oppure scrivi una richiesta libera"
+             style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text)" />
+      <p class="error-text" id="richiesta-error" hidden style="margin-top:6px"></p>
+      <button class="btn" id="richiesta-submit" style="width:100%; margin-top:10px">Invia richiesta</button>
+      ${elencoHtml}
+    `;
 
     let categoriaScelta = null;
     const bottoni = card.querySelectorAll(".categoria-btn");

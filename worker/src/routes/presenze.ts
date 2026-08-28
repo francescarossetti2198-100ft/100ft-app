@@ -34,13 +34,19 @@ presenze.get("/oggi", requireAuth, async (c) => {
   return c.json({ sessione, confermata: !!mia?.confermata, inSala: inSala.results });
 });
 
+// Presenza / assenza per la sessione di OGGI — sempre modificabile nel giorno stesso
+// (l'atleta può cambiare idea finché è oggi). Body `{ presente?: boolean }`: assente se
+// `false`, altrimenti presente (una chiamata senza body = conferma, come prima).
 presenze.post("/conferma", requireAuth, async (c) => {
   if (c.var.user.role !== "atleta") {
-    return c.json({ error: "Solo gli atleti possono confermare la presenza" }, 403);
+    return c.json({ error: "Solo gli atleti possono cambiare la presenza" }, 403);
   }
 
   const sessione = await sessioneOggi(c.env.DB);
   if (!sessione) return c.json({ error: "Nessuna sessione oggi" }, 400);
+
+  const body = await c.req.json<{ presente?: boolean }>().catch(() => ({}) as { presente?: boolean });
+  const presente = body.presente !== false;
 
   const { data } = oggi();
   const esistente = await c.env.DB.prepare(
@@ -49,35 +55,54 @@ presenze.post("/conferma", requireAuth, async (c) => {
     .bind(c.var.user.userId, sessione.id, data)
     .first<{ confermata: number }>();
 
-  if (esistente?.confermata) return c.json({ ok: true });
+  // Nessun cambiamento: presente e già confermata, oppure assente e (mai segnata O già assente).
+  if (presente === !!esistente?.confermata && (presente || esistente != null)) {
+    return c.json({ ok: true, confermata: !!esistente?.confermata });
+  }
 
   const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
 
   await c.env.DB.prepare(
-    `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES (?, ?, ?, 1)
-     ON CONFLICT (user_id, sessione_id, data) DO UPDATE SET confermata = 1`
+    `INSERT INTO presenze (user_id, sessione_id, data, confermata) VALUES (?, ?, ?, ?)
+     ON CONFLICT (user_id, sessione_id, data) DO UPDATE SET confermata = excluded.confermata`
   )
-    .bind(c.var.user.userId, sessione.id, data)
+    .bind(c.var.user.userId, sessione.id, data, presente ? 1 : 0)
     .run();
 
-  // +10 XP per sessione completata (brief, sezione 4) — assegnato una sola volta alla conferma.
-  await awardXp(c.env.DB, c.var.user.userId, "sessione_completata", 10);
+  if (presente) {
+    // +10 XP per sessione completata (brief, sezione 4).
+    await awardXp(c.env.DB, c.var.user.userId, "sessione_completata", 10);
+  } else {
+    // Torna assente: toglie i +10 XP dati alla conferma di oggi (le milestone già
+    // raggiunte restano — il conteggio presenze si ricorregge da solo se riconferma).
+    await c.env.DB.prepare(
+      `DELETE FROM xp_log WHERE id = (
+         SELECT id FROM xp_log
+         WHERE user_id = ? AND azione = 'sessione_completata' AND date(data) = date('now')
+         ORDER BY id DESC LIMIT 1
+       )`
+    )
+      .bind(c.var.user.userId)
+      .run();
+  }
 
   const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);
   await segnalaAvanzamento(c.env.DB, c.var.user.userId, prima, dopo);
 
-  // Milestones legate al numero di presenze (brief, sezione 10).
-  const totalePresenze = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`
-  )
-    .bind(c.var.user.userId)
-    .first<{ n: number }>();
+  if (presente) {
+    // Milestones legate al numero di presenze (brief, sezione 10).
+    const totalePresenze = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`
+    )
+      .bind(c.var.user.userId)
+      .first<{ n: number }>();
 
-  if (totalePresenze?.n === 1) await assegnaMilestone(c.env.DB, c.var.user.userId, "first_session");
-  if (totalePresenze?.n === 10) await assegnaMilestone(c.env.DB, c.var.user.userId, "10_sessions");
-  if (totalePresenze?.n === 25) await assegnaMilestone(c.env.DB, c.var.user.userId, "25_sessions");
+    if (totalePresenze?.n === 1) await assegnaMilestone(c.env.DB, c.var.user.userId, "first_session");
+    if (totalePresenze?.n === 10) await assegnaMilestone(c.env.DB, c.var.user.userId, "10_sessions");
+    if (totalePresenze?.n === 25) await assegnaMilestone(c.env.DB, c.var.user.userId, "25_sessions");
+  }
 
-  return c.json({ ok: true });
+  return c.json({ ok: true, confermata: presente });
 });
 
 export default presenze;

@@ -76,6 +76,8 @@ export type SessioneSettimana = {
   oraInizio: string;
   oraFine: string;
   confermata: boolean;
+  // "indeciso" = nessuna scelta ancora fatta; "assente" = ha segnato esplicitamente assenza.
+  stato: "presente" | "assente" | "indeciso";
 };
 
 // Le 3 (o quante sono) sessioni di questa settimana con lo stato di presenza — per la
@@ -95,12 +97,14 @@ export async function sessioniSettimanaConStato(db: D1Database, userId: number):
       .prepare(`SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`)
       .bind(userId, s.id, dataIso)
       .first<{ confermata: number }>();
+    const stato = presenza == null ? "indeciso" : presenza.confermata ? "presente" : "assente";
     risultato.push({
       sessioneId: s.id,
       data: dataIso,
       oraInizio: s.oraInizio,
       oraFine: s.oraFine,
       confermata: !!presenza?.confermata,
+      stato,
     });
   }
   return risultato;
