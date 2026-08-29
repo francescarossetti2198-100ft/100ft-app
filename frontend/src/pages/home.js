@@ -104,7 +104,9 @@ export function renderHome(appEl) {
     </div>
     <div class="card" id="allenamento-oggi-card" style="margin-top:12px">
       <p class="mono" style="font-size:12px; letter-spacing:1px">IL TUO ALLENAMENTO DI OGGI</p>
-      <p class="mono" id="ao-empty" hidden style="color:var(--mute); font-size:13px; margin-top:8px">Oggi non è un giorno di allenamento.</p>
+      <div id="ao-empty" hidden style="margin-top:8px">
+        <p class="mono" style="color:var(--mute); font-size:13px">Oggi non è un giorno di allenamento.</p>
+      </div>
       <div class="ao-sezione" id="ao-coach"></div>
       <div class="ao-sezione" id="ao-richieste"></div>
       <div class="ao-sezione" id="ao-feedback"></div>
@@ -187,7 +189,8 @@ async function loadFeedbackMese(el) {
 }
 
 // "Il tuo allenamento di oggi" — orchestra le tre sotto-sezioni nella card unica e mostra
-// il fallback se oggi non c'è nulla (niente sessione, niente messaggio della coach).
+// il countdown al prossimo allenamento se oggi non c'è nulla (niente sessione, niente
+// messaggio della coach).
 async function loadAllenamentoOggi(el) {
   await Promise.all([loadCoach(el), loadRichieste(el), loadFeedback(el)]);
   const card = el.querySelector("#allenamento-oggi-card");
@@ -195,7 +198,103 @@ async function loadAllenamentoOggi(el) {
   const vuoto = ["#ao-coach", "#ao-richieste", "#ao-feedback"].every(
     (sel) => !card.querySelector(sel)?.innerHTML.trim()
   );
-  card.querySelector("#ao-empty").hidden = !vuoto;
+  const box = card.querySelector("#ao-empty");
+  box.hidden = !vuoto;
+
+  if (!vuoto) {
+    fermaCountdown();
+    return;
+  }
+  try {
+    const { sessioniSettimana } = await api.get("/profilo/me");
+    avviaCountdown(box, sessioniSettimana);
+  } catch {
+    fermaCountdown();
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Oggi non è un giorno di allenamento.</p>`;
+  }
+}
+
+// --- Countdown al prossimo allenamento -------------------------------------------------
+// Le sessioni sono un pattern settimanale ricorrente (lun/mer/ven). Dalla lista di questa
+// settimana ricaviamo il prossimo inizio: la sessione futura più vicina, proiettata alla
+// settimana dopo se tutte quelle di questa settimana sono già passate. L'orario ("19:30")
+// è ora locale = ora di Roma per gli atleti (stessa approssimazione del resto dell'app).
+let countdownTimer = null;
+
+function fermaCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+function prossimoInizio(sessioni) {
+  const ora = Date.now();
+  const SETTIMANA = 7 * 24 * 3600 * 1000;
+  let migliore = null;
+  for (const s of sessioni ?? []) {
+    if (!s.data || !s.oraInizio) continue;
+    let ts = new Date(`${s.data}T${s.oraInizio}:00`).getTime();
+    if (Number.isNaN(ts)) continue;
+    if (ts <= ora) ts += SETTIMANA;
+    if (migliore == null || ts < migliore.ts) migliore = { ts, oraInizio: s.oraInizio };
+  }
+  return migliore;
+}
+
+function formattaResto(ms) {
+  const tot = Math.max(0, Math.floor(ms / 1000));
+  const g = Math.floor(tot / 86400);
+  const h = Math.floor((tot % 86400) / 3600);
+  const m = Math.floor((tot % 3600) / 60);
+  const s = tot % 60;
+  const parti = [];
+  if (g) parti.push(`${g} ${g === 1 ? "giorno" : "giorni"}`);
+  if (g || h) parti.push(`${h} h`);
+  parti.push(`${m} min`);
+  parti.push(`${s} sec`);
+  return parti.join(" · ");
+}
+
+function battuta(ms) {
+  const min = ms / 60000;
+  if (min < 15) return "scaldati, si parte 🔥";
+  if (min < 60) return "manca pochissimo 👀";
+  if (min < 24 * 60) return "ci siamo quasi 💪";
+  if (min < 48 * 60) return "preparati 💪";
+  return "ci vediamo in sala 💪";
+}
+
+function avviaCountdown(box, sessioni) {
+  fermaCountdown();
+  const prossima = prossimoInizio(sessioni);
+  if (!prossima) {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun allenamento in programma.</p>`;
+    return;
+  }
+  const giorno = GIORNI[(new Date(prossima.ts).getDay() + 6) % 7];
+  box.innerHTML = `
+    <p class="kicker" style="color:var(--accent)">Prossimo allenamento</p>
+    <p id="cd-tempo" style="font-family:var(--font-ui); font-weight:800; font-size:22px; letter-spacing:-0.3px; margin-top:6px">—</p>
+    <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px"><span id="cd-battuta"></span> · ${giorno} ${prossima.oraInizio}</p>
+  `;
+  const tempoEl = box.querySelector("#cd-tempo");
+  const battutaEl = box.querySelector("#cd-battuta");
+
+  const tick = () => {
+    if (!box.isConnected) return fermaCountdown();
+    const resto = prossima.ts - Date.now();
+    if (resto <= 0) {
+      tempoEl.textContent = "È ora! 🔥";
+      battutaEl.textContent = "in bocca al lupo";
+      fermaCountdown();
+      return;
+    }
+    tempoEl.textContent = formattaResto(resto);
+    battutaEl.textContent = battuta(resto);
+  };
+  tick();
+  countdownTimer = setInterval(tick, 1000);
 }
 
 function anelliSvg({ training, challenges, feedback }) {
