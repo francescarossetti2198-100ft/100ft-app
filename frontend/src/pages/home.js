@@ -103,8 +103,8 @@ export function renderHome(appEl) {
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
     <div class="card" id="allenamento-oggi-card" style="margin-top:12px">
-      <p class="mono" style="font-size:12px; letter-spacing:1px">IL TUO ALLENAMENTO DI OGGI</p>
-      <div id="ao-empty" hidden style="margin-top:8px">
+      <p class="mono" id="ao-titolo" style="font-size:12px; letter-spacing:1px">IL TUO ALLENAMENTO DI OGGI</p>
+      <div id="ao-empty" hidden>
         <p class="mono" style="color:var(--mute); font-size:13px">Oggi non è un giorno di allenamento.</p>
       </div>
       <div class="ao-sezione" id="ao-coach"></div>
@@ -200,6 +200,9 @@ async function loadAllenamentoOggi(el) {
   );
   const box = card.querySelector("#ao-empty");
   box.hidden = !vuoto;
+  // Il titolo "IL TUO ALLENAMENTO DI OGGI" ha senso solo quando oggi c'è qualcosa;
+  // col countdown al prossimo allenamento sparisce.
+  card.querySelector("#ao-titolo").hidden = vuoto;
 
   if (!vuoto) {
     fermaCountdown();
@@ -274,9 +277,9 @@ function avviaCountdown(box, sessioni) {
   }
   const giorno = GIORNI[(new Date(prossima.ts).getDay() + 6) % 7];
   box.innerHTML = `
-    <p class="kicker" style="color:var(--accent)">Prossimo allenamento</p>
-    <p id="cd-tempo" style="font-family:var(--font-ui); font-weight:800; font-size:22px; letter-spacing:-0.3px; margin-top:6px">—</p>
-    <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px"><span id="cd-battuta"></span> · ${giorno} ${prossima.oraInizio}</p>
+    <p class="kicker" style="color:var(--accent); font-size:11px">Prossimo allenamento</p>
+    <p id="cd-tempo" style="font-family:var(--font-ui); font-weight:700; font-size:15px; letter-spacing:-0.2px; margin-top:5px">—</p>
+    <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px"><span id="cd-battuta"></span> · ${giorno} ${prossima.oraInizio}</p>
   `;
   const tempoEl = box.querySelector("#cd-tempo");
   const battutaEl = box.querySelector("#cd-battuta");
