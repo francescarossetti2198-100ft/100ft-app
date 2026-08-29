@@ -17,6 +17,14 @@ function sbloccato(mese: number, anno: number): boolean {
   return anno < c.anno || (anno === c.anno && mese <= c.mese);
 }
 
+// Vero solo per il mese immediatamente successivo a quello corrente: agli atleti anticipiamo
+// il focus tematico del prossimo mese (l'unica anticipazione concessa dal brief), non oltre.
+function eProssimoMese(mese: number, anno: number): boolean {
+  const c = meseCorrente();
+  const prossimo = c.mese === 12 ? { mese: 1, anno: c.anno + 1 } : { mese: c.mese + 1, anno: c.anno };
+  return mese === prossimo.mese && anno === prossimo.anno;
+}
+
 // La vecchia stagione demo (set 2025 → lug 2026) resta nel DB ma non serve più mostrarla —
 // il Programma parte dalla stagione reale (set 2026 in poi).
 programma.get("/", requireAuth, async (c) => {
@@ -31,7 +39,8 @@ programma.get("/", requireAuth, async (c) => {
   const isCoach = c.var.user.role === "coach";
   const mesi = results.map((r) => {
     const sblocc = sbloccato(r.mese, r.anno);
-    return { id: r.id, mese: r.mese, anno: r.anno, sbloccato: sblocc, focusTema: sblocc || isCoach ? r.focusTema : null };
+    const mostraFocus = sblocc || isCoach || eProssimoMese(r.mese, r.anno);
+    return { id: r.id, mese: r.mese, anno: r.anno, sbloccato: sblocc, focusTema: mostraFocus ? r.focusTema : null };
   });
 
   return c.json({ mesi });
@@ -40,7 +49,10 @@ programma.get("/", requireAuth, async (c) => {
 programma.get("/:id", requireAuth, async (c) => {
   const id = Number(c.req.param("id"));
   const mese = await c.env.DB.prepare(
-    `SELECT id, mese, anno, focus_tema AS focusTema, descrizione, linee_guida_nutrizionali AS lineeGuidaNutrizionali
+    `SELECT id, mese, anno, focus_tema AS focusTema, descrizione,
+            obiettivo, perche_mese AS percheMese, risultato_atteso AS risultatoAtteso,
+            focus_nutrizionale AS focusNutrizionale, linee_guida_nutrizionali AS lineeGuidaNutrizionali,
+            obiettivo_nutrizionale AS obiettivoNutrizionale
      FROM programma_mensile WHERE id = ?`
   )
     .bind(id)
@@ -50,7 +62,12 @@ programma.get("/:id", requireAuth, async (c) => {
       anno: number;
       focusTema: string | null;
       descrizione: string | null;
+      obiettivo: string | null;
+      percheMese: string | null;
+      risultatoAtteso: string | null;
+      focusNutrizionale: string | null;
       lineeGuidaNutrizionali: string | null;
+      obiettivoNutrizionale: string | null;
     }>();
 
   if (!mese) return c.json({ error: "Mese non trovato" }, 404);
@@ -74,24 +91,41 @@ programma.post("/", requireCoach, async (c) => {
     anno?: number;
     focusTema?: string;
     descrizione?: string;
+    obiettivo?: string;
+    percheMese?: string;
+    risultatoAtteso?: string;
+    focusNutrizionale?: string;
     lineeGuidaNutrizionali?: string;
+    obiettivoNutrizionale?: string;
     merende?: { titolo: string; descrizione?: string; linkUrl?: string; data?: string }[];
   }>();
-  const { mese, anno, focusTema, descrizione, lineeGuidaNutrizionali, merende } = body;
+  const {
+    mese, anno, focusTema, descrizione, obiettivo, percheMese, risultatoAtteso,
+    focusNutrizionale, lineeGuidaNutrizionali, obiettivoNutrizionale, merende,
+  } = body;
 
   if (!mese || !anno) return c.json({ error: "Mese e anno sono obbligatori" }, 400);
 
   // Upsert parziale: un campo omesso nella richiesta lascia invariato il valore esistente
-  // (COALESCE), invece di svuotarlo — utile quando in futuro un form aggiorna un campo alla volta.
+  // (COALESCE), invece di svuotarlo — utile quando un form aggiorna un campo alla volta.
   await c.env.DB.prepare(
-    `INSERT INTO programma_mensile (mese, anno, focus_tema, descrizione, linee_guida_nutrizionali)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO programma_mensile (mese, anno, focus_tema, descrizione, obiettivo, perche_mese,
+       risultato_atteso, focus_nutrizionale, linee_guida_nutrizionali, obiettivo_nutrizionale)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (mese, anno) DO UPDATE SET
        focus_tema = COALESCE(excluded.focus_tema, programma_mensile.focus_tema),
        descrizione = COALESCE(excluded.descrizione, programma_mensile.descrizione),
-       linee_guida_nutrizionali = COALESCE(excluded.linee_guida_nutrizionali, programma_mensile.linee_guida_nutrizionali)`
+       obiettivo = COALESCE(excluded.obiettivo, programma_mensile.obiettivo),
+       perche_mese = COALESCE(excluded.perche_mese, programma_mensile.perche_mese),
+       risultato_atteso = COALESCE(excluded.risultato_atteso, programma_mensile.risultato_atteso),
+       focus_nutrizionale = COALESCE(excluded.focus_nutrizionale, programma_mensile.focus_nutrizionale),
+       linee_guida_nutrizionali = COALESCE(excluded.linee_guida_nutrizionali, programma_mensile.linee_guida_nutrizionali),
+       obiettivo_nutrizionale = COALESCE(excluded.obiettivo_nutrizionale, programma_mensile.obiettivo_nutrizionale)`
   )
-    .bind(mese, anno, focusTema ?? null, descrizione ?? null, lineeGuidaNutrizionali ?? null)
+    .bind(
+      mese, anno, focusTema ?? null, descrizione ?? null, obiettivo ?? null, percheMese ?? null,
+      risultatoAtteso ?? null, focusNutrizionale ?? null, lineeGuidaNutrizionali ?? null, obiettivoNutrizionale ?? null,
+    )
     .run();
 
   const programmaId = await c.env.DB.prepare(`SELECT id FROM programma_mensile WHERE mese = ? AND anno = ?`)

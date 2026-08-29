@@ -54,8 +54,8 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">FOCUS DEL MESE / MERENDE FIT</p>
-      <div style="display:flex; gap:8px; margin-top:10px">
+      <p class="sezione-label">Contenuto del mese</p>
+      <div style="display:flex; gap:8px; margin-top:12px">
         <select id="piano-mese" style="flex:2; background:var(--surface-2); border:1px solid var(--border);
                 border-radius:8px; padding:10px; color:var(--text); font-family:inherit">
           ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
@@ -65,22 +65,53 @@ export function renderCoach(appEl) {
       </div>
 
       <div class="field" style="margin-top:14px">
-        <label>Focus del mese</label>
-        <input id="piano-focus" type="text" placeholder="es. Forza" />
+        <label>Focus del mese (tema)</label>
+        <input id="piano-focus" type="text" placeholder="es. MOVEMENT QUALITY & MOBILITY" />
       </div>
       <div class="field">
-        <label>Descrizione</label>
-        <textarea id="piano-descrizione" rows="3"
+        <label>Obiettivo</label>
+        <textarea id="piano-obiettivo" rows="2"
           style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
                  padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
       </div>
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:16px">MERENDE FIT</p>
-      <div id="merende-rows" style="margin-top:8px; display:flex; flex-direction:column; gap:10px"></div>
+      <div class="field">
+        <label>Perché questo mese <span class="mono" style="color:var(--mute); font-size:12px">— righe vuote = nuovo paragrafo</span></label>
+        <textarea id="piano-perche" rows="5"
+          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
+      </div>
+      <div class="field">
+        <label>Risultato atteso</label>
+        <textarea id="piano-risultato" rows="4"
+          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
+      </div>
+
+      <p class="sezione-label" style="margin-top:20px">Nutrizione</p>
+      <div class="field" style="margin-top:12px">
+        <label>Focus nutrizionale</label>
+        <input id="piano-focus-nutri" type="text" placeholder="es. Regolarità e qualità alimentare" />
+      </div>
+      <div class="field">
+        <label>Linee guida <span class="mono" style="color:var(--mute); font-size:12px">— una per riga</span></label>
+        <textarea id="piano-linee" rows="6"
+          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
+      </div>
+      <div class="field">
+        <label>Obiettivo nutrizionale</label>
+        <textarea id="piano-obiettivo-nutri" rows="2"
+          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
+      </div>
+
+      <p class="sezione-label" style="margin-top:20px">Merende fit</p>
+      <div id="merende-rows" style="margin-top:10px; display:flex; flex-direction:column; gap:10px"></div>
       <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
 
       <p class="error-text" id="piano-error" hidden style="margin-top:10px"></p>
       <p class="success-text" id="piano-success" hidden style="margin-top:10px">Salvato ✓</p>
-      <button class="btn" id="piano-salva" style="width:100%; margin-top:14px">Salva focus del mese</button>
+      <button class="btn" id="piano-salva" style="width:100%; margin-top:14px">Salva contenuto del mese</button>
     </div>
 
     <div class="card" style="margin-top:16px">
@@ -208,8 +239,15 @@ function rigaMerenda(m = {}) {
 function initPiano(el) {
   const meseSel = el.querySelector("#piano-mese");
   const annoInput = el.querySelector("#piano-anno");
-  const focusInput = el.querySelector("#piano-focus");
-  const descrizioneInput = el.querySelector("#piano-descrizione");
+  const campi = {
+    focusTema: el.querySelector("#piano-focus"),
+    obiettivo: el.querySelector("#piano-obiettivo"),
+    percheMese: el.querySelector("#piano-perche"),
+    risultatoAtteso: el.querySelector("#piano-risultato"),
+    focusNutrizionale: el.querySelector("#piano-focus-nutri"),
+    lineeGuidaNutrizionali: el.querySelector("#piano-linee"),
+    obiettivoNutrizionale: el.querySelector("#piano-obiettivo-nutri"),
+  };
   const merendeRows = el.querySelector("#merende-rows");
   const errorEl = el.querySelector("#piano-error");
   const successEl = el.querySelector("#piano-success");
@@ -217,8 +255,7 @@ function initPiano(el) {
   async function carica() {
     errorEl.hidden = true;
     successEl.hidden = true;
-    focusInput.value = "";
-    descrizioneInput.value = "";
+    for (const input of Object.values(campi)) input.value = "";
     merendeRows.innerHTML = "";
 
     const mese = Number(meseSel.value);
@@ -229,8 +266,7 @@ function initPiano(el) {
       if (!esistente) return;
 
       const dettaglio = await api.get(`/programma/${esistente.id}`);
-      focusInput.value = dettaglio.focusTema ?? "";
-      descrizioneInput.value = dettaglio.descrizione ?? "";
+      for (const [chiave, input] of Object.entries(campi)) input.value = dettaglio[chiave] ?? "";
       for (const m of dettaglio.merende ?? []) merendeRows.appendChild(rigaMerenda(m));
     } catch {
       // Nessun piano esistente per questo mese o errore di rete — form vuoto, si crea da capo.
@@ -256,13 +292,11 @@ function initPiano(el) {
 
     e.target.disabled = true;
     try {
-      await api.post("/programma", {
-        mese: Number(meseSel.value),
-        anno: Number(annoInput.value),
-        focusTema: focusInput.value.trim() || undefined,
-        descrizione: descrizioneInput.value.trim() || undefined,
-        merende,
-      });
+      const payload = { mese: Number(meseSel.value), anno: Number(annoInput.value), merende };
+      for (const [chiave, input] of Object.entries(campi)) {
+        payload[chiave] = input.value.trim() || undefined;
+      }
+      await api.post("/programma", payload);
       successEl.hidden = false;
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";

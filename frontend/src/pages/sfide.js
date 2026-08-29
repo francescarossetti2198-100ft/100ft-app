@@ -375,6 +375,12 @@ async function loadSfide(el, meseVoluto) {
   }
   if (!perMese.has(meseCorrente)) perMese.set(meseCorrente, []);
 
+  // Il prossimo mese ha già il focus tematico (il worker lo anticipa agli atleti): mostralo
+  // nel carosello anche se non ha ancora nessuna sfida, così l'anticipazione si vede.
+  const [annoC, meseC] = meseCorrente.split("-").map(Number);
+  const prossimoKey = meseC === 12 ? `${annoC + 1}-01` : `${annoC}-${String(meseC + 1).padStart(2, "0")}`;
+  if (focusPerMese.has(prossimoKey) && !perMese.has(prossimoKey)) perMese.set(prossimoKey, []);
+
   const mesi = [...perMese.keys()].sort();
   let idx = mesi.indexOf(meseVoluto && perMese.has(meseVoluto) ? meseVoluto : meseCorrente);
   if (idx < 0) idx = Math.max(0, mesi.length - 1);

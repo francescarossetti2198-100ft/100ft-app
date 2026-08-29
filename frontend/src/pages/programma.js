@@ -28,6 +28,28 @@ function etichettaData(dataIso) {
   return `${giorno} ${gg}/${mm}`;
 }
 
+// Testo multi-paragrafo (righe vuote = separatore) -> <p> uno per capoverso.
+function paragrafi(testo, marginTop = "10px") {
+  return String(testo)
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p, i) => `<p style="margin-top:${i === 0 ? marginTop : "10px"}">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+// Elenco puntato: una riga per punto, con o senza bullet iniziale (*, -, •).
+function puntiElenco(testo) {
+  const voci = String(testo)
+    .split("\n")
+    .map((r) => r.replace(/^\s*[*\-•]\s*/, "").trim())
+    .filter(Boolean);
+  if (!voci.length) return "";
+  return `<ul style="margin:10px 0 0; padding-left:18px; font-size:14px; line-height:1.6">
+    ${voci.map((v) => `<li style="margin-top:4px">${v}</li>`).join("")}
+  </ul>`;
+}
+
 export function renderProgramma(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -111,16 +133,54 @@ async function loadDettaglio(content, id) {
     content.innerHTML = `
       <div class="card">
         <p class="mono" style="color:var(--accent); font-size:12px">${MESI[m.mese - 1].toUpperCase()} · ${m.anno}</p>
-        <h2 style="margin-top:6px">${m.focusTema ?? "Focus del mese"}</h2>
-        ${m.descrizione ? `<p style="margin-top:10px">${m.descrizione}</p>` : ""}
+
+        <p class="sezione-label" style="margin-top:14px">Focus del mese</p>
+        <h2 style="margin-top:10px; color:var(--accent)">${m.focusTema ?? "Focus del mese"}</h2>
 
         ${
-          m.lineeGuidaNutrizionali
+          m.obiettivo
             ? `
-              <p class="mono" style="color:var(--mute); font-size:12px; margin-top:20px; border-top:1px solid var(--border); padding-top:14px">
-                LINEE GUIDA NUTRIZIONALI GENERALI
-              </p>
-              <p style="margin-top:8px; font-size:14px">${m.lineeGuidaNutrizionali}</p>
+              <p class="sezione-label" style="margin-top:24px">Obiettivo</p>
+              <p style="margin-top:10px">${m.obiettivo}</p>
+            `
+            : ""
+        }
+
+        ${
+          m.percheMese
+            ? `
+              <p class="sezione-label" style="margin-top:24px">Perché questo mese</p>
+              ${paragrafi(m.percheMese)}
+            `
+            : ""
+        }
+
+        ${
+          m.risultatoAtteso
+            ? `
+              <p class="sezione-label" style="margin-top:24px">Risultato atteso</p>
+              ${paragrafi(m.risultatoAtteso)}
+            `
+            : ""
+        }
+
+        ${
+          // Fallback per i mesi ancora col vecchio paragrafo unico (skeleton stagione).
+          !m.obiettivo && !m.percheMese && !m.risultatoAtteso && m.descrizione
+            ? `
+              <p class="sezione-label" style="margin-top:24px">Descrizione</p>
+              ${paragrafi(m.descrizione)}
+            `
+            : ""
+        }
+
+        ${
+          m.focusNutrizionale || m.lineeGuidaNutrizionali || m.obiettivoNutrizionale
+            ? `
+              <p class="sezione-label" style="margin-top:24px">Nutrizione</p>
+              ${m.focusNutrizionale ? `<p style="margin-top:10px; color:var(--accent); font-weight:600">${m.focusNutrizionale}</p>` : ""}
+              ${m.lineeGuidaNutrizionali ? puntiElenco(m.lineeGuidaNutrizionali) : ""}
+              ${m.obiettivoNutrizionale ? `<p class="mono" style="margin-top:12px; font-size:13px; color:var(--mute)">Obiettivo — ${m.obiettivoNutrizionale}</p>` : ""}
             `
             : ""
         }
@@ -128,8 +188,8 @@ async function loadDettaglio(content, id) {
         ${
           m.merende?.length
             ? `
-              <p class="mono" style="color:var(--mute); font-size:12px; margin-top:20px">MERENDE FIT DEL MESE</p>
-              <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap">
+              <p class="sezione-label" style="margin-top:20px">Merende fit del mese</p>
+              <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
                 ${m.merende
                   .map((mf) => {
                     const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
