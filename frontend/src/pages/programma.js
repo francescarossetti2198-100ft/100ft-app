@@ -50,6 +50,17 @@ function puntiElenco(testo) {
   </ul>`;
 }
 
+// Blocco a tendina (chiuso di default) per la pagina Programma. Niente blocco se il corpo è vuoto.
+function bloccoTendina(titolo, corpoHtml) {
+  if (!corpoHtml) return "";
+  return `
+    <details class="blocco-mese">
+      <summary>${titolo}</summary>
+      <div class="blocco-corpo">${corpoHtml}</div>
+    </details>
+  `;
+}
+
 export function renderProgramma(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -137,42 +148,11 @@ async function loadDettaglio(content, id) {
         <p class="sezione-label" style="margin-top:14px">Focus del mese</p>
         <h2 style="margin-top:10px; color:var(--accent)">${m.focusTema ?? "Focus del mese"}</h2>
 
-        ${
-          m.obiettivo
-            ? `
-              <p class="sezione-label" style="margin-top:24px">Obiettivo</p>
-              <p style="margin-top:10px">${m.obiettivo}</p>
-            `
-            : ""
-        }
-
-        ${
-          m.percheMese
-            ? `
-              <p class="sezione-label" style="margin-top:24px">Perché questo mese</p>
-              ${paragrafi(m.percheMese)}
-            `
-            : ""
-        }
-
-        ${
-          m.risultatoAtteso
-            ? `
-              <p class="sezione-label" style="margin-top:24px">Risultato atteso</p>
-              ${paragrafi(m.risultatoAtteso)}
-            `
-            : ""
-        }
-
-        ${
-          // Fallback per i mesi ancora col vecchio paragrafo unico (skeleton stagione).
-          !m.obiettivo && !m.percheMese && !m.risultatoAtteso && m.descrizione
-            ? `
-              <p class="sezione-label" style="margin-top:24px">Descrizione</p>
-              ${paragrafi(m.descrizione)}
-            `
-            : ""
-        }
+        <div style="margin-top:20px">
+          ${bloccoTendina("Obiettivo", m.obiettivo && `<p style="margin-top:10px">${m.obiettivo}</p>`)}
+          ${bloccoTendina("Perché questo mese", m.percheMese && paragrafi(m.percheMese))}
+          ${bloccoTendina("Risultato atteso", m.risultatoAtteso && paragrafi(m.risultatoAtteso))}
+        </div>
 
         ${
           m.focusNutrizionale || m.lineeGuidaNutrizionali || m.obiettivoNutrizionale

@@ -129,6 +129,42 @@ a {
   background: var(--accent);
 }
 
+/* Blocco a tendina (pagina Programma: Obiettivo / Perché questo mese / Risultato atteso).
+   Chiuso di default, si apre al tocco sul titolo. */
+details.blocco-mese {
+  border-top: 1px solid var(--border);
+}
+details.blocco-mese > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 0;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+details.blocco-mese > summary::-webkit-details-marker {
+  display: none;
+}
+details.blocco-mese > summary::after {
+  content: "\25BE";
+  color: var(--accent);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+details.blocco-mese[open] > summary::after {
+  transform: rotate(180deg);
+}
+details.blocco-mese > .blocco-corpo {
+  padding: 0 0 14px;
+}
+
 .screen {
   flex: 1;
   padding: 20px 16px 90px;
