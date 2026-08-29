@@ -165,6 +165,19 @@ details.blocco-mese > .blocco-corpo {
   padding: 0 0 14px;
 }
 
+/* Kicker / etichetta breve: stessa impronta di .sezione-label (Space Grotesk bold
+   uppercase) ma senza barretta, per le scritte piccole sopra o sotto un titolo
+   (pagina Sfide, Daily Drop). Prima erano mono sottili in --mute e si perdevano. */
+.kicker {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+}
+
 .screen {
   flex: 1;
   padding: 20px 16px 90px;

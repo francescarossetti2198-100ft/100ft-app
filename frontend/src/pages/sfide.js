@@ -85,7 +85,8 @@ export function renderSfide(appEl) {
       #sfide-blocco .mese-track { will-change: transform, opacity; }
       #sfide-blocco .mese-head { text-align: center; }
       #sfide-blocco .mese-kicker {
-        font-size: 11px; letter-spacing: 2px; color: var(--mute);
+        font-family: var(--font-ui); font-weight: 700;
+        font-size: 12px; letter-spacing: 1.5px; color: var(--text);
         text-transform: uppercase; margin: 0;
       }
       #sfide-blocco .mese-title {
@@ -94,8 +95,9 @@ export function renderSfide(appEl) {
         color: var(--mese-accento, var(--accent));
       }
       #sfide-blocco .mese-focus {
-        font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--mute); margin: 6px 0 0;
+        font-family: var(--font-ui); font-weight: 700;
+        font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+        color: var(--text); margin: 8px 0 0;
       }
       #sfide-blocco .mese-focus strong { color: var(--mese-accento, var(--accent)); font-weight: 700; }
       /* Barra di avanzamento: una milestone per ogni sfida del mese, piena fino alle
@@ -113,8 +115,9 @@ export function renderSfide(appEl) {
         filter: none; opacity: 1; text-shadow: 0 0 8px rgba(244, 183, 64, 0.6);
       }
       #sfide-blocco .mese-trofeo-nota {
-        font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--mute); margin: 6px 0 0;
+        font-family: var(--font-ui); font-weight: 700;
+        font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+        color: var(--text); margin: 8px 0 0;
       }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
@@ -151,7 +154,7 @@ async function loadDailyDrop(el) {
 
     if (risposta) {
       card.innerHTML = `
-        <p class="mono" style="color:var(--mute); font-size:12px">💧 DAILY DROP</p>
+        <p class="kicker">💧 DAILY DROP</p>
         <p style="margin-top:6px">Hai già risposto oggi ✓</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
       `;
@@ -161,14 +164,14 @@ async function loadDailyDrop(el) {
     // Non riveliamo mai l'orario esatto prima che scatti — si perderebbe l'effetto sorpresa.
     if (!attivo) {
       card.innerHTML = `
-        <p class="mono" style="color:var(--mute); font-size:12px">💧 DAILY DROP</p>
+        <p class="kicker">💧 DAILY DROP</p>
         <p class="mono" style="color:var(--mute); margin-top:6px">Non ancora arrivato oggi — tieni d'occhio l'app.</p>
       `;
       return;
     }
 
     card.innerHTML = `
-      <p class="mono" style="color:var(--mute); font-size:12px">💧 DAILY DROP</p>
+      <p class="kicker">💧 DAILY DROP</p>
       <p style="margin-top:6px">Una foto al volo, ovunque tu sia in questo momento.</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
       <input id="dd-foto" type="file" accept="image/*" capture="environment"
