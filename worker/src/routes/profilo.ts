@@ -5,6 +5,7 @@ import { calcolaLivello } from "../lib/livelli";
 import { calcolaAnelli, sessioniSettimanaConStato } from "../lib/settimana";
 import { salvaFoto } from "../lib/storage";
 import { parseRisposte, validaRisposte } from "../lib/questionario";
+import { statoTrofei } from "../lib/trofei";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -29,7 +30,7 @@ profilo.get("/me", requireAuth, async (c) => {
     return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
   }
 
-  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione] = await Promise.all([
+  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei] = await Promise.all([
     c.env.DB.prepare(
       `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita
        FROM athlete_profile WHERE user_id = ?`
@@ -67,6 +68,7 @@ profilo.get("/me", requireAuth, async (c) => {
     )
       .bind(userId)
       .first<{ posizione: number; totaleAtleti: number; punti: number }>(),
+    statoTrofei(c.env.DB, userId),
   ]);
 
   return c.json({
@@ -89,6 +91,7 @@ profilo.get("/me", requireAuth, async (c) => {
     classificaTotale: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
     sfideCompletate: sfideCompletate?.n ?? 0,
     presenzeTotali: presenzeTotali?.n ?? 0,
+    trofei,
     milestones: milestones.results,
     sessioniSettimana,
   });

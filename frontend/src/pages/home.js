@@ -132,7 +132,8 @@ async function loadFeedbackMese(el) {
     card.remove();
     return;
   }
-  if (stato.giaInviato) {
+  // Si compila solo la prima settimana del mese (giorni 1–7), una volta sola.
+  if (stato.giaInviato || !stato.disponibile) {
     card.remove();
     return;
   }

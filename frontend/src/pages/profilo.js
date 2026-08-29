@@ -2,10 +2,11 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
-import { statoNotifiche, attivaNotifiche, disattivaNotifiche, inviaNotificaDiProva } from "../push.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
 import { costruisciQuestionario, riassuntoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
+import { trofeiRigaHtml } from "../trofei.js";
 
 const MILESTONE_LABEL = {
   first_session: "Prima sessione 🎬",
@@ -489,6 +490,11 @@ function schedaAtletaHtml(d) {
     </div>
 
     <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">TROFEI</p>
+      <div style="margin-top:10px">${trofeiRigaHtml(at.trofei)}</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">GESTIONE</p>
       <div style="margin-top:10px; display:flex; gap:14px; align-items:center; flex-wrap:wrap">
         ${pagamentoBadgeHtml(d.userId, at.pagamentoMese)}
@@ -624,8 +630,6 @@ async function initNotifiche(content) {
   box.innerHTML =
     stato === "attive"
       ? `<p style="font-size:13px">Attive ✓</p>
-         <button class="btn" id="notifiche-prova" style="width:100%; margin-top:8px">Invia notifica di prova</button>
-         <p class="mono" id="notifiche-prova-esito" style="font-size:12px; color:var(--mute); margin-top:6px" hidden></p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>`
       : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px">Attiva notifiche</button>`;
@@ -640,24 +644,6 @@ async function initNotifiche(content) {
       box.innerHTML = `<p class="error-text">${err.message}</p>`;
     }
   });
-
-  const prova = content.querySelector("#notifiche-prova");
-  if (prova) {
-    prova.addEventListener("click", async () => {
-      const esito = content.querySelector("#notifiche-prova-esito");
-      prova.disabled = true;
-      esito.hidden = false;
-      esito.textContent = "Invio…";
-      try {
-        await inviaNotificaDiProva();
-        esito.textContent = "Inviata — dovrebbe arrivarti tra pochi secondi.";
-      } catch (err) {
-        esito.textContent = err instanceof ApiError ? err.message : "Errore nell'invio";
-      } finally {
-        prova.disabled = false;
-      }
-    });
-  }
 }
 
 // ─── Card "I TUOI DATI" (anagrafica privata: data nascita, peso, altezza, note) ───
@@ -869,6 +855,11 @@ async function loadProfilo(el) {
     const sicurezzaCard = sicurezzaCardHtml();
     const datiCard = datiPersonaliCardHtml(p);
     const personalizzaCard = personalizzaCardHtml(p);
+    const trofeiCard = `
+      <div class="card" style="margin-top:12px">
+        <p class="mono" style="color:var(--mute); font-size:12px">I TUOI TROFEI</p>
+        <div style="margin-top:10px">${trofeiRigaHtml(p.trofei)}</div>
+      </div>`;
 
     // Sotto la foto: nickname grande, poi Nome Cognome più piccolo. Senza nickname,
     // il nome completo sta sulla riga grande e non c'è la seconda riga.
@@ -893,6 +884,7 @@ async function loadProfilo(el) {
         </div>
         ${datiCard}
         ${personalizzaCard}
+        ${trofeiCard}
         ${statsHtml}
         ${achievementsCard}
         ${notificheCard}
@@ -914,6 +906,7 @@ async function loadProfilo(el) {
         </div>
         ${datiCard}
         ${personalizzaCard}
+        ${trofeiCard}
         ${statsHtml}
         ${achievementsCard}
         ${notificheCard}

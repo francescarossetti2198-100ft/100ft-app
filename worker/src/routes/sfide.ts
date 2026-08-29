@@ -5,6 +5,7 @@ import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
 import { inizioSettimana } from "../lib/settimana";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
+import { stagioneDi, verificaEAssegnaTrofeo, statoTrofei } from "../lib/trofei";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -138,9 +139,11 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   const sfidaId = Number(c.req.param("id"));
 
-  const sfida = await c.env.DB.prepare(`SELECT id, titolo, tipo, punti, data_fine FROM sfide WHERE id = ?`)
+  const sfida = await c.env.DB.prepare(
+    `SELECT id, titolo, tipo, punti, data_inizio, data_fine FROM sfide WHERE id = ?`
+  )
     .bind(sfidaId)
-    .first<{ id: number; titolo: string; tipo: string; punti: number; data_fine: string }>();
+    .first<{ id: number; titolo: string; tipo: string; punti: number; data_inizio: string; data_fine: string }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
 
   const oggi = new Date().toISOString().slice(0, 10);
@@ -185,7 +188,19 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);
   await segnalaAvanzamento(c.env.DB, c.var.user.userId, prima, dopo);
 
+  // Se questa era l'ultima sfida mancante del blocco di stagione (Set–Dic o Gen–Lug),
+  // assegna il trofeo corrispondente.
+  const blocco = stagioneDi(sfida.data_inizio);
+  if (blocco) {
+    await verificaEAssegnaTrofeo(c.env.DB, c.var.user.userId, blocco.stagione, blocco.blocco);
+  }
+
   return c.json({ ok: true });
+});
+
+// Stato dei 2 trofei di stagione dell'atleta (Set–Dic / Gen–Lug) — pagina Sfide + Profilo.
+sfide.get("/trofei", requireAuth, async (c) => {
+  return c.json({ trofei: await statoTrofei(c.env.DB, c.var.user.userId) });
 });
 
 // Creazione sfida — riservata al coach (brief, sezione 15).

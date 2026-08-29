@@ -5,6 +5,7 @@ import { calcolaAnelli } from "../lib/settimana";
 import { calcolaLivello } from "../lib/livelli";
 import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
+import { statoTrofei } from "../lib/trofei";
 
 // Età in anni interi da una data YYYY-MM-DD (null se manca / non valida).
 function calcolaEta(dataNascita: string | null): number | null {
@@ -126,7 +127,7 @@ atleti.get("/:id", requireCoach, async (c) => {
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 
-  const [anelli, presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile] =
+  const [anelli, presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei] =
     await Promise.all([
       calcolaAnelli(db, id),
       db.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(id).first<{ n: number }>(),
@@ -167,6 +168,7 @@ atleti.get("/:id", requireCoach, async (c) => {
         )
         .bind(id)
         .all<{ mese: number; anno: number; risposte: string; creatoIl: string }>(),
+      statoTrofei(db, id),
     ]);
 
   return c.json({
@@ -199,6 +201,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       sfideFatte: sfideFatte.results,
       richiesteRecenti: richiesteRecenti.results,
       pagamentoMese: pagamento?.stato ?? "non_pagato",
+      trofei,
     },
   });
 });
