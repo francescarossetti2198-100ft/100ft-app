@@ -12,9 +12,13 @@
         try {
           var t = localStorage.getItem("100ft-theme");
           if (t !== "light" && t !== "dark") {
-            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-              ? "light"
-              : "dark";
+            // Modalità "auto": buio dal crepuscolo all'alba (19:00–7:00), altrimenti
+            // chiaro — ma se il sistema preferisce lo scuro lo rispettiamo. Vedi src/theme.js.
+            var h = new Date().getHours();
+            var buio = h >= 19 || h < 7;
+            var sistemaScuro =
+              window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            t = buio || sistemaScuro ? "dark" : "light";
           }
           document.documentElement.dataset.theme = t;
           var m = document.querySelector('meta[name="theme-color"]');

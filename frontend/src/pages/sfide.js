@@ -98,6 +98,13 @@ export function renderSfide(appEl) {
         color: var(--mute); margin: 6px 0 0;
       }
       #sfide-blocco .mese-focus strong { color: var(--mese-accento, var(--accent)); font-weight: 700; }
+      /* Barra di avanzamento: una milestone per ogni sfida del mese, piena fino alle
+         completate. Sotto il titolo/focus, nell'accento del mese. */
+      #sfide-blocco .mese-progress { display: flex; gap: 4px; margin: 12px 0 0; }
+      #sfide-blocco .mese-progress span {
+        flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2);
+      }
+      #sfide-blocco .mese-progress span.on { background: var(--mese-accento, var(--accent)); }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
       /* Sfida completata: sembra archiviata e riuscita, senza stravolgere lo stile. */
@@ -354,6 +361,7 @@ async function loadSfide(el, meseVoluto) {
           <p class="mono mese-kicker">Sfide del mese</p>
           <h2 class="mese-title"></h2>
           <p class="mono mese-focus" hidden></p>
+          <div class="mese-progress" hidden></div>
         </div>
         <button type="button" class="mese-arrow" data-dir="1" aria-label="Mese successivo">›</button>
       </div>
@@ -368,6 +376,7 @@ async function loadSfide(el, meseVoluto) {
   const titleEl = blocco.querySelector(".mese-title");
   const kickerEl = blocco.querySelector(".mese-kicker");
   const focusEl = blocco.querySelector(".mese-focus");
+  const progressEl = blocco.querySelector(".mese-progress");
   const viewport = blocco.querySelector(".mese-viewport");
   const track = blocco.querySelector(".mese-track");
   const dotsBox = blocco.querySelector(".mese-dots");
@@ -384,6 +393,12 @@ async function loadSfide(el, meseVoluto) {
     const focus = focusPerMese.get(key);
     focusEl.hidden = !focus;
     if (focus) focusEl.innerHTML = `Focus del mese — <strong>${focus}</strong>`;
+
+    // Una milestone per sfida del mese, piena fino alle completate.
+    progressEl.hidden = items.length === 0;
+    progressEl.innerHTML = items
+      .map((_, i) => `<span class="${i < completate ? "on" : ""}"></span>`)
+      .join("");
 
     track.innerHTML = items.length
       ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:6px">` +
