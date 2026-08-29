@@ -2,6 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 import { getUser } from "../auth.js";
 import { navigate } from "../router.js";
+import { etichettaCategoria } from "../richieste-categorie.js";
 
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -12,13 +13,6 @@ const TIPO_SFIDA_LABEL = {
   presenza: "Sfida di gruppo",
   foto: "Sfida foto",
   valore_manuale: "Sfida personale",
-};
-
-const CATEGORIA_LABEL = {
-  Mobilità: "🧘 Mobilità",
-  Gambe: "🦵 Gambe",
-  "Parte superiore": "💪 Parte superiore",
-  Altro: "✏️ Altro",
 };
 
 function oraCorrente() {
@@ -333,24 +327,32 @@ function initRichieste(el) {
   async function carica() {
     list.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
     try {
-      const { richieste } = await api.get("/richieste/oggi/coach");
+      const { richieste, conteggi } = await api.get("/richieste/oggi/coach");
 
       if (!richieste.length) {
         list.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna richiesta per oggi.</p>`;
         return;
       }
 
-      list.innerHTML = richieste
-        .map(
-          (r) => `
+      const conteggiHtml = conteggi && conteggi.length
+        ? `<p class="mono" style="font-size:13px; line-height:1.8; padding-bottom:8px">
+             ${conteggi.map((x) => `${etichettaCategoria(x.categoria)}&nbsp;<strong>${x.n}</strong>`).join(" · ")}
+           </p>`
+        : "";
+
+      list.innerHTML =
+        conteggiHtml +
+        richieste
+          .map(
+            (r) => `
             <div style="border-top:1px solid var(--border); padding:8px 0">
               <p style="font-size:14px"><strong>${r.nickname || r.nome}</strong></p>
-              ${r.categoria ? `<p class="mono" style="color:var(--accent); font-size:13px; margin-top:2px">${CATEGORIA_LABEL[r.categoria] ?? r.categoria}</p>` : ""}
+              ${r.categoria ? `<p class="mono" style="color:var(--accent); font-size:13px; margin-top:2px">${etichettaCategoria(r.categoria)}</p>` : ""}
               ${r.testoLibero ? `<p style="font-size:13px; margin-top:2px">${r.testoLibero}</p>` : ""}
             </div>
           `
-        )
-        .join("");
+          )
+          .join("");
     } catch (err) {
       list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
     }

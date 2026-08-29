@@ -47,6 +47,34 @@
   --tabbar-active-fg: #ffffff;
 }
 
+/* "Il tuo allenamento di oggi": card a colori invertiti rispetto al tema corrente,
+   così è la prima cosa che salta all'occhio nella Home. Ridefiniamo solo i token
+   neutri dentro la card — testo, bordi, input, bottoni e sfondo (.card usa
+   var(--surface)) si adattano da soli. I colori di brand restano invariati. */
+:root[data-theme="dark"] #allenamento-oggi-card {
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --surface-2: #e8e8ec;
+  --accent: #7c3aed;
+  --text: #16161a;
+  --mute: #6b6b73;
+  --border: #d9d9de;
+}
+:root[data-theme="light"] #allenamento-oggi-card {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1e1e1e;
+  --accent: #8b5cf6;
+  --text: #f5f5f5;
+  --mute: #b5b5bd;
+  --border: #2a2a2a;
+}
+/* Il testo della card (e i figli che ereditano il colore) deve seguire i token
+   invertiti, non il colore di base del <body>. */
+#allenamento-oggi-card {
+  color: var(--text);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -136,6 +164,35 @@ input {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px;
+}
+
+/* Campo password con occhio mostra/nascondi (frontend/src/components/password-field.js) */
+.pw-wrap {
+  position: relative;
+}
+.pw-wrap input {
+  width: 100%;
+  padding-right: 44px;
+}
+.pw-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--mute);
+  cursor: pointer;
+  padding: 0;
+}
+.pw-eye svg {
+  width: 18px;
+  height: 18px;
 }
 
 .error-text {

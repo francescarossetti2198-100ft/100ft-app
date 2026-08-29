@@ -7,6 +7,13 @@ export function oggi(): { data: string; giornoSettimana: number } {
   return { data, giornoSettimana };
 }
 
+// Mese di calendario precedente a "adesso" (il mese appena concluso) — usato dal
+// questionario mensile.
+export function mesePrecedente(now = new Date()): { mese: number; anno: number } {
+  const m = now.getUTCMonth(); // 0-11 = mese corrente; m (1-12) = mese precedente
+  return m === 0 ? { mese: 12, anno: now.getUTCFullYear() - 1 } : { mese: m, anno: now.getUTCFullYear() };
+}
+
 export type SessioneOggi = { id: number; ora_inizio: string; ora_fine: string; tipo_sessione: string };
 
 export async function sessioneOggi(db: D1Database): Promise<SessioneOggi | null> {

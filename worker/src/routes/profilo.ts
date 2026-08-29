@@ -4,9 +4,17 @@ import { requireAuth } from "../middleware/auth";
 import { calcolaLivello } from "../lib/livelli";
 import { calcolaAnelli, sessioniSettimanaConStato } from "../lib/settimana";
 import { salvaFoto } from "../lib/storage";
+import { parseRisposte, validaRisposte } from "../lib/questionario";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// YYYY-MM-DD, data reale e nel passato.
+function dataNascitaValida(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
+}
 
 profilo.get("/me", requireAuth, async (c) => {
   const userId = c.var.user.userId;
@@ -21,10 +29,19 @@ profilo.get("/me", requireAuth, async (c) => {
     return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
   }
 
-  const [profiloRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione] = await Promise.all([
-    c.env.DB.prepare(`SELECT nome, cognome, nickname, foto_url AS fotoUrl FROM athlete_profile WHERE user_id = ?`)
+  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita
+       FROM athlete_profile WHERE user_id = ?`
+    )
       .bind(userId)
-      .first<{ nome: string; cognome: string; nickname: string | null; fotoUrl: string | null }>(),
+      .first<{ nome: string; cognome: string; nickname: string | null; fotoUrl: string | null; dataNascita: string | null }>(),
+    c.env.DB.prepare(
+      `SELECT peso, altezza, note_infortuni AS noteInfortuni, personalizzazione
+       FROM athlete_private WHERE user_id = ?`
+    )
+      .bind(userId)
+      .first<{ peso: number | null; altezza: number | null; noteInfortuni: string | null; personalizzazione: string | null }>(),
     calcolaAnelli(c.env.DB, userId),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM partecipazioni_sfide WHERE user_id = ?`).bind(userId).first<{ n: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(userId).first<{ n: number }>(),
@@ -57,6 +74,14 @@ profilo.get("/me", requireAuth, async (c) => {
     cognome: profiloRow?.cognome ?? null,
     nickname: profiloRow?.nickname ?? null,
     fotoUrl: profiloRow?.fotoUrl ?? null,
+    // Dati privati (solo l'atleta stesso e la coach) — vedi anche GET /api/atleti/:id.
+    dataNascita: profiloRow?.dataNascita ?? null,
+    datiPrivati: {
+      peso: datiPrivatiRow?.peso ?? null,
+      altezza: datiPrivatiRow?.altezza ?? null,
+      noteInfortuni: datiPrivatiRow?.noteInfortuni ?? null,
+      personalizzazione: parseRisposte(datiPrivatiRow?.personalizzazione),
+    },
     role: c.var.user.role,
     anelli,
     livello: calcolaLivello(anelli.settimaneCompletateTotali),
@@ -67,6 +92,89 @@ profilo.get("/me", requireAuth, async (c) => {
     milestones: milestones.results,
     sessioniSettimana,
   });
+});
+
+// Dati modificabili dall'atleta dal suo Profilo: nickname + anagrafica privata
+// (data di nascita, peso, altezza, note infortuni) + risposte al questionario.
+// Salvataggio parziale: i campi non presenti nel body restano invariati.
+profilo.post("/me", requireAuth, async (c) => {
+  if (c.var.user.role !== "atleta") return c.json({ error: "Solo per gli atleti" }, 403);
+  const userId = c.var.user.userId;
+
+  const body = await c.req.json<{
+    nickname?: string | null;
+    dataNascita?: string | null;
+    peso?: number | null;
+    altezza?: number | null;
+    noteInfortuni?: string | null;
+    personalizzazione?: unknown;
+  }>();
+
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+
+  // --- validazioni sui soli campi presenti ---
+  if (has("dataNascita") && body.dataNascita != null && !dataNascitaValida(String(body.dataNascita))) {
+    return c.json({ error: "Data di nascita non valida" }, 400);
+  }
+  if (has("peso") && body.peso != null && (!Number.isFinite(body.peso) || body.peso < 20 || body.peso > 300)) {
+    return c.json({ error: "Peso non valido (20–300 kg)" }, 400);
+  }
+  if (has("altezza") && body.altezza != null && (!Number.isFinite(body.altezza) || body.altezza < 100 || body.altezza > 250)) {
+    return c.json({ error: "Altezza non valida (100–250 cm)" }, 400);
+  }
+  if (has("noteInfortuni") && body.noteInfortuni != null && String(body.noteInfortuni).length > 1000) {
+    return c.json({ error: "Note troppo lunghe (max 1000 caratteri)" }, 400);
+  }
+  if (has("personalizzazione") && !validaRisposte(body.personalizzazione)) {
+    return c.json({ error: "Risposte non valide" }, 400);
+  }
+
+  // --- athlete_profile: nickname + data di nascita (senza toccare nome/cognome) ---
+  if (has("nickname") || has("dataNascita")) {
+    const nickname = has("nickname") ? (String(body.nickname ?? "").trim() || null) : undefined;
+    const dataNascita = has("dataNascita") ? (body.dataNascita || null) : undefined;
+    await c.env.DB.prepare(
+      `UPDATE athlete_profile
+       SET nickname = COALESCE(?, nickname),
+           data_nascita = COALESCE(?, data_nascita)
+       WHERE user_id = ?`
+    )
+      .bind(nickname ?? null, dataNascita ?? null, userId)
+      .run();
+  }
+
+  // --- athlete_private: merge con la riga esistente ---
+  if (has("peso") || has("altezza") || has("noteInfortuni") || has("personalizzazione")) {
+    const esistente = await c.env.DB.prepare(
+      `SELECT peso, altezza, note_infortuni AS noteInfortuni, personalizzazione
+       FROM athlete_private WHERE user_id = ?`
+    )
+      .bind(userId)
+      .first<{ peso: number | null; altezza: number | null; noteInfortuni: string | null; personalizzazione: string | null }>();
+
+    const peso = has("peso") ? (body.peso ?? null) : esistente?.peso ?? null;
+    const altezza = has("altezza") ? (body.altezza ?? null) : esistente?.altezza ?? null;
+    const noteInfortuni = has("noteInfortuni")
+      ? (String(body.noteInfortuni ?? "").trim() || null)
+      : esistente?.noteInfortuni ?? null;
+    const personalizzazione = has("personalizzazione")
+      ? JSON.stringify(body.personalizzazione)
+      : esistente?.personalizzazione ?? null;
+
+    await c.env.DB.prepare(
+      `INSERT INTO athlete_private (user_id, peso, altezza, note_infortuni, personalizzazione)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET
+         peso = excluded.peso,
+         altezza = excluded.altezza,
+         note_infortuni = excluded.note_infortuni,
+         personalizzazione = excluded.personalizzazione`
+    )
+      .bind(userId, peso, altezza, noteInfortuni, personalizzazione)
+      .run();
+  }
+
+  return c.json({ ok: true });
 });
 
 // Foto profilo — vale per atleti e coach, mostrata anche in classifica (sfide.ts).

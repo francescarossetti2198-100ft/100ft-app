@@ -4,6 +4,19 @@ import { requireCoach } from "../middleware/auth";
 import { calcolaAnelli } from "../lib/settimana";
 import { calcolaLivello } from "../lib/livelli";
 import { hashPassword } from "../lib/password";
+import { parseRisposte } from "../lib/questionario";
+
+// Età in anni interi da una data YYYY-MM-DD (null se manca / non valida).
+function calcolaEta(dataNascita: string | null): number | null {
+  if (!dataNascita || !/^\d{4}-\d{2}-\d{2}$/.test(dataNascita)) return null;
+  const nascita = new Date(`${dataNascita}T00:00:00Z`);
+  if (Number.isNaN(nascita.getTime())) return null;
+  const oggi = new Date();
+  let eta = oggi.getUTCFullYear() - nascita.getUTCFullYear();
+  const m = oggi.getUTCMonth() - nascita.getUTCMonth();
+  if (m < 0 || (m === 0 && oggi.getUTCDate() < nascita.getUTCDate())) eta--;
+  return eta >= 0 && eta < 150 ? eta : null;
+}
 
 // Password temporanea leggibile da dettare a voce/WhatsApp: niente caratteri ambigui
 // (0/O, 1/l/I). 10 caratteri -> ben oltre il minimo di 8.
@@ -76,6 +89,118 @@ atleti.get("/", requireCoach, async (c) => {
   );
 
   return c.json({ atleti: risultato, mese, anno });
+});
+
+// Scheda completa di un atleta — pagina PROFILI della coach. Include i dati privati
+// (anagrafica + questionario) che NON sono mai esposti alle API rivolte ad altri atleti.
+atleti.get("/:id", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "ID atleta non valido" }, 400);
+  const db = c.env.DB;
+
+  const anagraficaRow = await db
+    .prepare(
+      `SELECT p.nome, p.cognome, p.nickname, p.foto_url AS fotoUrl, p.data_nascita AS dataNascita,
+              a.peso, a.altezza, a.note_infortuni AS noteInfortuni, a.personalizzazione
+       FROM users u
+       JOIN athlete_profile p ON p.user_id = u.id
+       LEFT JOIN athlete_private a ON a.user_id = u.id
+       WHERE u.id = ? AND u.role = 'atleta'`
+    )
+    .bind(id)
+    .first<{
+      nome: string;
+      cognome: string;
+      nickname: string | null;
+      fotoUrl: string | null;
+      dataNascita: string | null;
+      peso: number | null;
+      altezza: number | null;
+      noteInfortuni: string | null;
+      personalizzazione: string | null;
+    }>();
+
+  if (!anagraficaRow) return c.json({ error: "Atleta non trovato" }, 404);
+
+  const ora = new Date();
+  const mese = ora.getUTCMonth() + 1;
+  const anno = ora.getUTCFullYear();
+
+  const [anelli, presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile] =
+    await Promise.all([
+      calcolaAnelli(db, id),
+      db.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(id).first<{ n: number }>(),
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1 AND data >= date('now', '-28 days')`)
+        .bind(id)
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT faccina, difficolta, nota, data FROM feedback_allenamento
+           WHERE user_id = ? ORDER BY data DESC LIMIT 6`
+        )
+        .bind(id)
+        .all<{ faccina: number; difficolta: string | null; nota: string | null; data: string }>(),
+      db
+        .prepare(
+          `SELECT s.titolo, ps.data, ps.punti_assegnati AS punti
+           FROM partecipazioni_sfide ps JOIN sfide s ON s.id = ps.sfida_id
+           WHERE ps.user_id = ? ORDER BY ps.data DESC LIMIT 15`
+        )
+        .bind(id)
+        .all<{ titolo: string; data: string; punti: number }>(),
+      db
+        .prepare(
+          `SELECT categoria, testo_libero AS testoLibero, data_sessione AS data
+           FROM richieste_preallenamento WHERE user_id = ? ORDER BY data_sessione DESC LIMIT 5`
+        )
+        .bind(id)
+        .all<{ categoria: string | null; testoLibero: string | null; data: string }>(),
+      db
+        .prepare(`SELECT stato FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
+        .bind(id, mese, anno)
+        .first<{ stato: string }>(),
+      db
+        .prepare(
+          `SELECT mese, anno, risposte, creato_il AS creatoIl FROM feedback_mensile
+           WHERE user_id = ? ORDER BY anno DESC, mese DESC LIMIT 6`
+        )
+        .bind(id)
+        .all<{ mese: number; anno: number; risposte: string; creatoIl: string }>(),
+    ]);
+
+  return c.json({
+    userId: id,
+    anagrafica: {
+      nome: anagraficaRow.nome,
+      cognome: anagraficaRow.cognome,
+      nickname: anagraficaRow.nickname,
+      fotoUrl: anagraficaRow.fotoUrl,
+      dataNascita: anagraficaRow.dataNascita,
+      eta: calcolaEta(anagraficaRow.dataNascita),
+    },
+    datiPrivati: {
+      peso: anagraficaRow.peso ?? null,
+      altezza: anagraficaRow.altezza ?? null,
+      noteInfortuni: anagraficaRow.noteInfortuni ?? null,
+      personalizzazione: parseRisposte(anagraficaRow.personalizzazione),
+    },
+    attivita: {
+      livello: calcolaLivello(anelli.settimaneCompletateTotali),
+      presenzeTotali: presenzeTotali?.n ?? 0,
+      presenzeUltime4Settimane: presenze4Sett?.n ?? 0,
+      feedbackRecenti: feedbackRecenti.results,
+      feedbackMensile: feedbackMensile.results.map((f) => ({
+        mese: f.mese,
+        anno: f.anno,
+        risposte: parseRisposte(f.risposte),
+        creatoIl: f.creatoIl,
+      })),
+      sfideFatte: sfideFatte.results,
+      richiesteRecenti: richiesteRecenti.results,
+      pagamentoMese: pagamento?.stato ?? "non_pagato",
+    },
+  });
 });
 
 // Reset password gestito dalla coach — l'unico recupero possibile finché non c'è un

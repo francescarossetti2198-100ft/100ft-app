@@ -26,6 +26,11 @@ auth.post("/register", async (c) => {
   if (!nome || !cognome || !email || !password) {
     return c.json({ error: "Nome, cognome, email e password sono obbligatori" }, 400);
   }
+  // Data di nascita richiesta per creare l'account (il frontend non la etichetta come
+  // "obbligatoria", ma senza non si prosegue).
+  if (!body.data_nascita) {
+    return c.json({ error: "Inserisci la tua data di nascita" }, 400);
+  }
   if (password.length < 8) {
     return c.json({ error: "La password deve avere almeno 8 caratteri" }, 400);
   }

@@ -1,7 +1,8 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
-
-const CATEGORIE = ["Mobilità", "Gambe", "Parte superiore", "Altro"];
+import { CATEGORIE_RICHIESTA, etichettaCategoria } from "../richieste-categorie.js";
+import { costruisciQuestionario } from "../components/questionario.js";
+import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 
 // Scala fissa del feedback "Com'è andata oggi?" — sempre queste 5 faccine, in quest'ordine,
 // mai sostituite con stelle, slider, numeri o altre emoji.
@@ -97,6 +98,7 @@ export function renderHome(appEl) {
     <div class="card" id="settimana-card" style="margin-top:20px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
+    <div class="card" id="feedback-mese-card" hidden style="margin-top:12px"></div>
     <div class="card" id="timeline-card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute)">Carico...</p>
     </div>
@@ -112,8 +114,75 @@ export function renderHome(appEl) {
   appEl.appendChild(renderTabbar());
 
   loadSettimana(el);
+  loadFeedbackMese(el);
   loadTimeline(el);
   loadAllenamentoOggi(el);
+}
+
+// Questionario mensile — feedback guidato sul mese appena concluso. La card compare solo
+// se c'è un feedback da dare (finché non è inviato); poi sparisce.
+async function loadFeedbackMese(el) {
+  const card = el.querySelector("#feedback-mese-card");
+  if (!card) return;
+
+  let stato;
+  try {
+    stato = await api.get("/feedback-mensile/stato");
+  } catch {
+    card.remove();
+    return;
+  }
+  if (stato.giaInviato) {
+    card.remove();
+    return;
+  }
+
+  const meseNome = MESI[(stato.mese - 1 + 12) % 12];
+  card.hidden = false;
+  card.innerHTML = `
+    <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">FEEDBACK DI ${meseNome.toUpperCase()} · 2 MIN</p>
+    <div id="fm-vista" style="margin-top:8px">
+      <p style="font-size:14px">Com'è andato il mese? Raccontacelo con qualche tocco — aiuta la coach a lavorare meglio con te.</p>
+      <button class="btn" type="button" id="fm-apri" style="width:100%; margin-top:10px">Inizia</button>
+    </div>
+    <form id="fm-form" hidden style="margin-top:12px">
+      <div id="fm-domande"></div>
+      <p class="error-text" id="fm-error" hidden></p>
+      <button class="btn" type="submit" style="width:100%">Invia</button>
+    </form>
+  `;
+
+  let q = null;
+  const vista = card.querySelector("#fm-vista");
+  const form = card.querySelector("#fm-form");
+
+  card.querySelector("#fm-apri").addEventListener("click", () => {
+    q = costruisciQuestionario(form.querySelector("#fm-domande"), FEEDBACK_MENSILE_DOMANDE, {});
+    vista.hidden = true;
+    form.hidden = false;
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = form.querySelector("#fm-error");
+    errorEl.hidden = true;
+    const risposte = q ? q.getRisposte() : {};
+    if (Object.keys(risposte).length === 0) {
+      errorEl.textContent = "Rispondi ad almeno una domanda";
+      errorEl.hidden = false;
+      return;
+    }
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.post("/feedback-mensile", { risposte });
+      card.remove();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+      btn.disabled = false;
+    }
+  });
 }
 
 // "Il tuo allenamento di oggi" — orchestra le tre sotto-sezioni nella card unica e mostra
@@ -298,15 +367,29 @@ async function loadCoach(el) {
 
 // Sezione 7: RICHIESTA DELL'ALLIEVO — chiude alle 13:00, poi resta visibile ma non interattiva.
 // Le richieste di oggi sono pubbliche tra gli atleti: ognuno vede cosa hanno chiesto gli altri.
+const RICH_PILL_OFF =
+  "background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:7px 12px; font-size:12px; color:var(--text); cursor:pointer; font-family:inherit";
+const RICH_PILL_ON =
+  "background:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:7px 12px; font-size:12px; color:#fff; cursor:pointer; font-family:inherit";
+
 async function loadRichieste(el) {
   const card = el.querySelector("#ao-richieste");
   try {
-    const { sessione, aperte, inviata, richieste } = await api.get("/richieste/oggi");
+    const { sessione, aperte, inviata, richieste, conteggi } = await api.get("/richieste/oggi");
 
     if (!sessione) {
       card.innerHTML = "";
       return;
     }
+
+    // Conteggi per categoria — quante persone hanno chiesto cosa (visti da tutti).
+    const conteggiHtml = conteggi && conteggi.length
+      ? `
+        <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:16px">CONTEGGIO RICHIESTE</p>
+        <p class="mono" style="font-size:13px; margin-top:4px; line-height:1.8">
+          ${conteggi.map((x) => `${esc(etichettaCategoria(x.categoria))}&nbsp;<strong>${x.n}</strong>`).join(" · ")}
+        </p>`
+      : "";
 
     const elencoHtml = richieste.length
       ? `
@@ -317,7 +400,7 @@ async function loadRichieste(el) {
               (r) => `
                 <div style="border-top:1px solid var(--border); padding:8px 0">
                   <p style="font-size:14px"><strong>${esc(r.nickname || r.nome)}</strong></p>
-                  ${r.categoria ? `<p class="mono" style="color:var(--accent); font-size:13px; margin-top:2px">${esc(r.categoria)}</p>` : ""}
+                  ${r.categoria ? `<p class="mono" style="color:var(--accent); font-size:13px; margin-top:2px">${esc(etichettaCategoria(r.categoria))}</p>` : ""}
                   ${r.testoLibero ? `<p style="font-size:13px; margin-top:2px">${esc(r.testoLibero)}</p>` : ""}
                 </div>
               `
@@ -328,7 +411,7 @@ async function loadRichieste(el) {
       : "";
 
     if (inviata) {
-      card.innerHTML = `<p>Richiesta inviata ✓</p>${elencoHtml}`;
+      card.innerHTML = `<p>Richiesta inviata ✓</p>${conteggiHtml}${elencoHtml}`;
       return;
     }
 
@@ -336,6 +419,7 @@ async function loadRichieste(el) {
       card.innerHTML = `
         <p style="font-weight:600">RICHIESTA CHIUSA</p>
         <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">La coach vedrà la tua richiesta prima della sessione.</p>
+        ${conteggiHtml}
         ${elencoHtml}
       `;
       return;
@@ -344,12 +428,11 @@ async function loadRichieste(el) {
     card.innerHTML = `
       <p>C'è qualcosa su cui vorresti lavorare oggi?</p>
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px" id="categoria-scelte">
-        ${CATEGORIE.map((c) => `<button type="button" class="btn categoria-btn" data-cat="${c}" style="background:var(--surface-2); padding:6px 10px; font-size:12px; text-transform:uppercase">${c}</button>`).join("")}
+        ${CATEGORIE_RICHIESTA.map((c) => `<button type="button" class="categoria-btn" data-cat="${esc(c.v)}" style="${RICH_PILL_OFF}">${c.emoji} ${c.v}</button>`).join("")}
       </div>
-      <input id="richiesta-testo" type="text" placeholder="Oppure scrivi una richiesta libera"
-             style="width:100%; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text)" />
       <p class="error-text" id="richiesta-error" hidden style="margin-top:6px"></p>
       <button class="btn" id="richiesta-submit" style="width:100%; margin-top:10px">Invia richiesta</button>
+      ${conteggiHtml}
       ${elencoHtml}
     `;
 
@@ -358,19 +441,22 @@ async function loadRichieste(el) {
     bottoni.forEach((b) => {
       b.addEventListener("click", () => {
         const giaAttivo = categoriaScelta === b.dataset.cat;
-        bottoni.forEach((x) => (x.style.background = "var(--surface-2)"));
         categoriaScelta = giaAttivo ? null : b.dataset.cat;
-        if (!giaAttivo) b.style.background = "var(--accent)";
+        bottoni.forEach((x) => (x.style.cssText = x.dataset.cat === categoriaScelta ? RICH_PILL_ON : RICH_PILL_OFF));
       });
     });
 
     card.querySelector("#richiesta-submit").addEventListener("click", async (e) => {
       const errorEl = card.querySelector("#richiesta-error");
-      const testoLibero = card.querySelector("#richiesta-testo").value;
       errorEl.hidden = true;
+      if (!categoriaScelta) {
+        errorEl.textContent = "Scegli una categoria";
+        errorEl.hidden = false;
+        return;
+      }
       e.target.disabled = true;
       try {
-        await api.post("/richieste", { categoria: categoriaScelta, testoLibero });
+        await api.post("/richieste", { categoria: categoriaScelta });
         loadRichieste(el);
       } catch (err) {
         errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";

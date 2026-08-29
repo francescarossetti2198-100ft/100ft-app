@@ -16,8 +16,10 @@ import feedback from "./routes/feedback";
 import atleti from "./routes/atleti";
 import pagamenti from "./routes/pagamenti";
 import push from "./routes/push";
+import feedbackMensile from "./routes/feedback-mensile";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
+import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -54,6 +56,7 @@ app.route("/api/feedback", feedback);
 app.route("/api/atleti", atleti);
 app.route("/api/pagamenti", pagamenti);
 app.route("/api/push", push);
+app.route("/api/feedback-mensile", feedbackMensile);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).
@@ -66,5 +69,6 @@ export default {
   scheduled: async (_event: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(inviaDailyDropSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaAllenamentoSeAttivo(env));
+    ctx.waitUntil(inviaFeedbackMensileSeAttivo(env));
   },
 };
