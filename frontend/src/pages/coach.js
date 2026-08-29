@@ -87,9 +87,9 @@ export function renderCoach(appEl) {
                  padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
       </div>
 
-      <p class="sezione-label" style="margin-top:20px">Nutrizione</p>
+      <p class="sezione-label" style="margin-top:20px">Sane abitudini</p>
       <div class="field" style="margin-top:12px">
-        <label>Focus nutrizionale</label>
+        <label>Focus</label>
         <input id="piano-focus-nutri" type="text" placeholder="es. Regolarità e qualità alimentare" />
       </div>
       <div class="field">

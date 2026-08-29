@@ -153,7 +153,7 @@ async function loadDettaglio(content, id) {
           ${bloccoTendina("Perché questo mese", m.percheMese && paragrafi(m.percheMese))}
           ${bloccoTendina("Risultato atteso", m.risultatoAtteso && paragrafi(m.risultatoAtteso))}
           ${bloccoTendina(
-            "Nutrizione",
+            "Sane abitudini",
             [
               m.focusNutrizionale && `<p style="margin-top:10px; color:var(--accent); font-weight:600">${m.focusNutrizionale}</p>`,
               m.lineeGuidaNutrizionali && puntiElenco(m.lineeGuidaNutrizionali),
