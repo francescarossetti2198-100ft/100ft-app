@@ -60,6 +60,12 @@ export function renderHome(appEl) {
       #timeline-card .giorno-tile.oggi { border-color: var(--accent); cursor: pointer; }
       #timeline-card .giorno-tile.dim { opacity: 0.5; }
       #timeline-card .giorno-tile:disabled { opacity: 0.5; cursor: default; }
+      /* Sessione in corso adesso: il giorno "respira" con un lampeggio fioco e lento. */
+      #timeline-card .giorno-tile.live { animation: gt-live 1.7s ease-in-out infinite; }
+      @keyframes gt-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      @media (prefers-reduced-motion: reduce) {
+        #timeline-card .giorno-tile.live { animation: none; opacity: 0.7; }
+      }
       #timeline-card .gt-nome { font-size: 14px; font-weight: 600; margin: 0; }
       #timeline-card .gt-ora { font-size: 10px; color: var(--mute); margin: 3px 0 0; }
       #timeline-card .gt-stato { font-size: 10px; letter-spacing: 1px; margin: 6px 0 0; }
@@ -223,6 +229,7 @@ async function loadAllenamentoOggi(el) {
 // settimana dopo se tutte quelle di questa settimana sono già passate. L'orario ("19:30")
 // è ora locale = ora di Roma per gli atleti (stessa approssimazione del resto dell'app).
 let countdownTimer = null;
+let timelineRefresh = null;
 
 function fermaCountdown() {
   if (countdownTimer) {
@@ -397,12 +404,21 @@ async function loadTimeline(el) {
     const { sessioniSettimana } = await api.get("/profilo/me");
     const oggiIso = new Date().toISOString().slice(0, 10);
 
+    const ora = new Date();
     const tassello = (s) => {
       const giorno = nomeGiorno(s.data).slice(0, 3).toUpperCase(); // LUN / MER / VEN
       const orario = `${s.oraInizio}–${s.oraFine}`;
       const passato = s.data < oggiIso;
       const futuro = s.data > oggiIso;
       const oggi = !passato && !futuro;
+
+      // Orari "19:30" = ora locale = ora di Roma per gli atleti (stessa approssimazione
+      // del resto dell'app).
+      const iniziata = new Date(`${s.data}T${s.oraInizio}:00`) <= ora;
+      const finita = new Date(`${s.data}T${s.oraFine}:00`) <= ora;
+      const live = oggi && iniziata && !finita;
+      // Occasione di partecipare finita: chi non ha risposto entro qui conta come assente.
+      const conclusa = passato || (oggi && finita);
 
       let segno = "";
       let stato = "";
@@ -411,7 +427,8 @@ async function loadTimeline(el) {
         segno = "✓ ";
         stato = "PRESENTE";
         statoColore = "var(--accent)";
-      } else if (s.stato === "assente") {
+      } else if (s.stato === "assente" || (s.stato === "indeciso" && conclusa)) {
+        segno = "✗ ";
         stato = "ASSENTE";
       } else {
         segno = oggi ? "● " : "○ ";
@@ -419,7 +436,7 @@ async function loadTimeline(el) {
       }
 
       const dim = futuro || (!oggi && s.stato !== "presente");
-      const cls = `giorno-tile${oggi ? " oggi" : ""}${dim ? " dim" : ""}`;
+      const cls = `giorno-tile${oggi ? " oggi" : ""}${live ? " live" : ""}${dim ? " dim" : ""}`;
 
       const corpo = `
         <p class="gt-nome">${segno}${giorno}</p>
@@ -437,6 +454,17 @@ async function loadTimeline(el) {
       "QUESTA SETTIMANA",
       `<div class="giorni-riga">${sessioniSettimana.map(tassello).join("")}</div>`
     );
+
+    // Se una sessione è in corso, ridisegna la timeline alla sua fine (il lampeggio si
+    // spegne e lo stato "non risposto" diventa ASSENTE da solo, senza refresh manuale).
+    if (timelineRefresh) clearTimeout(timelineRefresh);
+    const oggiSess = sessioniSettimana.find((s) => s.data === oggiIso);
+    if (oggiSess) {
+      const fineMs = new Date(`${oggiSess.data}T${oggiSess.oraFine}:00`) - new Date();
+      if (fineMs > 0 && fineMs < 6 * 3600 * 1000) {
+        timelineRefresh = setTimeout(() => loadTimeline(el), fineMs + 1000);
+      }
+    }
 
     card.querySelector(".giorno-tile.oggi")?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
