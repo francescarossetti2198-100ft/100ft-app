@@ -152,18 +152,17 @@ async function loadDettaglio(content, id) {
           ${bloccoTendina("Obiettivo", m.obiettivo && `<p style="margin-top:10px">${m.obiettivo}</p>`)}
           ${bloccoTendina("Perché questo mese", m.percheMese && paragrafi(m.percheMese))}
           ${bloccoTendina("Risultato atteso", m.risultatoAtteso && paragrafi(m.risultatoAtteso))}
+          ${bloccoTendina(
+            "Nutrizione",
+            [
+              m.focusNutrizionale && `<p style="margin-top:10px; color:var(--accent); font-weight:600">${m.focusNutrizionale}</p>`,
+              m.lineeGuidaNutrizionali && puntiElenco(m.lineeGuidaNutrizionali),
+              m.obiettivoNutrizionale && `<p class="mono" style="margin-top:12px; font-size:13px; color:var(--mute)">Obiettivo — ${m.obiettivoNutrizionale}</p>`,
+            ]
+              .filter(Boolean)
+              .join("")
+          )}
         </div>
-
-        ${
-          m.focusNutrizionale || m.lineeGuidaNutrizionali || m.obiettivoNutrizionale
-            ? `
-              <p class="sezione-label" style="margin-top:24px">Nutrizione</p>
-              ${m.focusNutrizionale ? `<p style="margin-top:10px; color:var(--accent); font-weight:600">${m.focusNutrizionale}</p>` : ""}
-              ${m.lineeGuidaNutrizionali ? puntiElenco(m.lineeGuidaNutrizionali) : ""}
-              ${m.obiettivoNutrizionale ? `<p class="mono" style="margin-top:12px; font-size:13px; color:var(--mute)">Obiettivo — ${m.obiettivoNutrizionale}</p>` : ""}
-            `
-            : ""
-        }
 
         ${
           m.merende?.length
