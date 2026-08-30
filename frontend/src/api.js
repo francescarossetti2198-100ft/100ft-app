@@ -9,16 +9,27 @@ class ApiError extends Error {
   }
 }
 
+// Messaggio unico quando la fetch stessa fallisce (rete assente, server irraggiungibile,
+// oppure la pagina è aperta da un indirizzo diverso da app.100-ft.com → il browser blocca
+// la risposta per CORS). Non è un errore dell'API: è "non sono nemmeno riuscito a chiedere".
+const ERRORE_RETE =
+  "Impossibile contattare il server. Controlla la connessione e che l'indirizzo sia app.100-ft.com.";
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new ApiError(ERRORE_RETE, 0);
+  }
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
@@ -30,11 +41,16 @@ async function request(path, options = {}) {
 // Per upload di file (foto sfide/Daily Drop) — niente Content-Type esplicito, il browser
 // imposta multipart/form-data con il boundary corretto da solo.
 async function requestForm(path, formData) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+  } catch {
+    throw new ApiError(ERRORE_RETE, 0);
+  }
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
