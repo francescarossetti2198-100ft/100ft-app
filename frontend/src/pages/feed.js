@@ -13,7 +13,7 @@ const TIPO_INFO = {
 
 const EMOJI = ["👍", "🔥", "💪", "🎉"];
 
-// Playlist "ufficio 100FT" su Spotify — mini-banner in cima al Feed.
+// Playlist ufficiale di 100FT su Spotify — mini-banner in cima al Feed.
 // TODO: Francesca fornirà l'URL definitivo della playlist; poi rebuild + deploy frontend.
 const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/";
 
@@ -27,7 +27,7 @@ function bannerSpotifyHtml() {
       <span style="flex:0 0 auto; width:38px; height:38px; border-radius:50%; background:#1DB954;
                    color:#fff; display:flex; align-items:center; justify-content:center">${NOTA_SVG}</span>
       <span style="min-width:0">
-        <strong style="display:block; font-size:14px">Playlist ufficio 100FT</strong>
+        <strong style="display:block; font-size:14px">Playlist ufficiale 100FT</strong>
         <span class="mono" style="color:var(--mute); font-size:12px">Ascoltala su Spotify ↗</span>
       </span>
     </a>
