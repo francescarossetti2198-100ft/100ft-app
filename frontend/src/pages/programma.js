@@ -1,5 +1,5 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { api, ApiError } from "../api.js";
+import { api, ApiError, mediaUrl } from "../api.js";
 
 // Solo http/https: evita che un link_url malformato (es. "javascript:...") diventi un href eseguibile.
 function linkSicuro(url) {
@@ -26,6 +26,28 @@ function etichettaData(dataIso) {
   const gg = String(d.getUTCDate()).padStart(2, "0");
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   return `${giorno} ${gg}/${mm}`;
+}
+
+// Domenica 23:59:59 (ora locale ≈ Roma) della settimana Lun–Dom che contiene `d`.
+function fineSettimana(d) {
+  const dowLun = (d.getDay() + 6) % 7; // 0 = lunedì
+  const domenica = new Date(d);
+  domenica.setDate(d.getDate() + (6 - dowLun));
+  domenica.setHours(23, 59, 59, 999);
+  return domenica;
+}
+
+// Una merenda con data compare all'atleta dalle 07:00 (ora locale ≈ Roma) del suo
+// giorno e resta visibile fino a fine settimana: lunedì si vede quella di lunedì,
+// mercoledì quelle di lun+mer, venerdì tutte e tre; la settimana dopo riparte da capo.
+// Le merende senza data sono sempre visibili.
+function merendaDisponibile(dataIso, ora = new Date()) {
+  if (!dataIso) return true;
+  const giorno = new Date(`${dataIso}T00:00:00`);
+  if (Number.isNaN(giorno.getTime())) return true;
+  const disponibileDa = new Date(giorno);
+  disponibileDa.setHours(7, 0, 0, 0);
+  return ora >= disponibileDa && ora <= fineSettimana(giorno);
 }
 
 // Testo multi-paragrafo (righe vuote = separatore) -> <p> uno per capoverso.
@@ -140,6 +162,7 @@ async function loadDettaglio(content, id) {
   content.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
   try {
     const m = await api.get(`/programma/${id}`);
+    const merende = (m.merende ?? []).filter((mf) => merendaDisponibile(mf.data));
 
     content.innerHTML = `
       <div class="card">
@@ -165,20 +188,22 @@ async function loadDettaglio(content, id) {
         </div>
 
         ${
-          m.merende?.length
+          merende.length
             ? `
-              <p class="sezione-label" style="margin-top:20px">Merende fit del mese</p>
-              <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
-                ${m.merende
+              <p class="sezione-label" style="margin-top:20px">Merende fit</p>
+              <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px">
+                ${merende
                   .map((mf) => {
                     const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
                     const data = mf.data ? etichettaData(mf.data) : null;
+                    const titolo = (mf.titolo ?? "").trim();
                     return `
-                      <div class="card" style="flex:1 1 140px; background:var(--surface-2)">
+                      <div class="card" style="background:var(--surface-2)">
+                        ${mf.fotoUrl ? `<img src="${mediaUrl(mf.fotoUrl)}" alt="" style="width:100%; border-radius:12px; display:block; margin-bottom:10px" />` : ""}
                         ${data ? `<p class="mono" style="color:var(--accent); font-size:11px">${data}</p>` : ""}
-                        <p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${mf.titolo}</p>
-                        ${mf.descrizione ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${mf.descrizione}</p>` : ""}
-                        ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:6px">▶ Vedi la ricetta</a>` : ""}
+                        ${titolo ? `<p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${titolo}</p>` : ""}
+                        ${mf.descrizione ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:${data || titolo ? "4px" : "0"}">${mf.descrizione}</p>` : ""}
+                        ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:8px">▶ Guarda la video ricetta</a>` : ""}
                       </div>
                     `;
                   })

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
+import { salvaFoto } from "../lib/storage";
 
 type Variables = { user: SessionUser };
 const programma = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -76,10 +77,10 @@ programma.get("/:id", requireAuth, async (c) => {
   }
 
   const { results: merende } = await c.env.DB.prepare(
-    `SELECT titolo, descrizione, link_url AS linkUrl, data FROM merende_fit WHERE programma_id = ? ORDER BY data IS NULL, data, ordine`
+    `SELECT titolo, descrizione, link_url AS linkUrl, data, foto_url AS fotoUrl FROM merende_fit WHERE programma_id = ? ORDER BY data IS NULL, data, ordine`
   )
     .bind(id)
-    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null }>();
+    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null; fotoUrl: string | null }>();
 
   return c.json({ ...mese, merende });
 });
@@ -97,7 +98,7 @@ programma.post("/", requireCoach, async (c) => {
     focusNutrizionale?: string;
     lineeGuidaNutrizionali?: string;
     obiettivoNutrizionale?: string;
-    merende?: { titolo: string; descrizione?: string; linkUrl?: string; data?: string }[];
+    merende?: { titolo?: string; descrizione?: string; linkUrl?: string; data?: string; fotoUrl?: string }[];
   }>();
   const {
     mese, anno, focusTema, descrizione, obiettivo, percheMese, risultatoAtteso,
@@ -136,14 +137,25 @@ programma.post("/", requireCoach, async (c) => {
     await c.env.DB.prepare(`DELETE FROM merende_fit WHERE programma_id = ?`).bind(programmaId.id).run();
     for (const [i, m] of merende.entries()) {
       await c.env.DB.prepare(
-        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine, link_url, data) VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO merende_fit (programma_id, titolo, descrizione, ordine, link_url, data, foto_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-        .bind(programmaId.id, m.titolo, m.descrizione ?? null, i, m.linkUrl ?? null, m.data ?? null)
+        .bind(programmaId.id, m.titolo ?? "", m.descrizione ?? null, i, m.linkUrl ?? null, m.data ?? null, m.fotoUrl ?? null)
         .run();
     }
   }
 
   return c.json({ id: programmaId?.id }, 201);
+});
+
+// Upload della grafica di una merenda (immagine gia' composta dal coach). Separato dal
+// POST / (che resta JSON): torna il path /api/foto/... da rimandare come `fotoUrl`.
+programma.post("/merenda-foto", requireCoach, async (c) => {
+  const body = await c.req.parseBody();
+  const file = body.foto instanceof File ? body.foto : null;
+  if (!file) return c.json({ error: "Serve un'immagine" }, 400);
+
+  const fotoUrl = await salvaFoto(c.env.FOTO_SFIDE, "merende", file);
+  return c.json({ fotoUrl });
 });
 
 export default programma;

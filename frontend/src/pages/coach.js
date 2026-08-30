@@ -1,5 +1,5 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { api, ApiError } from "../api.js";
+import { api, ApiError, mediaUrl } from "../api.js";
 import { getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
@@ -218,20 +218,71 @@ function rigaMerenda(m = {}) {
   const row = document.createElement("div");
   row.className = "merenda-row";
   row.style.cssText = "border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px";
+  row.dataset.fotoUrl = m.fotoUrl ?? "";
+  const inputStile = "background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)";
   row.innerHTML = `
-    <input class="merenda-titolo" type="text" placeholder="Titolo" value="${m.titolo ?? ""}"
-      style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
-    <input class="merenda-descrizione" type="text" placeholder="Descrizione (opzionale)" value="${m.descrizione ?? ""}"
-      style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
-    <input class="merenda-link" type="text" placeholder="Link ricetta/video (opzionale)" value="${m.linkUrl ?? ""}"
-      style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
+    <input class="merenda-titolo" type="text" placeholder="Titolo (opzionale)" value="${m.titolo ?? ""}" style="${inputStile}" />
+    <input class="merenda-descrizione" type="text" placeholder="Descrizione (opzionale)" value="${m.descrizione ?? ""}" style="${inputStile}" />
+    <input class="merenda-link" type="text" placeholder="Link video ricetta Instagram (opzionale)" value="${m.linkUrl ?? ""}" style="${inputStile}" />
+
+    <div style="display:flex; flex-direction:column; gap:6px">
+      <img class="merenda-foto-preview" alt="" style="max-width:100%; border-radius:10px; display:${m.fotoUrl ? "block" : "none"}"${m.fotoUrl ? ` src="${mediaUrl(m.fotoUrl)}"` : ""} />
+      <div style="display:flex; align-items:center; gap:12px">
+        <label class="link-btn" style="cursor:pointer">
+          <span class="merenda-foto-testo">${m.fotoUrl ? "Cambia grafica" : "Aggiungi grafica"}</span>
+          <input class="merenda-foto-input" type="file" accept="image/*" hidden />
+        </label>
+        <button type="button" class="link-btn merenda-foto-rimuovi" style="color:var(--livello-5); display:${m.fotoUrl ? "inline" : "none"}">Rimuovi grafica</button>
+      </div>
+      <p class="error-text merenda-foto-error" hidden style="font-size:12px"></p>
+    </div>
+
     <div style="display:flex; align-items:center; gap:8px">
       <label class="mono" style="font-size:12px; color:var(--mute)">Per il giorno</label>
-      <input class="merenda-data" type="date" value="${m.data ?? ""}"
-        style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text)" />
+      <input class="merenda-data" type="date" value="${m.data ?? ""}" style="${inputStile}" />
     </div>
     <button type="button" class="link-btn merenda-rimuovi" style="align-self:flex-start; color:var(--livello-5)">Rimuovi</button>
   `;
+
+  const preview = row.querySelector(".merenda-foto-preview");
+  const testo = row.querySelector(".merenda-foto-testo");
+  const fileInput = row.querySelector(".merenda-foto-input");
+  const rimuoviFoto = row.querySelector(".merenda-foto-rimuovi");
+  const fotoError = row.querySelector(".merenda-foto-error");
+
+  function mostraFoto(url) {
+    row.dataset.fotoUrl = url || "";
+    if (url) {
+      preview.src = mediaUrl(url);
+      preview.style.display = "block";
+      rimuoviFoto.style.display = "inline";
+      testo.textContent = "Cambia grafica";
+    } else {
+      preview.removeAttribute("src");
+      preview.style.display = "none";
+      rimuoviFoto.style.display = "none";
+      testo.textContent = "Aggiungi grafica";
+    }
+  }
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    fotoError.hidden = true;
+    try {
+      const fd = new FormData();
+      fd.append("foto", file);
+      const res = await api.postForm("/programma/merenda-foto", fd);
+      mostraFoto(res.fotoUrl);
+    } catch (err) {
+      fotoError.textContent = err instanceof ApiError ? err.message : "Upload non riuscito";
+      fotoError.hidden = false;
+    } finally {
+      fileInput.value = "";
+    }
+  });
+
+  rimuoviFoto.addEventListener("click", () => mostraFoto(""));
   row.querySelector(".merenda-rimuovi").addEventListener("click", () => row.remove());
   return row;
 }
@@ -283,12 +334,13 @@ function initPiano(el) {
 
     const merende = [...merendeRows.querySelectorAll(".merenda-row")]
       .map((row) => ({
-        titolo: row.querySelector(".merenda-titolo").value.trim(),
+        titolo: row.querySelector(".merenda-titolo").value.trim() || undefined,
         descrizione: row.querySelector(".merenda-descrizione").value.trim() || undefined,
         linkUrl: row.querySelector(".merenda-link").value.trim() || undefined,
         data: row.querySelector(".merenda-data").value || undefined,
+        fotoUrl: row.dataset.fotoUrl || undefined,
       }))
-      .filter((m) => m.titolo);
+      .filter((m) => m.titolo || m.descrizione || m.linkUrl || m.fotoUrl);
 
     e.target.disabled = true;
     try {
