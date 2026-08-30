@@ -50,6 +50,21 @@ function merendaDisponibile(dataIso, ora = new Date()) {
   return ora >= disponibileDa && ora <= fineSettimana(giorno);
 }
 
+// Descrizione di una merenda: se ha più righe la mostra come elenco puntato (di solito
+// è una lista di ingredienti), altrimenti come singolo paragrafo.
+function descrizioneMerenda(testo, marginTop) {
+  const righe = String(testo)
+    .split("\n")
+    .map((r) => r.replace(/^\s*[*\-•]\s*/, "").trim())
+    .filter(Boolean);
+  if (righe.length === 0) return "";
+  const base = `color:var(--mute); font-size:12px; margin-top:${marginTop}`;
+  if (righe.length === 1) return `<p class="mono" style="${base}">${righe[0]}</p>`;
+  return `<ul class="mono" style="${base}; padding-left:16px; line-height:1.7">${righe
+    .map((r) => `<li>${r}</li>`)
+    .join("")}</ul>`;
+}
+
 // Testo multi-paragrafo (righe vuote = separatore) -> <p> uno per capoverso.
 function paragrafi(testo, marginTop = "10px") {
   return String(testo)
@@ -202,7 +217,7 @@ async function loadDettaglio(content, id) {
                         ${mf.fotoUrl ? `<img src="${mediaUrl(mf.fotoUrl)}" alt="" style="width:100%; border-radius:12px; display:block; margin-bottom:10px" />` : ""}
                         ${data ? `<p class="mono" style="color:var(--accent); font-size:11px">${data}</p>` : ""}
                         ${titolo ? `<p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${titolo}</p>` : ""}
-                        ${mf.descrizione ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:${data || titolo ? "4px" : "0"}">${mf.descrizione}</p>` : ""}
+                        ${mf.descrizione ? descrizioneMerenda(mf.descrizione, data || titolo ? "4px" : "0") : ""}
                         ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:8px">▶ Guarda la video ricetta</a>` : ""}
                       </div>
                     `;
