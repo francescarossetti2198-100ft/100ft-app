@@ -102,7 +102,7 @@ export function renderSfide(appEl) {
       #sfide-blocco .mese-progress span.on { background: var(--mese-accento, var(--accent)); }
       #sfide-blocco .mese-medaglia {
         flex: 0 0 auto; width: 26px; height: 26px; margin-left: 8px; display: block;
-        object-fit: contain; opacity: 0.55; transition: opacity .2s ease, filter .2s ease;
+        object-fit: contain; opacity: 0.75; transition: opacity .2s ease, filter .2s ease;
       }
       #sfide-blocco .mese-medaglia.on {
         opacity: 1;
