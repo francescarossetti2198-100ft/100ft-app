@@ -301,24 +301,34 @@ function initPiano(el) {
   const errorEl = el.querySelector("#piano-error");
   const successEl = el.querySelector("#piano-success");
 
+  // Vero solo quando le merende del mese corrente sono state caricate con successo (o è un
+  // mese nuovo senza merende). Se il caricamento fallisce restiamo a false e il salvataggio
+  // NON invia il campo `merende` → il worker lascia intatte quelle già salvate.
+  let merendeSincronizzate = false;
+
   async function carica() {
     errorEl.hidden = true;
     successEl.hidden = true;
     for (const input of Object.values(campi)) input.value = "";
     merendeRows.innerHTML = "";
+    merendeSincronizzate = false;
 
     const mese = Number(meseSel.value);
     const anno = Number(annoInput.value);
     try {
       const { mesi } = await api.get("/programma");
       const esistente = mesi.find((m) => m.mese === mese && m.anno === anno);
-      if (!esistente) return;
+      if (!esistente) {
+        merendeSincronizzate = true; // mese nuovo: nessuna merenda, form vuoto di proposito
+        return;
+      }
 
       const dettaglio = await api.get(`/programma/${esistente.id}`);
       for (const [chiave, input] of Object.entries(campi)) input.value = dettaglio[chiave] ?? "";
       for (const m of dettaglio.merende ?? []) merendeRows.appendChild(rigaMerenda(m));
+      merendeSincronizzate = true;
     } catch {
-      // Nessun piano esistente per questo mese o errore di rete — form vuoto, si crea da capo.
+      // Errore di rete: non sappiamo lo stato reale delle merende — non toccarle al salvataggio.
     }
   }
 
@@ -342,7 +352,8 @@ function initPiano(el) {
 
     e.target.disabled = true;
     try {
-      const payload = { mese: Number(meseSel.value), anno: Number(annoInput.value), merende };
+      const payload = { mese: Number(meseSel.value), anno: Number(annoInput.value) };
+      if (merendeSincronizzate) payload.merende = merende;
       for (const [chiave, input] of Object.entries(campi)) {
         payload[chiave] = input.value.trim() || undefined;
       }

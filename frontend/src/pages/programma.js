@@ -248,7 +248,14 @@ async function loadDettaglio(content, id, bloccato = false) {
                   .join("")}
               </div>
             `
-            : ""
+            : isCoach()
+              ? `
+              <p class="sezione-label" style="margin-top:20px">Merende fit</p>
+              <p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px">
+                Nessuna merenda per questo mese — aggiungile dalla dashboard, sezione "Contenuto del mese".
+              </p>
+            `
+              : ""
         }
       </div>
     `;
