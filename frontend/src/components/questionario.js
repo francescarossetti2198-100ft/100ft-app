@@ -36,10 +36,11 @@ function selezionata(scelte, id, v) {
   return Array.isArray(s) ? s.includes(v) : s === v;
 }
 
-function domandaHtml(d, scelte) {
+function domandaHtml(d, scelte, opts) {
   const faccia = d.tipo === "faccine";
+  // "Più di una" è solo un promemoria: con `nascondiHintMultipla` (card Obiettivi) si toglie.
   const hint =
-    d.tipo === "multipla"
+    d.tipo === "multipla" && (d.max || !opts.nascondiHintMultipla)
       ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-top:2px">${d.max ? `Fino a ${d.max}` : "Più di una"}</p>`
       : "";
   return `
@@ -61,14 +62,14 @@ function domandaHtml(d, scelte) {
 
 // Renderizza i gruppi di pill dentro `container`, gestisce lo stato interno e restituisce
 // { getRisposte() }. Il chiamante fornisce i bottoni Salva/Annulla e la logica di invio.
-export function costruisciQuestionario(container, domande, scelteIniziali = {}) {
+export function costruisciQuestionario(container, domande, scelteIniziali = {}, opts = {}) {
   const scelte = {};
   for (const d of domande) {
     const v = scelteIniziali?.[d.id];
     if (v != null) scelte[d.id] = Array.isArray(v) ? [...v] : v;
   }
 
-  container.innerHTML = domande.map((d) => domandaHtml(d, scelte)).join("");
+  container.innerHTML = domande.map((d) => domandaHtml(d, scelte, opts)).join("");
 
   container.querySelectorAll(".q-domanda").forEach((grp) => {
     const id = grp.dataset.id;

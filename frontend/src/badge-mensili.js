@@ -12,7 +12,7 @@ function badgeTile(b) {
   return `
     <div style="flex:0 0 auto; width:88px; text-align:center">
       <img src="/badge/badge_${mm}.png" alt="Badge ${b.nome}"
-           style="width:82px; height:82px; object-fit:contain; ${b.conquistato ? "" : "filter:grayscale(1); opacity:0.38"}" />
+           style="width:82px; height:82px; object-fit:contain; ${b.conquistato ? "" : "filter:grayscale(1) blur(3px); opacity:0.5"}" />
       <p class="mono" style="font-size:10px; color:${b.conquistato ? "var(--livello-1)" : "var(--mute)"}; margin-top:1px">${sotto}</p>
     </div>`;
 }

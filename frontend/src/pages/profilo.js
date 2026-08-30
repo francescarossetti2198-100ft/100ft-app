@@ -75,7 +75,7 @@ const PERSONALIZZAZIONE_DOMANDE = [
     testo: "Quali sono i tuoi obiettivi?",
     tipo: "multipla",
     opzioni: [
-      { v: "forza", label: "Diventare più forte", emoji: "💪" },
+      { v: "forza", label: "Aumentare la massa muscolare", emoji: "💪" },
       { v: "tonificare", label: "Tonificare il corpo", emoji: "🔥" },
       { v: "resistenza", label: "Migliorare la resistenza", emoji: "🏃" },
       { v: "mobilita", label: "Migliorare mobilità e movimento", emoji: "🧘" },
@@ -598,8 +598,8 @@ function initSchedaAzioni(scheda, d, ricarica) {
 // I 6 livelli con nome, colore e numero di allenamenti necessari per raggiungerli.
 // Tenere allineato a worker/src/lib/livelli.ts (LIVELLI).
 const LIVELLI_REGOLAMENTO = [
-  { numero: 1, nome: "Facile", colore: "#8BC53F", allenamentiMin: 3 },
-  { numero: 2, nome: "Inizio", colore: "#2D7DD2", allenamentiMin: 18 },
+  { numero: 1, nome: "Starter", colore: "#8BC53F", allenamentiMin: 3 },
+  { numero: 2, nome: "Principiante", colore: "#2D7DD2", allenamentiMin: 18 },
   { numero: 3, nome: "Intermedio", colore: "#F4B740", allenamentiMin: 36 },
   { numero: 4, nome: "Avanzato", colore: "#FF7A29", allenamentiMin: 60 },
   { numero: 5, nome: "Esperto", colore: "#E63946", allenamentiMin: 75 },
@@ -923,11 +923,13 @@ function obiettiviCardHtml(p) {
       </div>
       <form id="personalizza-form" hidden style="margin-top:12px"></form>
 
-      <div id="performance-blocco" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border)">
-        <p class="sezione-label">Performance</p>
-        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px">Tieni traccia dei carichi che utilizzi nei tuoi esercizi.</p>
-        <div id="performance-lista" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
-      </div>
+      <details class="blocco-mese" id="performance-blocco" style="margin-top:18px">
+        <summary>Performance</summary>
+        <div class="blocco-corpo">
+          <p class="mono" style="color:var(--mute); font-size:13px">Tieni traccia dei carichi che utilizzi nei tuoi esercizi.</p>
+          <div id="performance-lista" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+        </div>
+      </details>
     </div>`;
 }
 
@@ -1048,7 +1050,7 @@ function initPersonalizza(content, p, onSaved) {
         <button class="btn" type="submit" style="flex:1">Salva</button>
         <button type="button" class="btn" id="pz-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
       </div>`;
-    q = costruisciQuestionario(form.querySelector("#pz-domande"), PERSONALIZZAZIONE_DOMANDE, p.datiPrivati?.personalizzazione ?? {});
+    q = costruisciQuestionario(form.querySelector("#pz-domande"), PERSONALIZZAZIONE_DOMANDE, p.datiPrivati?.personalizzazione ?? {}, { nascondiHintMultipla: true });
     form.hidden = false;
     vista.hidden = true;
 
