@@ -8,6 +8,7 @@ const TIPO_INFO = {
   athlete_of_week: { icona: "⭐", azione: "è Atleta della Settimana" },
   daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
   sfida: { icona: "🏆", azione: "ha completato una sfida" },
+  badge: { icona: "🏅", azione: "ha conquistato il badge di" },
   annuncio_coach: { icona: "📣", azione: "" },
 };
 

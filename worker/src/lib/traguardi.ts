@@ -9,6 +9,17 @@ import { parseRisposte } from "./questionario";
 const PUNTI_SFIDA = 10;
 const PUNTI_BONUS_MESE = 10;
 
+const NOMI_MESE = [
+  "", "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+  "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
+];
+
+// "2026-09" -> "Settembre 2026"
+function etichettaMese(meseKey: string): string {
+  const [anno, mm] = meseKey.split("-");
+  return `${NOMI_MESE[Number(mm)] ?? meseKey} ${anno}`;
+}
+
 // Criteri ammessi per tipo = 'traguardo'.
 export const CRITERI_TRAGUARDO = ["profilo_completo", "obiettivi_completi", "daily_drop"] as const;
 export function criterioValido(criterio: string): boolean {
@@ -127,5 +138,11 @@ export async function verificaBonusMese(db: D1Database, userId: number, meseKey:
 
   if (c && c.totali > 0 && c.fatte >= c.totali) {
     await awardXp(db, userId, azione, PUNTI_BONUS_MESE);
+    // Badge del mese conquistato -> post nel Feed (una sola volta: la guard su xp_log sopra
+    // impedisce di rientrare qui per lo stesso mese).
+    await db
+      .prepare(`INSERT INTO post_feed (user_id, tipo, testo) VALUES (?, 'badge', ?)`)
+      .bind(userId, etichettaMese(meseKey))
+      .run();
   }
 }

@@ -63,6 +63,19 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">ANNUNCIO NEL FEED</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
+        Compare nel Feed di tutti gli atleti come comunicazione della coach.</p>
+      <textarea id="annuncio-testo" rows="3"
+        style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
+               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical"
+        placeholder="Es. Sabato palestra chiusa, ci vediamo lunedì 💪"></textarea>
+      <p class="error-text" id="annuncio-error" hidden style="margin-top:6px"></p>
+      <p class="success-text" id="annuncio-success" hidden style="margin-top:6px">Pubblicato nel Feed ✓</p>
+      <button class="btn" id="annuncio-pub" style="width:100%; margin-top:10px">Pubblica nel Feed</button>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="sezione-label">Contenuto del mese</p>
       <div style="display:flex; gap:8px; margin-top:12px">
         <select id="piano-mese" style="flex:2; background:var(--surface-2); border:1px solid var(--border);
@@ -193,6 +206,7 @@ export function renderCoach(appEl) {
   appEl.appendChild(renderTabbar());
 
   initNota(el);
+  initAnnuncio(el);
   initPiano(el);
   initSfida(el);
   initAppello(el);
@@ -336,6 +350,33 @@ function initNota(el) {
   });
 
   carica();
+}
+
+function initAnnuncio(el) {
+  const testo = el.querySelector("#annuncio-testo");
+  const errorEl = el.querySelector("#annuncio-error");
+  const successEl = el.querySelector("#annuncio-success");
+
+  el.querySelector("#annuncio-pub").addEventListener("click", async (e) => {
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    if (!testo.value.trim()) {
+      errorEl.textContent = "Scrivi un testo";
+      errorEl.hidden = false;
+      return;
+    }
+    e.target.disabled = true;
+    try {
+      await api.post("/feed/annuncio", { testo: testo.value.trim() });
+      successEl.hidden = false;
+      testo.value = "";
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
 }
 
 function rigaMerenda(m = {}) {
