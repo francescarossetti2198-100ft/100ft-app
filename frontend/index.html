@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0A0A" />
     <title>100FT — Functional Training</title>
+    <!-- Normalizza l'hostname con il punto finale ("app.100-ft.com." → "app.100-ft.com").
+         È un FQDN valido che i browser accettano, ma conta come origin diversa: da lì
+         ogni chiamata a api.100-ft.com fallisce il controllo CORS e l'app mostra
+         "Errore imprevisto". Redirect prima di qualsiasi altra cosa. -->
+    <script>
+      (function () {
+        if (location.hostname.endsWith(".")) {
+          location.replace(
+            location.protocol + "//" +
+              location.hostname.replace(/\.+$/, "") +
+              (location.port ? ":" + location.port : "") +
+              location.pathname + location.search + location.hash
+          );
+        }
+      })();
+    </script>
     <!-- Applica il tema salvato (o quello di sistema) prima del primo paint, per non
          mostrare un lampo del tema sbagliato al caricamento. Logica completa in src/theme.js. -->
     <script>

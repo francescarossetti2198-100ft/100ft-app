@@ -25,8 +25,16 @@ type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use("*", async (c, next) => {
+  const allowed = c.env.FRONTEND_ORIGIN;
   const corsMiddleware = cors({
-    origin: c.env.FRONTEND_ORIGIN,
+    // Accetta anche la variante con il punto finale nell'hostname
+    // ("https://app.100-ft.com." — FQDN valido ma origin diversa): senza questo
+    // il browser da quell'host blocca ogni richiesta e l'app mostra "Errore imprevisto".
+    // Il frontend fa comunque un redirect per normalizzare l'host (vedi index.html).
+    origin: (origin) => {
+      if (!origin) return allowed;
+      return origin.replace(/\.$/, "") === allowed ? origin : allowed;
+    },
     credentials: true,
   });
   return corsMiddleware(c, next);
