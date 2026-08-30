@@ -1,5 +1,5 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { api, ApiError } from "../api.js";
+import { api, ApiError, mediaUrl } from "../api.js";
 import { getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
@@ -225,15 +225,17 @@ function rigaMerenda(m = {}) {
     <textarea class="merenda-descrizione" rows="3" placeholder="Descrizione — vai a capo per fare un elenco (una riga = un punto)" style="${inputStile}; resize:vertical; font:inherit">${m.descrizione ?? ""}</textarea>
     <input class="merenda-link" type="text" placeholder="Link video ricetta Instagram (opzionale)" value="${m.linkUrl ?? ""}" style="${inputStile}" />
 
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
-      <label class="link-btn" style="cursor:pointer">
-        <span class="merenda-foto-testo">${m.fotoUrl ? "Cambia grafica" : "Aggiungi grafica"}</span>
-        <input class="merenda-foto-input" type="file" accept="image/*" hidden />
-      </label>
-      <span class="merenda-foto-stato mono" style="font-size:12px; color:var(--livello-1); display:${m.fotoUrl ? "inline" : "none"}">✓ grafica caricata</span>
-      <button type="button" class="link-btn merenda-foto-rimuovi" style="color:var(--livello-5); display:${m.fotoUrl ? "inline" : "none"}">Rimuovi</button>
+    <div style="display:flex; flex-direction:column; gap:8px">
+      <img class="merenda-foto-preview" alt="Anteprima grafica" style="max-width:100%; width:auto; max-height:200px; border-radius:8px; object-fit:contain; align-self:flex-start; border:1px solid var(--border); display:${m.fotoUrl ? "block" : "none"}"${m.fotoUrl ? ` src="${mediaUrl(m.fotoUrl)}"` : ""} />
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+        <label class="link-btn" style="cursor:pointer">
+          <span class="merenda-foto-testo">${m.fotoUrl ? "Cambia grafica" : "Aggiungi grafica"}</span>
+          <input class="merenda-foto-input" type="file" accept="image/*" hidden />
+        </label>
+        <button type="button" class="link-btn merenda-foto-rimuovi" style="color:var(--livello-5); display:${m.fotoUrl ? "inline" : "none"}">Rimuovi</button>
+      </div>
+      <p class="error-text merenda-foto-error" hidden style="font-size:12px"></p>
     </div>
-    <p class="error-text merenda-foto-error" hidden style="font-size:12px"></p>
 
     <div style="display:flex; align-items:center; gap:8px">
       <label class="mono" style="font-size:12px; color:var(--mute)">Per il giorno</label>
@@ -242,17 +244,22 @@ function rigaMerenda(m = {}) {
     <button type="button" class="link-btn merenda-rimuovi" style="align-self:flex-start; color:var(--livello-5)">Rimuovi</button>
   `;
 
+  const preview = row.querySelector(".merenda-foto-preview");
   const testo = row.querySelector(".merenda-foto-testo");
-  const stato = row.querySelector(".merenda-foto-stato");
   const fileInput = row.querySelector(".merenda-foto-input");
   const rimuoviFoto = row.querySelector(".merenda-foto-rimuovi");
   const fotoError = row.querySelector(".merenda-foto-error");
 
   function mostraFoto(url) {
     row.dataset.fotoUrl = url || "";
-    const c = url ? "inline" : "none";
-    stato.style.display = c;
-    rimuoviFoto.style.display = c;
+    if (url) {
+      preview.src = mediaUrl(url);
+      preview.style.display = "block";
+    } else {
+      preview.removeAttribute("src");
+      preview.style.display = "none";
+    }
+    rimuoviFoto.style.display = url ? "inline" : "none";
     testo.textContent = url ? "Cambia grafica" : "Aggiungi grafica";
   }
 
