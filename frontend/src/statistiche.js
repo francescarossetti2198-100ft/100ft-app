@@ -1,7 +1,7 @@
 // Sotto-sezione "Statistiche" della card "I tuoi progressi" (Profilo atleta).
 // Dati: GET /profilo/statistiche -> { presenze:[iso], feedback:[{data,faccina,difficolta}],
 //   sfide:[{data,punti}], settimaneCompletateTotali, allenamentiFatti }.
-// Il bucketing per periodo lo fa qui il client. Grafico a barre SVG, nessuna libreria.
+// Il bucketing per periodo lo fa qui il client. Grafico a linee SVG, nessuna libreria.
 import { api } from "./api.js";
 
 const FACCINE = ["", "😫", "😕", "😐", "🙂", "🔥"]; // scala fissa (indice = faccina 1..5)
@@ -16,6 +16,9 @@ const PERIODI = [
   { v: "semestre", label: "Sem." },
   { v: "totale", label: "Totale" },
 ];
+
+// La stagione parte a settembre 2026: le statistiche non mostrano nulla di prima.
+const INIZIO_STAGIONE = "2026-09-01";
 
 const parse = (iso) => new Date(iso + "T00:00:00");
 const addDays = (d, n) => { const c = new Date(d); c.setDate(c.getDate() + n); return c; };
@@ -70,25 +73,27 @@ function bucketizza(date, buckets) {
   }).length);
 }
 
-function barChartSvg(valori, labels, colore) {
-  const W = 280, H = 104, pad = 4, topPad = 14, botPad = 16;
-  const gap = valori.length > 8 ? 3 : 6;
-  const max = Math.max(1, ...valori) * 1.15; // un po' di aria sopra la barra più alta
-  const bw = (W - pad * 2 - gap * (valori.length - 1)) / valori.length;
-  const bars = valori.map((v, i) => {
-    const bh = (v / max) * (H - topPad - botPad);
-    const x = pad + i * (bw + gap);
-    const yTop = H - botPad - bh;
-    return (v
-      ? `<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2, bh).toFixed(1)}" rx="2" fill="${colore}" />`
-        + `<text x="${(x + bw / 2).toFixed(1)}" y="${(yTop - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--mute)">${v}</text>`
-      : `<rect x="${x.toFixed(1)}" y="${(H - botPad - 2).toFixed(1)}" width="${bw.toFixed(1)}" height="2" rx="1" fill="var(--surface-2)" />`);
-  }).join("");
+function lineChartSvg(valori, labels, colore) {
+  const W = 280, H = 104, padX = 8, topPad = 14, botPad = 16;
+  const n = valori.length;
+  const max = Math.max(1, ...valori) * 1.15; // un po' di aria sopra il punto più alto
+  const x = (i) => (n <= 1 ? W / 2 : padX + (i * (W - padX * 2)) / (n - 1));
+  const y = (v) => H - botPad - (v / max) * (H - topPad - botPad);
+  const pts = valori.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const baseY = (H - botPad).toFixed(1);
+
+  const area = `<polygon points="${x(0).toFixed(1)},${baseY} ${pts.join(" ")} ${x(n - 1).toFixed(1)},${baseY}" fill="${colore}" fill-opacity="0.12" />`;
+  const line = `<polyline points="${pts.join(" ")}" fill="none" stroke="${colore}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
+  const dots = valori.map((v, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="${colore}" />`
+    + (v ? `<text x="${x(i).toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--mute)">${v}</text>` : "")
+  ).join("");
+
   const step = labels.length > 8 ? Math.ceil(labels.length / 6) : 1;
   const labs = labels.map((l, i) => (i % step === 0 || i === labels.length - 1)
-    ? `<text x="${(pad + i * (bw + gap) + bw / 2).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="8" fill="var(--mute)">${l}</text>`
+    ? `<text x="${x(i).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="8" fill="var(--mute)">${l}</text>`
     : "").join("");
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; display:block; margin-top:6px">${bars}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; display:block; margin-top:6px">${area}${line}${dots}${labs}</svg>`;
 }
 
 const rigaStat = (label, valore) => `
@@ -109,9 +114,11 @@ export async function initStatistiche(content) {
     return;
   }
 
-  const presenze = dati.presenze ?? [];
-  const feedback = dati.feedback ?? [];
-  const sfide = dati.sfide ?? [];
+  // Taglio a inizio stagione: qualunque dato precedente a settembre 2026 non conta.
+  const daStagione = (iso) => (iso || "").slice(0, 10) >= INIZIO_STAGIONE;
+  const presenze = (dati.presenze ?? []).filter(daStagione);
+  const feedback = (dati.feedback ?? []).filter((f) => daStagione(f.data));
+  const sfide = (dati.sfide ?? []).filter((s) => daStagione(s.data));
 
   if (!presenze.length && !feedback.length) {
     box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Ancora niente da mostrare — completa qualche allenamento.</p>`;
@@ -157,7 +164,7 @@ export async function initStatistiche(content) {
     const SOGLIE = [3, 18, 36, 60, 75, 90];
     const raggiunte = SOGLIE.filter((s) => (dati.allenamentiFatti || 0) >= s).length;
 
-    box.querySelector("#stat-chart").innerHTML = barChartSvg(perBucket, buckets.map((b) => b.label), "var(--accent)");
+    box.querySelector("#stat-chart").innerHTML = lineChartSvg(perBucket, buckets.map((b) => b.label), "var(--accent)");
     box.querySelector("#stat-righe").innerHTML =
       rigaStat("Presenze nel periodo", totPres) +
       rigaStat("Media a settimana", media) +

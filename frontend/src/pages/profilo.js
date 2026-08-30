@@ -184,32 +184,6 @@ export function renderProfilo(appEl) {
   loadProfilo(el);
 }
 
-// I 6 livelli del brief (sezione 5) — le card grafiche sono definitive, qui si decide solo
-// quali mostrare sbloccate (fino al livello attuale incluso) e quali ancora bloccate.
-const NUMERO_LIVELLI = 6;
-
-function scalaLivelliHtml(livello) {
-  const attualeNumero = livello?.attuale.numero ?? 0;
-
-  return `
-    <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:4px">
-      ${Array.from({ length: NUMERO_LIVELLI }, (_, i) => i + 1)
-        .map((n) => {
-          const sbloccato = n <= attualeNumero;
-          return `
-            <div style="flex:0 0 auto; text-align:center">
-              <img src="/cards/card_final_${n}.png" alt="Livello ${n}"
-                   style="width:64px; height:64px; border-radius:10px; object-fit:cover;
-                          ${sbloccato ? "" : "filter:grayscale(1); opacity:0.35"}" />
-              ${!sbloccato ? `<img src="/lucchetto.png" alt="Bloccato" style="width:16px; height:16px; margin-top:4px" />` : ""}
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
-
 function giorniFa(dataIso) {
   const giorni = Math.round((Date.now() - new Date(`${dataIso}T00:00:00Z`).getTime()) / 86400000);
   if (giorni === 0) return "oggi";
@@ -1254,15 +1228,6 @@ async function loadProfilo(el) {
       return;
     }
 
-    const scalaCard = p.livello
-      ? `<div class="card" style="margin-top:12px; text-align:center">
-           <img src="/cards/card_final_${p.livello.attuale.numero}.png" alt="Livello ${p.livello.attuale.numero}"
-                style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
-           <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
-           <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
-         </div>`
-      : "";
-
     const progressiCard = `
       <div class="card" style="margin-top:12px">
         <p class="sezione-label">I tuoi progressi</p>
@@ -1297,7 +1262,6 @@ async function loadProfilo(el) {
 
     content.innerHTML = `
       ${identitaCardHtml(p)}
-      ${scalaCard}
       ${datiPersonaliCardHtml(p)}
       ${obiettiviCardHtml(p)}
       ${badgeCard}

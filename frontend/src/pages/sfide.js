@@ -136,11 +136,11 @@ export function renderSfide(appEl) {
          completate. A fine barra la medaglia del mese: da lineata (in bianco/nero) a
          colorata quando tutte le sfide del mese sono completate. */
       #sfide-blocco .mese-progress { display: flex; align-items: center; gap: 4px; margin: 12px 0 0; }
-      #sfide-blocco .mese-progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); }
+      #sfide-blocco .mese-progress span { flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text) 16%, transparent); }
       #sfide-blocco .mese-progress span.on { background: var(--mese-accento, var(--accent)); }
       #sfide-blocco .mese-medaglia {
         flex: 0 0 auto; width: 26px; height: 26px; margin-left: 8px; display: block;
-        object-fit: contain; opacity: 0.75; transition: opacity .2s ease, filter .2s ease;
+        object-fit: contain; opacity: 0.92; transition: opacity .2s ease, filter .2s ease;
       }
       #sfide-blocco .mese-medaglia.on {
         opacity: 1;
@@ -381,13 +381,17 @@ async function loadSfide(el, meseVoluto) {
     /* nessun focus: la scheda mostra solo il mese */
   }
 
+  // La stagione parte a settembre 2026: mesi precedenti non compaiono nel carosello.
+  const INIZIO_STAGIONE = "2026-09";
   const oggi = new Date().toISOString().slice(0, 10);
-  const meseCorrente = oggi.slice(0, 7);
+  const meseOggi = oggi.slice(0, 7);
+  const meseCorrente = meseOggi < INIZIO_STAGIONE ? INIZIO_STAGIONE : meseOggi;
 
   // Raggruppa per mese di inizio; il mese corrente è sempre presente anche se vuoto.
   const perMese = new Map();
   for (const s of sfide) {
     const key = (s.data_inizio || meseCorrente).slice(0, 7);
+    if (key < INIZIO_STAGIONE) continue;
     if (!perMese.has(key)) perMese.set(key, []);
     perMese.get(key).push(s);
   }

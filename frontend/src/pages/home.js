@@ -386,7 +386,7 @@ async function loadSettimana(el) {
       livelloHtml = `
         <div style="display:flex; align-items:center; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
           <img class="livello-img" src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero} — ${attuale.nome}"
-               style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:zoom-in" />
+               style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:zoom-in; background:#141414; padding:3px" />
           <div style="flex:1; min-width:0">
             <p class="mono" style="color:${attuale.colore}; font-size:11px">
               LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}
