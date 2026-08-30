@@ -626,14 +626,14 @@ function livelliRegolamentoHtml() {
 // Ogni voce: { titolo, corpo, extra? } — `extra` è HTML già pronto, appeso sotto al corpo.
 const REGOLAMENTO = [
   {
-    titolo: "Banner presenze",
+    titolo: "Presenze",
     corpo:
-      "In Home segni la tua presenza il giorno dell'allenamento. È il gesto da cui parte tutto: senza presenza la settimana non si chiude.",
+      "In Home prenoti la presenza il giorno dell'allenamento («CI SONO»). A fine sessione la coach fa l'appello e conferma chi c'era davvero: solo allora la presenza è valida e prendi i punti.",
   },
   {
     titolo: "Anelli di riepilogo",
     corpo:
-      "Ogni settimana ha tre anelli: Allenamento (presenza), Sfide e Feedback. Quando li chiudi tutti e tre, la settimana è completata e conta per il livello.",
+      "In Home ci sono tre anelli: Allenamenti, Sfide e Feedback. Sono solo un riepilogo di quello che hai fatto nella settimana, non incidono sul livello.",
   },
   {
     titolo: "Classifica",
@@ -646,17 +646,18 @@ const REGOLAMENTO = [
       "I punti alimentano la classifica (settimana, mese, totale). Quanto vale ogni attività:",
     extra: `
       <ul style="list-style:none; padding:0; margin:8px 0 0; display:flex; flex-direction:column; gap:6px">
-        <li class="mono" style="font-size:13px">🏋️ Presenza confermata a un allenamento — <strong>+10 punti</strong></li>
-        <li class="mono" style="font-size:13px">💧 Daily Drop (la foto del momento) — <strong>+10 punti</strong></li>
-        <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>i punti che la coach ha assegnato a quella sfida</strong></li>
+        <li class="mono" style="font-size:13px">🏋️ Presenza confermata dalla coach — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">🏅 Tutte le sfide del mese completate — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">💧 Daily Drop (la foto del momento) — <strong>+5 punti</strong></li>
+        <li class="mono" style="font-size:13px">💬 Feedback dopo l'allenamento — <strong>+2 punti</strong></li>
         <li class="mono" style="font-size:13px">🗒️ Questionario del mese — <strong>+15 punti</strong></li>
-      </ul>
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; line-height:1.5">Sezione in lavorazione: i valori verranno rivisti insieme alla coach.</p>`,
+      </ul>`,
   },
   {
     titolo: "Livelli",
     corpo:
-      "Ci sono 6 livelli. Si sale accumulando settimane completate — non serve farle di fila, contano quante in totale (una settimana completata = tutti e 3 gli anelli chiusi). La card del livello e la scala sono nel Profilo.",
+      "Ci sono 6 livelli. Si sale in base al numero di allenamenti fatti (presenze confermate dalla coach) — non serve farli di fila, conta quanti in totale. La card del livello e la scala sono nel Profilo.",
     extra: livelliRegolamentoHtml(),
   },
   {
