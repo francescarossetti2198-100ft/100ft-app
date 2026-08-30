@@ -549,7 +549,34 @@ function initSchedaAzioni(scheda, d, ricarica) {
 // ─── Card "IMPOSTAZIONI" (in fondo al profilo): Notifiche push, Sicurezza,
 // Regolamento — ognuna a tendina — più il pulsante Esci. ───────────────────────
 
+// I 6 livelli con nome, colore e settimane complete necessarie per raggiungerli.
+// Tenere allineato a worker/src/lib/livelli.ts (LIVELLI).
+const LIVELLI_REGOLAMENTO = [
+  { numero: 1, nome: "Facile", colore: "#8BC53F", settimaneMin: 1 },
+  { numero: 2, nome: "Inizio", colore: "#2D7DD2", settimaneMin: 4 },
+  { numero: 3, nome: "Intermedio", colore: "#F4B740", settimaneMin: 9 },
+  { numero: 4, nome: "Avanzato", colore: "#FF7A29", settimaneMin: 16 },
+  { numero: 5, nome: "Esperto", colore: "#E63946", settimaneMin: 25 },
+  { numero: 6, nome: "Leggendario", colore: "#A85CFF", settimaneMin: 35 },
+];
+
+function livelliRegolamentoHtml() {
+  return `
+    <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 0 4px; margin-top:4px">
+      ${LIVELLI_REGOLAMENTO.map(
+        (l) => `
+        <div style="flex:0 0 auto; width:92px; text-align:center">
+          <img src="/cards/card_final_${l.numero}.png" alt="Livello ${l.numero} — ${l.nome}"
+               style="width:92px; height:92px; object-fit:contain" />
+          <p style="font-weight:700; font-size:12px; margin-top:4px; color:${l.colore}">${l.numero}. ${l.nome}</p>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:1px">da ${l.settimaneMin} settiman${l.settimaneMin === 1 ? "a" : "e"} complete</p>
+        </div>`
+      ).join("")}
+    </div>`;
+}
+
 // Come funziona l'app, in breve. Bozza: Francesca può ritoccare i testi.
+// Ogni voce: { titolo, corpo, extra? } — `extra` è HTML già pronto, appeso sotto al corpo.
 const REGOLAMENTO = [
   {
     titolo: "Banner presenze",
@@ -564,12 +591,26 @@ const REGOLAMENTO = [
   {
     titolo: "Classifica",
     corpo:
-      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle sfide completate. La freccia indica se sei salito o sceso rispetto al periodo prima.",
+      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle attività che fai (vedi «Sistema di punteggio»). La freccia indica se sei salito o sceso rispetto al periodo prima.",
+  },
+  {
+    titolo: "Sistema di punteggio",
+    corpo:
+      "I punti alimentano la classifica (settimana, mese, totale). Quanto vale ogni attività:",
+    extra: `
+      <ul style="list-style:none; padding:0; margin:8px 0 0; display:flex; flex-direction:column; gap:6px">
+        <li class="mono" style="font-size:13px">🏋️ Presenza confermata a un allenamento — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">💧 Daily Drop (la foto del momento) — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>i punti che la coach ha assegnato a quella sfida</strong></li>
+        <li class="mono" style="font-size:13px">🗒️ Questionario del mese — <strong>+15 punti</strong></li>
+      </ul>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; line-height:1.5">Sezione in lavorazione: i valori verranno rivisti insieme alla coach.</p>`,
   },
   {
     titolo: "Livelli",
     corpo:
-      "Ci sono 6 livelli. Si sale accumulando settimane completate (non conta la fila, contano quante in totale). La card del livello e la scala sono nel Profilo.",
+      "Ci sono 6 livelli. Si sale accumulando settimane completate — non serve farle di fila, contano quante in totale (una settimana completata = tutti e 3 gli anelli chiusi). La card del livello e la scala sono nel Profilo.",
+    extra: livelliRegolamentoHtml(),
   },
   {
     titolo: "Badge",
@@ -599,6 +640,7 @@ function regolamentoHtml() {
       <div style="padding:8px 0; border-top:1px solid var(--border)">
         <p style="font-weight:700; font-size:13px">${r.titolo}</p>
         <p class="mono" style="color:var(--mute); font-size:13px; margin-top:3px; line-height:1.5">${r.corpo}</p>
+        ${r.extra ?? ""}
       </div>`
   ).join("");
 }
