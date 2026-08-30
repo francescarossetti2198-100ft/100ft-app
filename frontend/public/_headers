@@ -1,0 +1,15 @@
+# Cloudflare Pages — regole di caching.
+# Di default Pages serve tutto con `max-age=14400` (4 ore): per il service worker e la
+# index questo significa che dopo un deploy il browser continua a usare la versione
+# vecchia in cache anche per ore. Con `no-cache` il browser rivalida sempre col server
+# prima di usarli (304 se invariati, costo minimo), così un nuovo deploy viene preso
+# al primo avvio dell'app. Gli asset con hash nel nome (/assets/*) restano cacheabili.
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
