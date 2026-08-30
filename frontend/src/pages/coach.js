@@ -155,6 +155,10 @@ export function renderCoach(appEl) {
       <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
       <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
     </div>
+
+    <p class="mono" style="color:var(--mute); font-size:11px; text-align:center; margin-top:20px; opacity:.7">
+      versione ${typeof __BUILD_STAMP__ !== "undefined" ? __BUILD_STAMP__ : "dev"}
+    </p>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());

@@ -1,7 +1,14 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Timbro di build (data+ora) mostrato in fondo alla dashboard coach: serve a capire
+// al volo se un device sta ancora usando una versione vecchia in cache.
+const BUILD_STAMP = new Date().toISOString().slice(0, 16).replace("T", " ");
+
 export default defineConfig({
+  define: {
+    __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
+  },
   server: {
     proxy: {
       // In sviluppo il browser parla solo con Vite: le richieste /api vengono
