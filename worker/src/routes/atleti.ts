@@ -129,7 +129,7 @@ atleti.get("/:id", requireCoach, async (c) => {
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 
-  const [presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei] =
+  const [presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei, performance] =
     await Promise.all([
       db.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(id).first<{ n: number }>(),
       db
@@ -170,6 +170,16 @@ atleti.get("/:id", requireCoach, async (c) => {
         .bind(id)
         .all<{ mese: number; anno: number; risposte: string; creatoIl: string }>(),
       statoTrofei(db, id),
+      db
+        .prepare(
+          `SELECT esercizio, peso, data FROM (
+             SELECT esercizio, peso_kg AS peso, creato_il AS data,
+                    ROW_NUMBER() OVER (PARTITION BY esercizio ORDER BY creato_il DESC, id DESC) AS rn
+             FROM performance_carichi WHERE user_id = ?
+           ) WHERE rn = 1 ORDER BY esercizio`
+        )
+        .bind(id)
+        .all<{ esercizio: string; peso: number; data: string }>(),
     ]);
 
   return c.json({
@@ -203,6 +213,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       richiesteRecenti: richiesteRecenti.results,
       pagamentoMese: pagamento?.stato ?? "non_pagato",
       trofei,
+      performance: performance.results,
     },
   });
 });

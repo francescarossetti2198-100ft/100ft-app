@@ -5,6 +5,7 @@ import { api, ApiError, mediaUrl } from "../api.js";
 import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
 import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
+import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { trofeiRigaHtml } from "../trofei.js";
 
@@ -39,6 +40,12 @@ function formatDataNascita(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d || m > 12) return null;
   return `${d} ${MESI[m - 1]} ${y}`;
+}
+
+// "12 set" da un timestamp SQLite "YYYY-MM-DD HH:MM:SS".
+function formatDataBreve(s) {
+  const m = String(s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${Number(m[3])} ${MESI[Number(m[2]) - 1]}` : "";
 }
 
 function calcolaEta(iso) {
@@ -432,6 +439,18 @@ function schedaAtletaHtml(d) {
         .join("")
     : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun feedback mensile.</p>`;
 
+  const performanceHtml = (at.performance ?? []).length
+    ? at.performance
+        .map(
+          (r) => `
+            <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border)">
+              <span style="font-size:13px">${esc(r.esercizio)}</span>
+              <span class="mono" style="color:var(--mute); font-size:12px; white-space:nowrap">${r.peso} kg · ${formatDataBreve(r.data)}</span>
+            </div>`
+        )
+        .join("")
+    : null;
+
   const livelloBadge = at.livello
     ? `<span class="mono" style="color:${at.livello.attuale.colore}; font-size:12px">Livello ${at.livello.attuale.numero} — ${at.livello.attuale.nome}</span>`
     : `<span class="mono" style="color:var(--mute); font-size:12px">Nessun livello</span>`;
@@ -494,6 +513,15 @@ function schedaAtletaHtml(d) {
       <p class="mono" style="color:var(--mute); font-size:12px">FEEDBACK MENSILE</p>
       <div style="margin-top:2px">${feedbackMensileHtml}</div>
     </div>
+
+    ${
+      performanceHtml
+        ? `<div class="card" style="margin-top:12px">
+             <p class="mono" style="color:var(--mute); font-size:12px">PERFORMANCE</p>
+             <div style="margin-top:6px">${performanceHtml}</div>
+           </div>`
+        : ""
+    }
 
     <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">BADGE</p>
@@ -882,7 +910,115 @@ function obiettiviCardHtml(p) {
         }
       </div>
       <form id="personalizza-form" hidden style="margin-top:12px"></form>
+
+      <div id="performance-blocco" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border)">
+        <p class="sezione-label">Performance</p>
+        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px">Tieni traccia dei carichi che utilizzi nei tuoi esercizi.</p>
+        <div id="performance-lista" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+      </div>
     </div>`;
+}
+
+// Sezione "Performance": ultimo carico usato per ogni esercizio + storico. Solo kg.
+async function initPerformance(content) {
+  const box = content.querySelector("#performance-lista");
+  if (!box) return;
+  let data;
+  try {
+    data = await api.get("/performance");
+  } catch {
+    box.innerHTML = `<p class="error-text">Impossibile caricare la Performance</p>`;
+    return;
+  }
+  const per = new Map(data.esercizi.map((e) => [e.nome, e]));
+
+  box.innerHTML = PERFORMANCE_ESERCIZI.map(
+    (cat) => `
+      <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:14px 0 2px">${cat.emoji} ${cat.categoria.toUpperCase()}</p>
+      ${cat.esercizi
+        .map((nome) => {
+          const e = per.get(nome) ?? {};
+          const ha = e.ultimoPeso != null;
+          return `
+            <div class="perf-riga" data-esercizio="${esc(nome)}" style="border-top:1px solid var(--border); padding:10px 0">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+                <div style="min-width:0">
+                  <p style="font-size:14px">${esc(nome)}</p>
+                  <p class="mono" style="color:${ha ? "var(--text)" : "var(--mute)"}; font-size:12px; margin-top:2px">
+                    ${ha ? `Ultimo peso: ${e.ultimoPeso} kg` : "Nessun peso registrato"}
+                  </p>
+                </div>
+                <button type="button" class="link-btn perf-apri" style="flex-shrink:0; text-decoration:none">${ha ? "Modifica" : "+ Aggiungi peso"}</button>
+              </div>
+              <div class="perf-panel" hidden style="margin-top:10px"></div>
+            </div>`;
+        })
+        .join("")}`
+  ).join("");
+
+  box.querySelectorAll(".perf-riga").forEach((riga) => {
+    const nome = riga.dataset.esercizio;
+    const panel = riga.querySelector(".perf-panel");
+    riga.querySelector(".perf-apri").addEventListener("click", async () => {
+      if (!panel.hidden) {
+        panel.hidden = true;
+        panel.innerHTML = "";
+        return;
+      }
+      const iniziale = per.get(nome)?.ultimoPeso ?? 20;
+      panel.innerHTML = `
+        <p style="font-size:13px">Quanto hai utilizzato?</p>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:6px">
+          <button type="button" class="btn perf-meno" style="width:40px; background:var(--surface-2); color:var(--text)">−</button>
+          <input class="perf-input" type="number" inputmode="numeric" min="1" max="500" step="1" value="${iniziale}"
+                 style="width:72px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font-family:inherit" />
+          <span class="mono" style="color:var(--mute)">kg</span>
+          <button type="button" class="btn perf-piu" style="width:40px; background:var(--surface-2); color:var(--text)">+</button>
+          <button type="button" class="btn perf-salva" style="flex:1">Salva</button>
+        </div>
+        <p class="error-text perf-err" hidden style="margin-top:6px"></p>
+        <div class="perf-storico" style="margin-top:10px"></div>`;
+      panel.hidden = false;
+
+      const input = panel.querySelector(".perf-input");
+      const clamp = (n) => Math.max(1, Math.min(500, Math.round(n) || 1));
+      panel.querySelector(".perf-meno").addEventListener("click", () => (input.value = clamp((Number(input.value) || 0) - 1)));
+      panel.querySelector(".perf-piu").addEventListener("click", () => (input.value = clamp((Number(input.value) || 0) + 1)));
+
+      try {
+        const { storico } = await api.get(`/performance/${encodeURIComponent(nome)}`);
+        if (storico.length) {
+          panel.querySelector(".perf-storico").innerHTML = `
+            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">STORICO</p>
+            ${storico
+              .map((s) => `<p class="mono" style="font-size:12px; margin-top:3px">${s.peso} kg <span style="color:var(--mute)">· ${formatDataBreve(s.data)}</span></p>`)
+              .join("")}`;
+        }
+      } catch {
+        /* lo storico è un extra: se non arriva, pazienza */
+      }
+
+      panel.querySelector(".perf-salva").addEventListener("click", async (ev) => {
+        const err = panel.querySelector(".perf-err");
+        err.hidden = true;
+        const peso = Number(input.value);
+        if (!Number.isInteger(peso) || peso < 1 || peso > 500) {
+          err.textContent = "Inserisci un peso in kg (numero intero)";
+          err.hidden = false;
+          return;
+        }
+        ev.target.disabled = true;
+        try {
+          await api.post("/performance", { esercizio: nome, peso });
+          initPerformance(content);
+        } catch (e2) {
+          err.textContent = e2 instanceof ApiError ? e2.message : "Errore imprevisto";
+          err.hidden = false;
+          ev.target.disabled = false;
+        }
+      });
+    });
+  });
 }
 
 function initPersonalizza(content, p, onSaved) {
@@ -1159,6 +1295,7 @@ async function loadProfilo(el) {
     initIdentita(content, p, () => loadProfilo(el));
     initDatiPersonali(content, () => loadProfilo(el));
     initPersonalizza(content, p, () => loadProfilo(el));
+    initPerformance(content);
     initNotifiche(content);
     initSicurezza(content);
     content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {
