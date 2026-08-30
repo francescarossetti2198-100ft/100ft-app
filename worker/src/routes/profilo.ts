@@ -6,6 +6,7 @@ import { calcolaAnelli, sessioniSettimanaConStato } from "../lib/settimana";
 import { salvaFoto } from "../lib/storage";
 import { parseRisposte, validaRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
+import { verificaTraguardi } from "../lib/traguardi";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -29,6 +30,10 @@ profilo.get("/me", requireAuth, async (c) => {
       .first<{ fotoUrl: string | null }>();
     return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
   }
+
+  // Le sfide "traguardo" (completa profilo, obiettivi, ecc.) scattano anche solo aprendo
+  // il Profilo, senza passare dalla pagina Sfide.
+  await verificaTraguardi(c.env.DB, userId);
 
   // Abbonamento = pagamento segnato dalla coach per il MESE corrente (stessa chiave
   // di POST /api/pagamenti). Nessuna riga = non attivo.

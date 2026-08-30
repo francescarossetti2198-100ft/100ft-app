@@ -13,7 +13,16 @@ const TIPO_SFIDA_LABEL = {
   presenza: "Sfida di gruppo",
   foto: "Sfida foto",
   valore_manuale: "Sfida personale",
+  traguardo: "Traguardo (automatico)",
 };
+
+// Criteri per le sfide "traguardo": si completano da sole quando l'atleta li raggiunge.
+const CRITERI_TRAGUARDO = [
+  { v: "profilo_completo", label: "Profilo + I tuoi dati completi" },
+  { v: "obiettivi_completi", label: "Obiettivi personali compilati" },
+  { v: "daily_drop", label: "Almeno un daily drop" },
+  { v: "presenze", label: "N presenze (nel periodo della sfida)" },
+];
 
 function oraCorrente() {
   const now = new Date();
@@ -134,6 +143,15 @@ export function renderCoach(appEl) {
                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px">
           ${Object.entries(TIPO_SFIDA_LABEL).map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}
         </select>
+      </div>
+      <div class="field" id="sfida-criterio-wrap" hidden>
+        <label>Criterio</label>
+        <select id="sfida-criterio" style="background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px">
+          ${CRITERI_TRAGUARDO.map((x) => `<option value="${x.v}">${x.label}</option>`).join("")}
+        </select>
+        <input id="sfida-criterio-n" type="number" min="1" max="99" value="6" hidden
+               style="margin-top:8px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px" />
       </div>
       <div style="display:flex; gap:10px">
         <div class="field" style="flex:1">
@@ -502,6 +520,18 @@ function initPiano(el) {
 function initSfida(el) {
   const errorEl = el.querySelector("#sfida-error");
   const successEl = el.querySelector("#sfida-success");
+  const tipoSel = el.querySelector("#sfida-tipo");
+  const criterioWrap = el.querySelector("#sfida-criterio-wrap");
+  const criterioSel = el.querySelector("#sfida-criterio");
+  const criterioN = el.querySelector("#sfida-criterio-n");
+
+  const aggiornaCriterio = () => {
+    criterioWrap.hidden = tipoSel.value !== "traguardo";
+    criterioN.hidden = !(tipoSel.value === "traguardo" && criterioSel.value === "presenze");
+  };
+  tipoSel.addEventListener("change", aggiornaCriterio);
+  criterioSel.addEventListener("change", aggiornaCriterio);
+  aggiornaCriterio();
 
   el.querySelector("#sfida-crea").addEventListener("click", async (e) => {
     errorEl.hidden = true;
@@ -509,9 +539,13 @@ function initSfida(el) {
 
     const titolo = el.querySelector("#sfida-titolo").value.trim();
     const descrizione = el.querySelector("#sfida-descrizione").value.trim();
-    const tipo = el.querySelector("#sfida-tipo").value;
+    const tipo = tipoSel.value;
     const dataInizio = el.querySelector("#sfida-inizio").value;
     const dataFine = el.querySelector("#sfida-fine").value;
+    let criterio;
+    if (tipo === "traguardo") {
+      criterio = criterioSel.value === "presenze" ? `presenze:${Number(criterioN.value) || 1}` : criterioSel.value;
+    }
 
     if (!titolo || !dataInizio || !dataFine) {
       errorEl.textContent = "Titolo, data di inizio e data di fine sono obbligatori";
@@ -525,6 +559,7 @@ function initSfida(el) {
         titolo,
         descrizione: descrizione || undefined,
         tipo,
+        criterio,
         data_inizio: dataInizio,
         data_fine: dataFine,
       });

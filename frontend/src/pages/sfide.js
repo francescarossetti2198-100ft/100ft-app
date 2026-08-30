@@ -5,7 +5,20 @@ const TIPO_LABEL = {
   presenza: "Sfida di gruppo",
   foto: "Sfida foto",
   valore_manuale: "Sfida personale",
+  traguardo: "Traguardo",
 };
+
+const CRITERIO_TESTO = {
+  profilo_completo: "Si completa da sola quando compili «Il tuo profilo» e «I tuoi dati».",
+  obiettivi_completi: "Si completa da sola quando compili i tuoi obiettivi personali.",
+  daily_drop: "Si completa da sola dopo il tuo primo daily drop.",
+};
+function criterioTesto(criterio) {
+  if (!criterio) return "";
+  const m = String(criterio).match(/^presenze:(\d+)$/);
+  if (m) return `Si completa da sola quando raggiungi ${m[1]} presenze confermate.`;
+  return CRITERIO_TESTO[criterio] ?? "";
+}
 
 const PERIODI = [
   { valore: "settimana", label: "Settimana" },
@@ -259,14 +272,16 @@ function sfidaItemHtml(s, oggi) {
     ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>`
     : scaduta
       ? `<button class="btn" style="width:100%; margin-top:10px" disabled>Sfida terminata</button>`
-      : s.tipo === "foto"
-        ? `
+      : s.tipo === "traguardo"
+        ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">${criterioTesto(s.criterio)}</p>`
+        : s.tipo === "foto"
+          ? `
           <input class="foto-input" type="file" accept="image/*" capture="environment"
                  style="margin-top:10px; width:100%; color:var(--text)" />
           <p class="error-text foto-error" hidden style="margin-top:6px"></p>
           <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
         `
-        : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
+          : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
 
   return `
     <div class="sfida-item${done ? " done" : ""}" data-id="${s.id}" data-tipo="${s.tipo}">

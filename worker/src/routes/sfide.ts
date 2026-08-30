@@ -6,6 +6,7 @@ import { salvaFoto } from "../lib/storage";
 import { inizioSettimana } from "../lib/settimana";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { stagioneDi, verificaEAssegnaTrofeo, statoTrofei } from "../lib/trofei";
+import { verificaTraguardi, verificaBonusMese, criterioValido } from "../lib/traguardi";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -118,8 +119,11 @@ sfide.get("/", requireAuth, async (c) => {
   const isCoach = c.var.user.role === "coach";
   const oggi = new Date().toISOString().slice(0, 10);
 
+  // Aprendo le Sfide l'atleta fa scattare le "traguardo" già maturate.
+  if (!isCoach) await verificaTraguardi(c.env.DB, c.var.user.userId);
+
   const { results } = await c.env.DB.prepare(
-    `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.punti, s.data_inizio, s.data_fine,
+    `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.data_inizio, s.data_fine,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
@@ -145,6 +149,9 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     .bind(sfidaId)
     .first<{ id: number; titolo: string; tipo: string; punti: number; data_inizio: string; data_fine: string }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
+  if (sfida.tipo === "traguardo") {
+    return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
+  }
 
   const oggi = new Date().toISOString().slice(0, 10);
   if (sfida.data_fine < oggi) return c.json({ error: "Sfida terminata" }, 400);
@@ -195,6 +202,9 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     await verificaEAssegnaTrofeo(c.env.DB, c.var.user.userId, blocco.stagione, blocco.blocco);
   }
 
+  // Bonus se questa era l'ultima sfida mancante del mese.
+  await verificaBonusMese(c.env.DB, c.var.user.userId, sfida.data_inizio.slice(0, 7));
+
   return c.json({ ok: true });
 });
 
@@ -209,24 +219,28 @@ sfide.post("/", requireCoach, async (c) => {
     titolo?: string;
     descrizione?: string;
     tipo?: string;
+    criterio?: string;
     data_inizio?: string;
     data_fine?: string;
   }>();
-  const { titolo, descrizione, tipo, data_inizio, data_fine } = body;
+  const { titolo, descrizione, tipo, criterio, data_inizio, data_fine } = body;
 
   if (!titolo || !tipo || !data_inizio || !data_fine) {
     return c.json({ error: "Titolo, tipo, data_inizio e data_fine sono obbligatori" }, 400);
   }
-  if (!["presenza", "foto", "valore_manuale"].includes(tipo)) {
+  if (!["presenza", "foto", "valore_manuale", "traguardo"].includes(tipo)) {
     return c.json({ error: "Tipo sfida non valido" }, 400);
+  }
+  if (tipo === "traguardo" && (!criterio || !criterioValido(criterio))) {
+    return c.json({ error: "Criterio del traguardo mancante o non valido" }, 400);
   }
 
   // Ogni sfida completata vale 10 punti fissi (sistema punti 2026-08) — non più deciso dal coach.
   const PUNTI_SFIDA = 10;
   const result = await c.env.DB.prepare(
-    `INSERT INTO sfide (titolo, descrizione, tipo, punti, data_inizio, data_fine) VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, data_inizio, data_fine) VALUES (?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(titolo, descrizione ?? null, tipo, PUNTI_SFIDA, data_inizio, data_fine)
+    .bind(titolo, descrizione ?? null, tipo, tipo === "traguardo" ? criterio : null, PUNTI_SFIDA, data_inizio, data_fine)
     .run();
 
   return c.json({ id: result.meta.last_row_id }, 201);
