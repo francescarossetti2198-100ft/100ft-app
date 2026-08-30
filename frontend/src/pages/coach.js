@@ -137,10 +137,6 @@ export function renderCoach(appEl) {
       </div>
       <div style="display:flex; gap:10px">
         <div class="field" style="flex:1">
-          <label>Punti</label>
-          <input id="sfida-punti" type="number" value="10" min="0" />
-        </div>
-        <div class="field" style="flex:1">
           <label>Inizio</label>
           <input id="sfida-inizio" type="date" />
         </div>
@@ -149,6 +145,7 @@ export function renderCoach(appEl) {
           <input id="sfida-fine" type="date" />
         </div>
       </div>
+      <p class="mono" style="color:var(--mute); font-size:12px">Ogni sfida completata vale 10 punti.</p>
       <p class="error-text" id="sfida-error" hidden></p>
       <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
       <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
@@ -412,7 +409,6 @@ function initSfida(el) {
     const titolo = el.querySelector("#sfida-titolo").value.trim();
     const descrizione = el.querySelector("#sfida-descrizione").value.trim();
     const tipo = el.querySelector("#sfida-tipo").value;
-    const punti = Number(el.querySelector("#sfida-punti").value);
     const dataInizio = el.querySelector("#sfida-inizio").value;
     const dataFine = el.querySelector("#sfida-fine").value;
 
@@ -428,14 +424,12 @@ function initSfida(el) {
         titolo,
         descrizione: descrizione || undefined,
         tipo,
-        punti,
         data_inizio: dataInizio,
         data_fine: dataFine,
       });
       successEl.hidden = false;
       el.querySelector("#sfida-titolo").value = "";
       el.querySelector("#sfida-descrizione").value = "";
-      el.querySelector("#sfida-punti").value = "10";
       el.querySelector("#sfida-inizio").value = "";
       el.querySelector("#sfida-fine").value = "";
     } catch (err) {

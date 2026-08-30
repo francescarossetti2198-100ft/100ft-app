@@ -72,8 +72,8 @@ dailyDrop.post("/", requireAuth, async (c) => {
     .bind(c.var.user.userId, fotoUrl, "ha risposto al Daily Drop")
     .run();
 
-  // +10 XP alla pubblicazione (brief, sezione 4 e 8).
-  await awardXp(c.env.DB, c.var.user.userId, "daily_drop", 10);
+  // +5 punti alla pubblicazione (sistema punti 2026-08).
+  await awardXp(c.env.DB, c.var.user.userId, "daily_drop", 5);
 
   return c.json({ ok: true }, 201);
 });

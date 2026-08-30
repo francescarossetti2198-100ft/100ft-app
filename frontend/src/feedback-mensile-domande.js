@@ -1,50 +1,50 @@
 // ────────────────────────────────────────────────────────────────────────────
 // Questionario mensile — feedback guidato sul mese appena concluso.
 //
-// ⚠️ SEGNAPOSTO: Francesca fornirà le domande definitive. Per sostituirle basta
-// riscrivere QUESTO array — salvataggio, riassunto e rendering non cambiano.
-// Voce: { id, testo, tipo: "faccine" | "singola" | "multipla", max?, opzioni?: [{ v, label }] }
-//   - "faccine": le 5 faccine fisse 😫 😕 😐 🙂 🔥 (nessun opzioni: da fornire)
+// Per cambiare le domande basta riscrivere QUESTO array — salvataggio, riassunto e
+// rendering non cambiano.
+// Voce: { id, testo, tipo: "faccine" | "singola" | "multipla", max?, opzioni?: [{ v, label, esclusiva? }] }
+//   - "faccine": le 5 faccine fisse 😫 😕 😐 🙂 🔥 (nessun opzioni)
 //   - "singola" : una sola scelta
-//   - "multipla": più scelte, opzionale `max`
+//   - "multipla": più scelte, opzionale `max`; un'opzione con `esclusiva: true` azzera le altre
 // Risposte salvate: { [id]: "v" }  |  { [id]: ["v1","v2"] }   (per faccine: "1".."5")
 // ────────────────────────────────────────────────────────────────────────────
 export const FEEDBACK_MENSILE_DOMANDE = [
   {
     id: "andamento",
-    testo: "Com'è andato il mese?",
+    testo: "Com'è andato il tuo mese?",
     tipo: "faccine",
   },
   {
-    id: "funzionato",
-    testo: "Cosa ha funzionato di più?",
+    id: "aiutato",
+    testo: "Cosa ti ha aiutato di più nel tuo percorso?",
     tipo: "multipla",
     opzioni: [
-      { v: "costanza", label: "La mia costanza" },
-      { v: "risultati", label: "I risultati sul corpo" },
-      { v: "gruppo", label: "L'atmosfera del gruppo" },
-      { v: "sfide", label: "Le sfide" },
-      { v: "coach", label: "Il rapporto con la coach" },
-      { v: "organizzazione", label: "L'organizzazione / gli orari" },
+      { v: "costanza", label: "Costanza" },
+      { v: "risultati", label: "Risultati" },
+      { v: "allenamenti", label: "Allenamenti" },
+      { v: "gruppo", label: "Atmosfera del gruppo" },
+      { v: "sfide", label: "Sfide" },
+      { v: "alimentazione", label: "Alimentazione" },
+      { v: "organizzazione", label: "Organizzazione / orari" },
     ],
   },
   {
-    id: "mancato",
-    testo: "Cosa è mancato o vorresti diverso?",
+    id: "piu",
+    testo: "Cosa vorresti trovare di più nei prossimi allenamenti?",
     tipo: "multipla",
     opzioni: [
-      { v: "varieta", label: "Più varietà" },
-      { v: "intensita", label: "Più intensità" },
-      { v: "tecnica", label: "Più lavoro tecnico" },
-      { v: "mobilita", label: "Più mobilità / stretching" },
-      { v: "individuale", label: "Più attenzione individuale" },
-      { v: "recupero", label: "Più recupero / gradualità" },
-      { v: "niente", label: "Niente, tutto ok" },
+      { v: "varieta", label: "Varietà" },
+      { v: "intensita", label: "Intensità" },
+      { v: "tecnica", label: "Lavoro tecnico" },
+      { v: "mobilita", label: "Mobilità / stretching" },
+      { v: "recupero", label: "Recupero / gradualità" },
+      { v: "niente", label: "Niente, va bene così", esclusiva: true },
     ],
   },
   {
-    id: "sensazione",
-    testo: "Come ti sei sentito fisicamente questo mese?",
+    id: "fisico",
+    testo: "Come ti sei sentito/a fisicamente questo mese?",
     tipo: "singola",
     opzioni: [
       { v: "energia", label: "In forma e con energia" },
@@ -55,16 +55,17 @@ export const FEEDBACK_MENSILE_DOMANDE = [
   },
   {
     id: "prossimo",
-    testo: "Su cosa vuoi puntare il mese prossimo?",
+    testo: "Su cosa vuoi concentrarti maggiormente il mese prossimo?",
     tipo: "multipla",
-    max: 2,
     opzioni: [
       { v: "forza", label: "Forza" },
       { v: "resistenza", label: "Resistenza" },
       { v: "mobilita", label: "Mobilità" },
-      { v: "dimagrimento", label: "Dimagrimento" },
+      { v: "forma", label: "Forma fisica" },
       { v: "tecnica", label: "Tecnica" },
       { v: "costanza", label: "Costanza" },
+      { v: "energia", label: "Energia / benessere" },
+      { v: "alimentazione", label: "Alimentazione / idratazione" },
     ],
   },
 ];

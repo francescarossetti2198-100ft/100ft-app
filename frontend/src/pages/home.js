@@ -359,10 +359,10 @@ async function loadSettimana(el) {
 
     let livelloHtml = "";
     if (livello) {
-      const { attuale, prossimo, settimaneCompletate } = livello;
-      const range = prossimo ? prossimo.settimaneMin - attuale.settimaneMin : 0;
-      const progresso = prossimo ? settimaneCompletate - attuale.settimaneMin + 1 : range;
-      const pctBarra = prossimo ? Math.round((progresso / range) * 100) : 100;
+      const { attuale, prossimo, allenamentiFatti } = livello;
+      const range = prossimo ? prossimo.allenamentiMin - attuale.allenamentiMin : 0;
+      const progresso = prossimo ? allenamentiFatti - attuale.allenamentiMin : range;
+      const pctBarra = prossimo ? Math.max(0, Math.round((progresso / range) * 100)) : 100;
 
       livelloHtml = `
         <div style="display:flex; align-items:center; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
@@ -370,7 +370,7 @@ async function loadSettimana(el) {
                style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0" />
           <div style="flex:1; min-width:0">
             <p class="mono" style="color:var(--mute); font-size:11px">
-              ${settimaneCompletate} SETTIMANE COMPLETATE · <span style="color:${attuale.colore}">LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}</span>
+              ${allenamentiFatti}${prossimo ? ` / ${prossimo.allenamentiMin}` : ""} ALLENAMENTI · <span style="color:${attuale.colore}">LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}</span>
             </p>
             <div style="background:var(--surface-2); border-radius:4px; height:4px; margin-top:6px; overflow:hidden">
               <div style="background:${attuale.colore}; width:${pctBarra}%; height:100%"></div>

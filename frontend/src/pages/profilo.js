@@ -53,63 +53,55 @@ function calcolaEta(iso) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// "Personalizza il tuo profilo" — questionario a risposta guidata (mai testo libero).
+// "Obiettivi personali" — questionario a risposta guidata (mai testo libero).
 //
-// ⚠️ SEGNAPOSTO: Francesca fornirà le domande definitive. Per sostituirle basta
-// riscrivere QUESTO array — salvataggio, riassunto e rendering non cambiano.
-// Ogni voce: { id, testo, tipo: "singola" | "multipla", max?, opzioni: [{ v, label, emoji }] }.
-// L'emoji è il puntino d'elenco con cui l'obiettivo compare nella card "Obiettivi personali".
+// Per cambiare le domande basta riscrivere QUESTO array — salvataggio, riassunto e
+// rendering non cambiano. Ogni voce: { id, testo, tipo: "singola" | "multipla", max?,
+// opzioni: [{ v, label, emoji, esclusiva? }] }. L'emoji è il puntino d'elenco con cui la
+// risposta compare nella card. `esclusiva: true` = opzione che azzera le altre.
 // Risposte salvate: { [id]: "v" }  (singola)  |  { [id]: ["v1","v2"] }  (multipla).
 // ────────────────────────────────────────────────────────────────────────────
 const PERSONALIZZAZIONE_DOMANDE = [
   {
-    id: "obiettivo",
-    testo: "Qual è il tuo obiettivo principale?",
-    tipo: "singola",
-    opzioni: [
-      { v: "forma", label: "Rimettermi in forma", emoji: "✨" },
-      { v: "peso", label: "Perdere peso", emoji: "⚖️" },
-      { v: "massa", label: "Aumentare la massa muscolare", emoji: "💪🏻" },
-      { v: "forza", label: "Diventare più forte", emoji: "🏋️" },
-      { v: "mobilita", label: "Migliorare mobilità e flessibilità", emoji: "🤸" },
-      { v: "resistenza", label: "Più fiato e resistenza", emoji: "🫁" },
-      { v: "benessere", label: "Scaricare lo stress e stare bene", emoji: "🧘" },
-    ],
-  },
-  {
-    id: "esperienza",
-    testo: "Da quanto ti alleni con costanza?",
-    tipo: "singola",
-    opzioni: [
-      { v: "inizio", label: "Sto ricominciando adesso", emoji: "🌱" },
-      { v: "mesi", label: "Da qualche mese", emoji: "📆" },
-      { v: "anni", label: "Da un paio d'anni", emoji: "📅" },
-      { v: "sempre", label: "Da sempre", emoji: "🎖️" },
-    ],
-  },
-  {
-    id: "frequenza",
-    testo: "Quante volte a settimana vuoi allenarti?",
-    tipo: "singola",
-    opzioni: [
-      { v: "1", label: "1 volta a settimana", emoji: "⏱️" },
-      { v: "2", label: "2 volte a settimana", emoji: "⏱️" },
-      { v: "3", label: "3 volte a settimana", emoji: "⏱️" },
-      { v: "4+", label: "4 o più volte a settimana", emoji: "⏱️" },
-    ],
-  },
-  {
-    id: "focus",
-    testo: "Su quali aree vuoi concentrarti?",
+    id: "obiettivi",
+    testo: "Quali sono i tuoi obiettivi?",
     tipo: "multipla",
-    max: 2,
     opzioni: [
-      { v: "upper", label: "Parte superiore", emoji: "💪" },
-      { v: "core", label: "Core / addome", emoji: "🎯" },
-      { v: "gambe", label: "Gambe e glutei", emoji: "🦵" },
+      { v: "forza", label: "Diventare più forte", emoji: "💪" },
+      { v: "tonificare", label: "Tonificare il corpo", emoji: "🔥" },
+      { v: "resistenza", label: "Migliorare la resistenza", emoji: "🏃" },
+      { v: "mobilita", label: "Migliorare mobilità e movimento", emoji: "🧘" },
+      { v: "forma", label: "Sentirmi più in forma", emoji: "⚡" },
+      { v: "peso", label: "Perdere peso", emoji: "⚖️" },
+    ],
+  },
+  {
+    id: "migliorare",
+    testo: "Cosa vuoi migliorare?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "forza", label: "Forza", emoji: "🏋️" },
+      { v: "resistenza", label: "Resistenza", emoji: "🫁" },
       { v: "mobilita", label: "Mobilità", emoji: "🤸" },
-      { v: "cardio", label: "Cardio", emoji: "❤️‍🔥" },
-      { v: "tecnica", label: "Tecnica dei movimenti", emoji: "🎓" },
+      { v: "equilibrio", label: "Equilibrio", emoji: "⚖️" },
+      { v: "coordinazione", label: "Coordinazione", emoji: "🎯" },
+      { v: "core", label: "Core", emoji: "🔩" },
+      { v: "gambe", label: "Gambe e glutei", emoji: "🦵" },
+      { v: "upper", label: "Parte superiore del corpo", emoji: "💪" },
+    ],
+  },
+  {
+    id: "motivazione",
+    testo: "Cosa ti motiva a iniziare questo percorso?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "meglio", label: "Sentirmi meglio", emoji: "😊" },
+      { v: "cambiamenti", label: "Vedere dei cambiamenti", emoji: "🔎" },
+      { v: "energia", label: "Avere più energia", emoji: "⚡" },
+      { v: "forte", label: "Diventare più forte", emoji: "🏋️" },
+      { v: "forma", label: "Migliorare la forma fisica", emoji: "✨" },
+      { v: "cura", label: "Prendermi più cura di me", emoji: "💗" },
+      { v: "abitudine", label: "Creare una buona abitudine", emoji: "🔁" },
     ],
   },
   {
@@ -118,11 +110,13 @@ const PERSONALIZZAZIONE_DOMANDE = [
     tipo: "multipla",
     opzioni: [
       { v: "corsa", label: "Corsa / running", emoji: "🏃" },
-      { v: "pesi", label: "Sala pesi", emoji: "🏋️" },
-      { v: "squadra", label: "Sport di squadra", emoji: "⚽" },
       { v: "yoga", label: "Yoga / pilates", emoji: "🧘" },
-      { v: "camminate", label: "Camminate / trekking", emoji: "🥾" },
-      { v: "nessuno", label: "No, solo 100FT", emoji: "💯" },
+      { v: "squadra", label: "Sport di squadra", emoji: "⚽" },
+      { v: "camminate", label: "Camminata / trekking", emoji: "🥾" },
+      { v: "ciclismo", label: "Ciclismo", emoji: "🚴" },
+      { v: "individuali", label: "Sport individuali (tennis, padel, ecc.)", emoji: "🎾" },
+      { v: "altro", label: "Altro", emoji: "➕" },
+      { v: "nessuno", label: "No, solo 100FT", emoji: "💯", esclusiva: true },
     ],
   },
 ];
@@ -562,15 +556,15 @@ function initSchedaAzioni(scheda, d, ricarica) {
 // ─── Card "IMPOSTAZIONI" (in fondo al profilo): Notifiche push, Sicurezza,
 // Regolamento — ognuna a tendina — più il pulsante Esci. ───────────────────────
 
-// I 6 livelli con nome, colore e settimane complete necessarie per raggiungerli.
+// I 6 livelli con nome, colore e numero di allenamenti necessari per raggiungerli.
 // Tenere allineato a worker/src/lib/livelli.ts (LIVELLI).
 const LIVELLI_REGOLAMENTO = [
-  { numero: 1, nome: "Facile", colore: "#8BC53F", settimaneMin: 1 },
-  { numero: 2, nome: "Inizio", colore: "#2D7DD2", settimaneMin: 4 },
-  { numero: 3, nome: "Intermedio", colore: "#F4B740", settimaneMin: 9 },
-  { numero: 4, nome: "Avanzato", colore: "#FF7A29", settimaneMin: 16 },
-  { numero: 5, nome: "Esperto", colore: "#E63946", settimaneMin: 25 },
-  { numero: 6, nome: "Leggendario", colore: "#A85CFF", settimaneMin: 35 },
+  { numero: 1, nome: "Facile", colore: "#8BC53F", allenamentiMin: 3 },
+  { numero: 2, nome: "Inizio", colore: "#2D7DD2", allenamentiMin: 18 },
+  { numero: 3, nome: "Intermedio", colore: "#F4B740", allenamentiMin: 36 },
+  { numero: 4, nome: "Avanzato", colore: "#FF7A29", allenamentiMin: 60 },
+  { numero: 5, nome: "Esperto", colore: "#E63946", allenamentiMin: 75 },
+  { numero: 6, nome: "Leggendario", colore: "#A85CFF", allenamentiMin: 90 },
 ];
 
 function livelliRegolamentoHtml() {
@@ -584,7 +578,7 @@ function livelliRegolamentoHtml() {
           <img src="/cards/card_final_${l.numero}.png" alt="Livello ${l.numero} — ${l.nome}"
                style="width:92px; height:92px; object-fit:contain${l.numero >= 2 ? "; filter:blur(6px)" : ""}" />
           <p style="font-weight:700; font-size:12px; margin-top:4px; color:${l.colore}">${l.numero}. ${l.nome}</p>
-          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:1px">da ${l.settimaneMin} settiman${l.settimaneMin === 1 ? "a" : "e"} complete</p>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:1px">da ${l.allenamentiMin} allenamenti</p>
         </div>`
       ).join("")}
     </div>`;
@@ -944,7 +938,7 @@ function identitaCardHtml(p) {
 
   const livelloLinea = p.livello
     ? `<p class="mono" style="color:${p.livello.attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${p.livello.attuale.numero} — ${p.livello.attuale.nome}</p>`
-    : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — completa la tua prima settimana (Training + Challenges + Feedback) per sbloccarlo.</p>`;
+    : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — fai i tuoi primi 3 allenamenti per sbloccarlo.</p>`;
 
   const pastiglia = (hex, label, contenuto = "") => `
     <button type="button" class="col-opt" data-colore="${hex}" aria-label="${label}"

@@ -3,6 +3,7 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { inizioSettimana } from "../lib/settimana";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
+import { awardXp } from "../lib/xp";
 
 // Scala fissa del feedback "Com'è andata oggi?" — sempre e solo queste 5 faccine, mai stelle,
 // slider, numeri o altre emoji.
@@ -88,6 +89,9 @@ feedback.post("/", requireAuth, async (c) => {
   )
     .bind(c.var.user.userId, sessioneId, data, faccina, difficolta, nota?.trim() || null)
     .run();
+
+  // +2 punti per il feedback post-allenamento (sistema punti 2026-08).
+  await awardXp(c.env.DB, c.var.user.userId, "feedback_allenamento", 2);
 
   const dopo = await snapshotProgressione(c.env.DB, c.var.user.userId);
   await segnalaAvanzamento(c.env.DB, c.var.user.userId, prima, dopo);

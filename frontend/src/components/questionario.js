@@ -2,6 +2,9 @@
 // profilo" (profilo.js) e dal questionario mensile (home.js).
 // Tipi di domanda: "singola", "multipla" (con `max` opzionale), "faccine" (le 5 faccine
 // fisse 😫 😕 😐 🙂 🔥, mai sostituite).
+// Un'opzione `multipla` con `esclusiva: true` (es. "No, solo 100FT" / "Niente, va bene
+// così") si comporta come una scelta a parte: selezionarla azzera le altre e selezionarne
+// un'altra la deseleziona.
 
 // Le 5 faccine: sempre queste, in quest'ordine. Valore salvato = "1".."5".
 const FACCE = [
@@ -47,7 +50,7 @@ function domandaHtml(d, scelte) {
         ${opzioniDi(d)
           .map(
             (o) =>
-              `<button type="button" class="q-opt" data-v="${o.v}" style="${
+              `<button type="button" class="q-opt" data-v="${o.v}" data-esclusiva="${o.esclusiva ? 1 : 0}" style="${
                 faccia ? facciaStyle(selezionata(scelte, d.id, o.v)) : pillStyle(selezionata(scelte, d.id, o.v))
               }">${o.label}</button>`
           )
@@ -77,9 +80,18 @@ export function costruisciQuestionario(container, domande, scelteIniziali = {}) 
         const v = btn.dataset.v;
         if (tipo === "multipla") {
           const arr = Array.isArray(scelte[id]) ? scelte[id] : [];
-          if (arr.includes(v)) scelte[id] = arr.filter((x) => x !== v);
-          else if (!max || arr.length < max) scelte[id] = [...arr, v];
-          else return;
+          const esclusive = [...grp.querySelectorAll(".q-opt")]
+            .filter((b) => b.dataset.esclusiva === "1")
+            .map((b) => b.dataset.v);
+          if (arr.includes(v)) {
+            scelte[id] = arr.filter((x) => x !== v);
+          } else if (btn.dataset.esclusiva === "1") {
+            scelte[id] = [v]; // un'opzione esclusiva azzera tutte le altre
+          } else {
+            const senzaEsclusive = arr.filter((x) => !esclusive.includes(x));
+            if (!max || senzaEsclusive.length < max) scelte[id] = [...senzaEsclusive, v];
+            else return;
+          }
         } else {
           scelte[id] = scelte[id] === v ? undefined : v;
         }

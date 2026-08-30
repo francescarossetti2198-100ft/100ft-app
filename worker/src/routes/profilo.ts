@@ -96,7 +96,7 @@ profilo.get("/me", requireAuth, async (c) => {
     },
     role: c.var.user.role,
     anelli,
-    livello: calcolaLivello(anelli.settimaneCompletateTotali),
+    livello: calcolaLivello(presenzeTotali?.n ?? 0),
     puntiTotali: posizione?.punti ?? 0,
     classificaTotale: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
     sfideCompletate: sfideCompletate?.n ?? 0,

@@ -209,11 +209,10 @@ sfide.post("/", requireCoach, async (c) => {
     titolo?: string;
     descrizione?: string;
     tipo?: string;
-    punti?: number;
     data_inizio?: string;
     data_fine?: string;
   }>();
-  const { titolo, descrizione, tipo, punti, data_inizio, data_fine } = body;
+  const { titolo, descrizione, tipo, data_inizio, data_fine } = body;
 
   if (!titolo || !tipo || !data_inizio || !data_fine) {
     return c.json({ error: "Titolo, tipo, data_inizio e data_fine sono obbligatori" }, 400);
@@ -222,10 +221,12 @@ sfide.post("/", requireCoach, async (c) => {
     return c.json({ error: "Tipo sfida non valido" }, 400);
   }
 
+  // Ogni sfida completata vale 10 punti fissi (sistema punti 2026-08) — non più deciso dal coach.
+  const PUNTI_SFIDA = 10;
   const result = await c.env.DB.prepare(
     `INSERT INTO sfide (titolo, descrizione, tipo, punti, data_inizio, data_fine) VALUES (?, ?, ?, ?, ?, ?)`
   )
-    .bind(titolo, descrizione ?? null, tipo, punti ?? 0, data_inizio, data_fine)
+    .bind(titolo, descrizione ?? null, tipo, PUNTI_SFIDA, data_inizio, data_fine)
     .run();
 
   return c.json({ id: result.meta.last_row_id }, 201);

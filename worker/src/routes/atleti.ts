@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireCoach } from "../middleware/auth";
-import { calcolaAnelli } from "../lib/settimana";
 import { calcolaLivello } from "../lib/livelli";
 import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
@@ -50,8 +49,11 @@ atleti.get("/", requireCoach, async (c) => {
 
   const risultato = await Promise.all(
     utenti.map(async (u) => {
-      const [anelli, ultimoFeedback, richiesteRecenti, presenze4Sett, pagamento] = await Promise.all([
-        calcolaAnelli(db, u.userId),
+      const [presenzeTotali, ultimoFeedback, richiesteRecenti, presenze4Sett, pagamento] = await Promise.all([
+        db
+          .prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
+          .bind(u.userId)
+          .first<{ n: number }>(),
         db
           .prepare(`SELECT faccina, data FROM feedback_allenamento WHERE user_id = ? ORDER BY data DESC LIMIT 1`)
           .bind(u.userId)
@@ -80,7 +82,7 @@ atleti.get("/", requireCoach, async (c) => {
         nome: u.nome,
         cognome: u.cognome,
         nickname: u.nickname,
-        livello: calcolaLivello(anelli.settimaneCompletateTotali),
+        livello: calcolaLivello(presenzeTotali?.n ?? 0),
         presenzeUltime4Settimane: presenze4Sett?.n ?? 0,
         ultimoFeedback: ultimoFeedback ?? null,
         richiesteRecenti: richiesteRecenti.results,
@@ -127,9 +129,8 @@ atleti.get("/:id", requireCoach, async (c) => {
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 
-  const [anelli, presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei] =
+  const [presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei] =
     await Promise.all([
-      calcolaAnelli(db, id),
       db.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(id).first<{ n: number }>(),
       db
         .prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1 AND data >= date('now', '-28 days')`)
@@ -188,7 +189,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       personalizzazione: parseRisposte(anagraficaRow.personalizzazione),
     },
     attivita: {
-      livello: calcolaLivello(anelli.settimaneCompletateTotali),
+      livello: calcolaLivello(presenzeTotali?.n ?? 0),
       presenzeTotali: presenzeTotali?.n ?? 0,
       presenzeUltime4Settimane: presenze4Sett?.n ?? 0,
       feedbackRecenti: feedbackRecenti.results,

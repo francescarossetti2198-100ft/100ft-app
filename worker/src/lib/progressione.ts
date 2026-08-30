@@ -7,9 +7,17 @@ import { assegnaMilestone } from "./milestones";
 
 export type Snapshot = { anelli: StatoAnelli; livello: StatoLivello | null };
 
+// Il livello ora si calcola dal numero di allenamenti (presenze confermate), non dalle
+// settimane complete — vedi lib/livelli.ts.
 export async function snapshotProgressione(db: D1Database, userId: number): Promise<Snapshot> {
-  const anelli = await calcolaAnelli(db, userId);
-  return { anelli, livello: calcolaLivello(anelli.settimaneCompletateTotali) };
+  const [anelli, presenze] = await Promise.all([
+    calcolaAnelli(db, userId),
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
+      .bind(userId)
+      .first<{ n: number }>(),
+  ]);
+  return { anelli, livello: calcolaLivello(presenze?.n ?? 0) };
 }
 
 export async function segnalaAvanzamento(
