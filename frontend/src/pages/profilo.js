@@ -561,13 +561,15 @@ const LIVELLI_REGOLAMENTO = [
 ];
 
 function livelliRegolamentoHtml() {
+  // La card del livello 1 si vede, quelle da 2 a 6 restano sfocate: la grafica è
+  // una sorpresa che si svela salendo di livello.
   return `
     <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 0 4px; margin-top:4px">
       ${LIVELLI_REGOLAMENTO.map(
         (l) => `
         <div style="flex:0 0 auto; width:92px; text-align:center">
           <img src="/cards/card_final_${l.numero}.png" alt="Livello ${l.numero} — ${l.nome}"
-               style="width:92px; height:92px; object-fit:contain" />
+               style="width:92px; height:92px; object-fit:contain${l.numero >= 2 ? "; filter:blur(6px)" : ""}" />
           <p style="font-weight:700; font-size:12px; margin-top:4px; color:${l.colore}">${l.numero}. ${l.nome}</p>
           <p class="mono" style="color:var(--mute); font-size:11px; margin-top:1px">da ${l.settimaneMin} settiman${l.settimaneMin === 1 ? "a" : "e"} complete</p>
         </div>`
