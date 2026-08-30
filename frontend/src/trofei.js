@@ -1,5 +1,6 @@
-// Presentazione dei trofei di stagione (2 per stagione: Set–Dic, Gen–Lug).
-// Backend: worker/src/lib/trofei.ts -> { blocco, stagione, etichetta, conquistato, fatte, totale }.
+// Presentazione dei badge di stagione (2 per stagione: Set–Dic, Gen–Lug) — nel Profilo
+// sono la card "I tuoi badge". Backend: worker/src/lib/trofei.ts ->
+// { blocco, stagione, etichetta, conquistato, fatte, totale }.
 // L'emoji 🏆 è un segnaposto: la struttura è pronta per un'immagine dedicata.
 
 function emojiStyle(conquistato) {

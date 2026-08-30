@@ -37,6 +37,10 @@ const MESE_ACCENTO = {
   12: "#A85CFF", // Dicembre — viola (livello 6)
 };
 
+// Traguardo del mese a fine barra milestone. Icona Lucide "rocket": stroke
+// currentColor così prende il colore del mese (grigia/spenta o accesa via CSS).
+const ROCKET_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05z"/></svg>`;
+
 function meseNome(key) {
   return MESI[Number(key.split("-")[1]) - 1].toUpperCase();
 }
@@ -94,30 +98,22 @@ export function renderSfide(appEl) {
         letter-spacing: -0.5px; text-transform: uppercase; margin: 4px 0 0;
         color: var(--mese-accento, var(--accent));
       }
-      #sfide-blocco .mese-focus {
-        font-family: var(--font-ui); font-weight: 700;
-        font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--text); margin: 8px 0 0;
-      }
-      #sfide-blocco .mese-focus strong { color: var(--mese-accento, var(--accent)); font-weight: 700; }
       /* Barra di avanzamento: una milestone per ogni sfida del mese, piena fino alle
-         completate. La barra "porta" al trofeo di stagione a fine riga. */
+         completate. A fine barra il traguardo del mese (rocket): si accende quando
+         tutte le sfide del mese sono completate. */
       #sfide-blocco .mese-progress { display: flex; align-items: center; gap: 4px; margin: 12px 0 0; }
-      #sfide-blocco .mese-progress span:not(.mese-trofeo) {
+      #sfide-blocco .mese-progress span:not(.mese-traguardo) {
         flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2);
       }
       #sfide-blocco .mese-progress span.on { background: var(--mese-accento, var(--accent)); }
-      #sfide-blocco .mese-trofeo {
-        flex: 0 0 auto; font-size: 18px; line-height: 1; margin-left: 4px;
-        filter: grayscale(1); opacity: 0.35;
+      #sfide-blocco .mese-traguardo {
+        flex: 0 0 auto; margin-left: 6px; display: inline-flex;
+        color: var(--mute); opacity: 0.4; transition: opacity .2s ease, color .2s ease;
       }
-      #sfide-blocco .mese-trofeo.vinto {
-        filter: none; opacity: 1; text-shadow: 0 0 8px rgba(244, 183, 64, 0.6);
-      }
-      #sfide-blocco .mese-trofeo-nota {
-        font-family: var(--font-ui); font-weight: 700;
-        font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--text); margin: 8px 0 0;
+      #sfide-blocco .mese-traguardo svg { width: 22px; height: 22px; display: block; }
+      #sfide-blocco .mese-traguardo.on {
+        color: var(--mese-accento, var(--accent)); opacity: 1;
+        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mese-accento, var(--accent)) 70%, transparent));
       }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
@@ -337,23 +333,9 @@ async function loadSfide(el, meseVoluto) {
     return;
   }
 
-  // Trofei di stagione (Set–Dic / Gen–Lug) — la barra a milestone porta a quello del blocco.
-  // L'endpoint restituisce i 2 trofei della stagione corrente; li mostriamo solo sui mesi
-  // che appartengono a quella stagione (stesso calcolo di worker/src/lib/trofei.ts).
-  const { trofei } = await api.get("/sfide/trofei").catch(() => ({ trofei: [] }));
-  const trofeoDelMese = (key) => {
-    const anno = Number(key.split("-")[0]);
-    const m = Number(key.split("-")[1]);
-    let stagione;
-    let blocco;
-    if (m >= 9 && m <= 12) { stagione = anno; blocco = "autunno"; }
-    else if (m >= 1 && m <= 7) { stagione = anno - 1; blocco = "primavera"; }
-    else return null; // agosto: fuori stagione
-    return trofei.find((t) => t.blocco === blocco && t.stagione === stagione) ?? null;
-  };
-
-  // Focus tematico del mese (l'unica anticipazione concessa dal brief) — lo mostriamo come
-  // sottotitolo della scheda. Se l'endpoint non risponde, la scheda funziona lo stesso.
+  // Focus tematico del mese: non è più mostrato in scheda (richiesta di Francesca), ma
+  // serve ancora per decidere se anticipare il mese successivo nel carosello.
+  // Se l'endpoint non risponde, la scheda funziona lo stesso.
   const focusPerMese = new Map();
   try {
     const { mesi: programma } = await api.get("/programma");
@@ -395,9 +377,7 @@ async function loadSfide(el, meseVoluto) {
         <div class="mese-head" style="flex:1">
           <p class="mono mese-kicker">Sfide del mese</p>
           <h2 class="mese-title"></h2>
-          <p class="mono mese-focus" hidden></p>
           <div class="mese-progress" hidden></div>
-          <p class="mono mese-trofeo-nota" hidden></p>
         </div>
         <button type="button" class="mese-arrow" data-dir="1" aria-label="Mese successivo">›</button>
       </div>
@@ -411,9 +391,7 @@ async function loadSfide(el, meseVoluto) {
   const blocco = list.querySelector("#sfide-blocco");
   const titleEl = blocco.querySelector(".mese-title");
   const kickerEl = blocco.querySelector(".mese-kicker");
-  const focusEl = blocco.querySelector(".mese-focus");
   const progressEl = blocco.querySelector(".mese-progress");
-  const trofeoNotaEl = blocco.querySelector(".mese-trofeo-nota");
   const viewport = blocco.querySelector(".mese-viewport");
   const track = blocco.querySelector(".mese-track");
   const dotsBox = blocco.querySelector(".mese-dots");
@@ -427,24 +405,16 @@ async function loadSfide(el, meseVoluto) {
     blocco.style.setProperty("--mese-accento", accento);
     kickerEl.textContent = `Sfide · ${key.split("-")[0]}`;
     titleEl.textContent = meseNome(key);
-    const focus = focusPerMese.get(key);
-    focusEl.hidden = !focus;
-    if (focus) focusEl.innerHTML = `Focus del mese — <strong>${focus}</strong>`;
 
     // Una milestone per sfida del mese, piena fino alle completate; a fine barra il
-    // trofeo di stagione del blocco (Set–Dic o Gen–Lug), acceso solo se il blocco è chiuso.
-    const trofeo = trofeoDelMese(key);
-    progressEl.hidden = items.length === 0 && !trofeo;
+    // traguardo del mese (rocket), acceso solo se tutte le sfide del mese sono fatte.
+    const meseCompleto = items.length > 0 && completate === items.length;
+    progressEl.hidden = items.length === 0;
     progressEl.innerHTML =
       items.map((_, i) => `<span class="${i < completate ? "on" : ""}"></span>`).join("") +
-      (trofeo ? `<span class="mese-trofeo${trofeo.conquistato ? " vinto" : ""}" title="Trofeo ${trofeo.etichetta}">🏆</span>` : "");
-
-    trofeoNotaEl.hidden = !trofeo;
-    if (trofeo) {
-      trofeoNotaEl.textContent = trofeo.conquistato
-        ? `🏆 Trofeo ${trofeo.etichetta} conquistato`
-        : `Trofeo ${trofeo.etichetta} — ${trofeo.totale > 0 ? `${trofeo.fatte}/${trofeo.totale} sfide` : "nessuna sfida ancora"}`;
-    }
+      `<span class="mese-traguardo${meseCompleto ? " on" : ""}" title="${
+        meseCompleto ? "Traguardo del mese raggiunto" : "Completa tutte le sfide del mese"
+      }">${ROCKET_SVG}</span>`;
 
     track.innerHTML = items.length
       ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:6px">` +

@@ -3,19 +3,14 @@ import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
-import { costruisciQuestionario, riassuntoRisposte } from "../components/questionario.js";
+import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { trofeiRigaHtml } from "../trofei.js";
 
-const MILESTONE_LABEL = {
-  first_session: "Prima sessione 🎬",
-  "10_sessions": "10 sessioni 🔟",
-  "25_sessions": "25 sessioni 🏅",
-  first_month: "Primo mese 📅",
-  hydration_hero: "Hydration Hero 💧",
-  team_player: "Team Player 🤝",
-};
+// Palette fissa di brand per l'accento delle card del Profilo (i 6 colori livello + il
+// viola accent). Deve restare allineata a COLORI_CARD in worker/src/routes/profilo.ts.
+const COLORI_CARD = ["#8b5cf6", "#8bc53f", "#2d7dd2", "#f4b740", "#ff7a29", "#e63946", "#a85cff"];
 
 // Stessa scala fissa delle 5 faccine di feedback usata in Home (frontend/src/pages/home.js) —
 // mai sostituita, stesso ordine.
@@ -62,7 +57,8 @@ function calcolaEta(iso) {
 //
 // ⚠️ SEGNAPOSTO: Francesca fornirà le domande definitive. Per sostituirle basta
 // riscrivere QUESTO array — salvataggio, riassunto e rendering non cambiano.
-// Ogni voce: { id, testo, tipo: "singola" | "multipla", max?, opzioni: [{ v, label }] }.
+// Ogni voce: { id, testo, tipo: "singola" | "multipla", max?, opzioni: [{ v, label, emoji }] }.
+// L'emoji è il puntino d'elenco con cui l'obiettivo compare nella card "Obiettivi personali".
 // Risposte salvate: { [id]: "v" }  (singola)  |  { [id]: ["v1","v2"] }  (multipla).
 // ────────────────────────────────────────────────────────────────────────────
 const PERSONALIZZAZIONE_DOMANDE = [
@@ -71,13 +67,13 @@ const PERSONALIZZAZIONE_DOMANDE = [
     testo: "Qual è il tuo obiettivo principale?",
     tipo: "singola",
     opzioni: [
-      { v: "forma", label: "Rimettermi in forma" },
-      { v: "peso", label: "Perdere peso" },
-      { v: "massa", label: "Aumentare la massa muscolare" },
-      { v: "forza", label: "Diventare più forte" },
-      { v: "mobilita", label: "Migliorare mobilità e flessibilità" },
-      { v: "resistenza", label: "Più fiato e resistenza" },
-      { v: "benessere", label: "Scaricare lo stress e stare bene" },
+      { v: "forma", label: "Rimettermi in forma", emoji: "✨" },
+      { v: "peso", label: "Perdere peso", emoji: "⚖️" },
+      { v: "massa", label: "Aumentare la massa muscolare", emoji: "💪🏻" },
+      { v: "forza", label: "Diventare più forte", emoji: "🏋️" },
+      { v: "mobilita", label: "Migliorare mobilità e flessibilità", emoji: "🤸" },
+      { v: "resistenza", label: "Più fiato e resistenza", emoji: "🫁" },
+      { v: "benessere", label: "Scaricare lo stress e stare bene", emoji: "🧘" },
     ],
   },
   {
@@ -85,10 +81,10 @@ const PERSONALIZZAZIONE_DOMANDE = [
     testo: "Da quanto ti alleni con costanza?",
     tipo: "singola",
     opzioni: [
-      { v: "inizio", label: "Sto ricominciando adesso" },
-      { v: "mesi", label: "Da qualche mese" },
-      { v: "anni", label: "Da un paio d'anni" },
-      { v: "sempre", label: "Da sempre" },
+      { v: "inizio", label: "Sto ricominciando adesso", emoji: "🌱" },
+      { v: "mesi", label: "Da qualche mese", emoji: "📆" },
+      { v: "anni", label: "Da un paio d'anni", emoji: "📅" },
+      { v: "sempre", label: "Da sempre", emoji: "🎖️" },
     ],
   },
   {
@@ -96,10 +92,10 @@ const PERSONALIZZAZIONE_DOMANDE = [
     testo: "Quante volte a settimana vuoi allenarti?",
     tipo: "singola",
     opzioni: [
-      { v: "1", label: "1 volta" },
-      { v: "2", label: "2 volte" },
-      { v: "3", label: "3 volte" },
-      { v: "4+", label: "4 o più" },
+      { v: "1", label: "1 volta a settimana", emoji: "⏱️" },
+      { v: "2", label: "2 volte a settimana", emoji: "⏱️" },
+      { v: "3", label: "3 volte a settimana", emoji: "⏱️" },
+      { v: "4+", label: "4 o più volte a settimana", emoji: "⏱️" },
     ],
   },
   {
@@ -108,12 +104,12 @@ const PERSONALIZZAZIONE_DOMANDE = [
     tipo: "multipla",
     max: 2,
     opzioni: [
-      { v: "upper", label: "Parte superiore" },
-      { v: "core", label: "Core / addome" },
-      { v: "gambe", label: "Gambe e glutei" },
-      { v: "mobilita", label: "Mobilità" },
-      { v: "cardio", label: "Cardio" },
-      { v: "tecnica", label: "Tecnica dei movimenti" },
+      { v: "upper", label: "Parte superiore", emoji: "💪" },
+      { v: "core", label: "Core / addome", emoji: "🎯" },
+      { v: "gambe", label: "Gambe e glutei", emoji: "🦵" },
+      { v: "mobilita", label: "Mobilità", emoji: "🤸" },
+      { v: "cardio", label: "Cardio", emoji: "❤️‍🔥" },
+      { v: "tecnica", label: "Tecnica dei movimenti", emoji: "🎓" },
     ],
   },
   {
@@ -121,19 +117,20 @@ const PERSONALIZZAZIONE_DOMANDE = [
     testo: "Fai altro sport oltre a 100FT?",
     tipo: "multipla",
     opzioni: [
-      { v: "corsa", label: "Corsa / running" },
-      { v: "pesi", label: "Sala pesi" },
-      { v: "squadra", label: "Sport di squadra" },
-      { v: "yoga", label: "Yoga / pilates" },
-      { v: "camminate", label: "Camminate / trekking" },
-      { v: "nessuno", label: "No, solo 100FT" },
+      { v: "corsa", label: "Corsa / running", emoji: "🏃" },
+      { v: "pesi", label: "Sala pesi", emoji: "🏋️" },
+      { v: "squadra", label: "Sport di squadra", emoji: "⚽" },
+      { v: "yoga", label: "Yoga / pilates", emoji: "🧘" },
+      { v: "camminate", label: "Camminate / trekking", emoji: "🥾" },
+      { v: "nessuno", label: "No, solo 100FT", emoji: "💯" },
     ],
   },
 ];
 
-// Le label selezionate, una riga per domanda risposta (per il riassunto sul profilo).
-function riassuntoPersonalizzazione(answers) {
-  return riassuntoRisposte(PERSONALIZZAZIONE_DOMANDE, answers).map((r) => r.risposta);
+// Gli obiettivi selezionati come elenco { emoji, label } — una riga per opzione scelta
+// (card "Obiettivi personali" sul profilo e sezione OBIETTIVI della scheda coach).
+function obiettiviElenco(answers) {
+  return elencoRisposte(PERSONALIZZAZIONE_DOMANDE, answers);
 }
 
 // TODO: dati pubblici vs privati, stato pagamento (brief, sezione 14) — servono la Coach
@@ -183,22 +180,6 @@ function scalaLivelliHtml(livello) {
   `;
 }
 
-function achievementsHtml(milestones) {
-  if (!milestones?.length) {
-    return `<p class="mono" style="color:var(--mute); font-size:13px">Nessun traguardo ancora.</p>`;
-  }
-  return `
-    <div style="display:flex; flex-wrap:wrap; gap:8px">
-      ${milestones
-        .map(
-          (m) =>
-            `<span class="mono" style="font-size:12px; background:var(--surface-2); border-radius:6px; padding:5px 9px">${MILESTONE_LABEL[m.tipo] ?? m.tipo}</span>`
-        )
-        .join("")}
-    </div>
-  `;
-}
-
 function giorniFa(dataIso) {
   const giorni = Math.round((Date.now() - new Date(`${dataIso}T00:00:00Z`).getTime()) / 86400000);
   if (giorni === 0) return "oggi";
@@ -221,15 +202,18 @@ function pagamentoBadgeHtml(userId, stato) {
 // per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
 // invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
 // apre il selettore quando viene attivato dalla label.
-function fotoProfiloHtml(fotoUrl, iniziale) {
+function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
+  const media = fotoUrl
+    ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
+    : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${iniziale}</span>`;
+
+  // Fuori dalla modalità modifica: solo la foto, niente "Cambia foto" / input.
+  if (!modifica) return `<div style="text-align:center">${media}</div>`;
+
   return `
     <div style="text-align:center">
       <label for="foto-input" style="cursor:pointer; display:inline-block">
-        ${
-          fotoUrl
-            ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
-            : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${iniziale}</span>`
-        }
+        ${media}
         <p class="mono link-btn" style="margin-top:6px; font-size:12px">${fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
       </label>
       <input id="foto-input" type="file" accept="image/*"
@@ -364,7 +348,7 @@ function schedaAtletaHtml(d) {
       <span style="font-size:14px; text-align:right">${val ?? "—"}</span>
     </div>`;
 
-  const obiettivi = riassuntoPersonalizzazione(dp.personalizzazione);
+  const obiettivi = obiettiviElenco(dp.personalizzazione);
 
   const feedbackHtml = at.feedbackRecenti.length
     ? at.feedbackRecenti
@@ -460,10 +444,10 @@ function schedaAtletaHtml(d) {
       <p class="mono" style="color:var(--mute); font-size:12px">OBIETTIVI</p>
       ${
         obiettivi.length
-          ? `<div style="margin-top:6px; display:flex; flex-direction:column; gap:4px">${obiettivi
-              .map((o) => `<p style="font-size:14px">${esc(o)}</p>`)
-              .join("")}</div>`
-          : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px">Non ha ancora personalizzato il profilo.</p>`
+          ? `<ul style="list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:5px">${obiettivi
+              .map((o) => `<li style="font-size:14px">${o.emoji} ${esc(o.label)}</li>`)
+              .join("")}</ul>`
+          : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px">Non ha ancora indicato i suoi obiettivi.</p>`
       }
     </div>
 
@@ -490,7 +474,7 @@ function schedaAtletaHtml(d) {
     </div>
 
     <div class="card" style="margin-top:12px">
-      <p class="mono" style="color:var(--mute); font-size:12px">TROFEI</p>
+      <p class="mono" style="color:var(--mute); font-size:12px">BADGE</p>
       <div style="margin-top:10px">${trofeiRigaHtml(at.trofei)}</div>
     </div>
 
@@ -547,28 +531,102 @@ function initSchedaAzioni(scheda, d, ricarica) {
   });
 }
 
-function sicurezzaCardHtml() {
+// ─── Card "IMPOSTAZIONI" (in fondo al profilo): Notifiche push, Sicurezza,
+// Regolamento — ognuna a tendina — più il pulsante Esci. ───────────────────────
+
+// Come funziona l'app, in breve. Bozza: Francesca può ritoccare i testi.
+const REGOLAMENTO = [
+  {
+    titolo: "Banner presenze",
+    corpo:
+      "In Home segni la tua presenza il giorno dell'allenamento. È il gesto da cui parte tutto: senza presenza la settimana non si chiude.",
+  },
+  {
+    titolo: "Anelli di riepilogo",
+    corpo:
+      "Ogni settimana ha tre anelli: Allenamento (presenza), Sfide e Feedback. Quando li chiudi tutti e tre, la settimana è completata e conta per il livello.",
+  },
+  {
+    titolo: "Classifica",
+    corpo:
+      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle sfide completate. La freccia indica se sei salito o sceso rispetto al periodo prima.",
+  },
+  {
+    titolo: "Livelli",
+    corpo:
+      "Ci sono 6 livelli. Si sale accumulando settimane completate (non conta la fila, contano quante in totale). La card del livello e la scala sono nel Profilo.",
+  },
+  {
+    titolo: "Badge",
+    corpo:
+      "I badge di stagione (autunno e primavera) si sbloccano completando le sfide del periodo. Li trovi nella card «I tuoi badge».",
+  },
+  {
+    titolo: "Programma",
+    corpo:
+      "Ogni mese la coach pubblica il programma: focus del mese, obiettivo, perché, risultato atteso, sane abitudini e le merende fit. I mesi futuri restano bloccati finché non è il loro turno.",
+  },
+  {
+    titolo: "Feed",
+    corpo:
+      "Il diario del gruppo: livelli raggiunti, sfide, Daily Drop, annunci della coach. Puoi reagire ai post con le emoji, niente commenti.",
+  },
+  {
+    titolo: "Obiettivi personali",
+    corpo:
+      "Rispondi a qualche domanda guidata sui tuoi obiettivi: la coach li vede e tara il lavoro su di te. Puoi rivederli quando vuoi dalla card «Obiettivi personali».",
+  },
+];
+
+function regolamentoHtml() {
+  return REGOLAMENTO.map(
+    (r) => `
+      <div style="padding:8px 0; border-top:1px solid var(--border)">
+        <p style="font-weight:700; font-size:13px">${r.titolo}</p>
+        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:3px; line-height:1.5">${r.corpo}</p>
+      </div>`
+  ).join("");
+}
+
+function impostazioniCardHtml() {
   return `
-    <div class="card" style="margin-top:12px" id="sicurezza-card">
-      <p class="mono" style="color:var(--mute); font-size:12px">SICUREZZA</p>
-      <button class="link-btn" id="apri-cambio-password" style="margin-top:8px">Cambia password</button>
-      <form id="cambio-password-form" hidden style="margin-top:12px">
-        <div class="field">
-          <label for="pw-attuale">Password attuale</label>
-          <input id="pw-attuale" type="password" autocomplete="current-password" required />
-        </div>
-        <div class="field">
-          <label for="pw-nuova">Nuova password</label>
-          <input id="pw-nuova" type="password" autocomplete="new-password" minlength="8" required />
-        </div>
-        <div class="field">
-          <label for="pw-conferma">Conferma nuova password</label>
-          <input id="pw-conferma" type="password" autocomplete="new-password" minlength="8" required />
-        </div>
-        <p class="error-text" id="pw-error" hidden></p>
-        <p class="success-text" id="pw-success" hidden>Password aggiornata.</p>
-        <button class="btn" type="submit" style="width:100%">Salva nuova password</button>
-      </form>
+    <div class="card" style="margin-top:12px" id="impostazioni-card">
+      <p class="sezione-label">Impostazioni</p>
+      <div style="margin-top:10px">
+        <details class="blocco-mese" id="notifiche-card">
+          <summary>Notifiche push</summary>
+          <div class="blocco-corpo">
+            <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+          </div>
+        </details>
+        <details class="blocco-mese" id="sicurezza-card">
+          <summary>Sicurezza</summary>
+          <div class="blocco-corpo">
+            <form id="cambio-password-form">
+              <div class="field">
+                <label for="pw-attuale">Password attuale</label>
+                <input id="pw-attuale" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field">
+                <label for="pw-nuova">Nuova password</label>
+                <input id="pw-nuova" type="password" autocomplete="new-password" minlength="8" required />
+              </div>
+              <div class="field">
+                <label for="pw-conferma">Conferma nuova password</label>
+                <input id="pw-conferma" type="password" autocomplete="new-password" minlength="8" required />
+              </div>
+              <p class="error-text" id="pw-error" hidden></p>
+              <p class="success-text" id="pw-success" hidden>Password aggiornata.</p>
+              <button class="btn" type="submit" style="width:100%">Salva nuova password</button>
+            </form>
+          </div>
+        </details>
+        <details class="blocco-mese">
+          <summary>Regolamento</summary>
+          <div class="blocco-corpo">${regolamentoHtml()}</div>
+        </details>
+      </div>
+      <button class="btn" id="impostazioni-logout" style="width:100%; margin-top:14px; background:var(--surface-2); color:var(--text)">Esci</button>
     </div>
   `;
 }
@@ -576,14 +634,9 @@ function sicurezzaCardHtml() {
 function initSicurezza(content) {
   const card = content.querySelector("#sicurezza-card");
   if (!card) return;
-  const apri = card.querySelector("#apri-cambio-password");
   const form = card.querySelector("#cambio-password-form");
   const errorEl = card.querySelector("#pw-error");
   const successEl = card.querySelector("#pw-success");
-
-  apri.addEventListener("click", () => {
-    form.hidden = !form.hidden;
-  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -660,57 +713,60 @@ function datiPersonaliCardHtml(p) {
     "width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:14px";
   return `
     <div class="card" style="margin-top:12px" id="dati-card">
-      <div style="display:flex; justify-content:space-between; align-items:baseline">
-        <p class="mono" style="color:var(--mute); font-size:12px">I TUOI DATI</p>
-        <button type="button" class="link-btn" id="dati-modifica">Modifica</button>
-      </div>
-      <div id="dati-vista" style="margin-top:6px">
-        ${riga("Data di nascita", dn ? `${dn}${eta != null ? ` · ${eta} anni` : ""}` : null)}
-        ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
-        ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
-        ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
-        <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">Visibili solo a te e alla coach</p>
-      </div>
-      <form id="dati-form" hidden style="margin-top:12px">
-        <div class="field">
-          <label for="dati-data">Data di nascita</label>
-          <input id="dati-data" type="date" value="${p.dataNascita ?? ""}" />
-        </div>
-        <div style="display:flex; gap:10px">
-          <div class="field" style="flex:1">
-            <label for="dati-peso">Peso (kg)</label>
-            <input id="dati-peso" type="number" step="0.1" min="20" max="300" inputmode="decimal" value="${dp.peso ?? ""}" />
+      <details class="blocco-mese" id="dati-details">
+        <summary>I tuoi dati</summary>
+        <div class="blocco-corpo">
+          <div id="dati-vista">
+            ${riga("Data di nascita", dn ? `${dn}${eta != null ? ` · ${eta} anni` : ""}` : null)}
+            ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
+            ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
+            ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
+            <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">Visibili solo a te e alla coach</p>
+            <button type="button" class="link-btn" id="dati-modifica" style="margin-top:8px">Modifica</button>
           </div>
-          <div class="field" style="flex:1">
-            <label for="dati-altezza">Altezza (cm)</label>
-            <input id="dati-altezza" type="number" step="1" min="100" max="250" inputmode="numeric" value="${dp.altezza ?? ""}" />
-          </div>
+          <form id="dati-form" hidden style="margin-top:12px">
+            <div class="field">
+              <label for="dati-data">Data di nascita</label>
+              <input id="dati-data" type="date" value="${p.dataNascita ?? ""}" />
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="field" style="flex:1">
+                <label for="dati-peso">Peso (kg)</label>
+                <input id="dati-peso" type="number" step="0.1" min="20" max="300" inputmode="decimal" value="${dp.peso ?? ""}" />
+              </div>
+              <div class="field" style="flex:1">
+                <label for="dati-altezza">Altezza (cm)</label>
+                <input id="dati-altezza" type="number" step="1" min="100" max="250" inputmode="numeric" value="${dp.altezza ?? ""}" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="dati-note">Note / infortuni (per la coach)</label>
+              <textarea id="dati-note" rows="3" maxlength="1000" style="${inputStyle}; resize:vertical">${dp.noteInfortuni ? esc(dp.noteInfortuni) : ""}</textarea>
+            </div>
+            <p class="error-text" id="dati-error" hidden></p>
+            <div style="display:flex; gap:8px">
+              <button class="btn" type="submit" style="flex:1">Salva</button>
+              <button type="button" class="btn" id="dati-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
+            </div>
+          </form>
         </div>
-        <div class="field">
-          <label for="dati-note">Note / infortuni (per la coach)</label>
-          <textarea id="dati-note" rows="3" maxlength="1000" style="${inputStyle}; resize:vertical">${dp.noteInfortuni ? esc(dp.noteInfortuni) : ""}</textarea>
-        </div>
-        <p class="error-text" id="dati-error" hidden></p>
-        <div style="display:flex; gap:8px">
-          <button class="btn" type="submit" style="flex:1">Salva</button>
-          <button type="button" class="btn" id="dati-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
-        </div>
-      </form>
+      </details>
     </div>`;
 }
 
 function initDatiPersonali(content, onSaved) {
   const card = content.querySelector("#dati-card");
   if (!card) return;
+  const dettaglio = card.querySelector("#dati-details");
   const vista = card.querySelector("#dati-vista");
   const form = card.querySelector("#dati-form");
   const modifica = card.querySelector("#dati-modifica");
   const errorEl = card.querySelector("#dati-error");
 
   const apri = (mostra) => {
+    if (mostra) dettaglio.open = true;
     form.hidden = !mostra;
     vista.hidden = mostra;
-    modifica.hidden = mostra;
   };
   modifica.addEventListener("click", () => apri(true));
   card.querySelector("#dati-annulla").addEventListener("click", () => apri(false));
@@ -739,19 +795,22 @@ function initDatiPersonali(content, onSaved) {
   });
 }
 
-// ─── Card "PERSONALIZZA IL TUO PROFILO" (questionario a risposta guidata) ───
-function personalizzaCardHtml(p) {
+// ─── Card "OBIETTIVI PERSONALI" (questionario a risposta guidata, mostrato come
+// elenco puntato con emoji) ───
+function obiettiviCardHtml(p) {
   const answers = p.datiPrivati?.personalizzazione ?? {};
-  const riassunto = riassuntoPersonalizzazione(answers);
-  const compilata = riassunto.length > 0;
+  const elenco = obiettiviElenco(answers);
+  const compilata = elenco.length > 0;
   return `
     <div class="card" style="margin-top:12px" id="personalizza-card">
-      <p class="mono" style="color:var(--mute); font-size:12px">PERSONALIZZA IL TUO PROFILO</p>
+      <p class="sezione-label">Obiettivi personali</p>
       <div id="personalizza-vista" style="margin-top:8px">
         ${
           compilata
-            ? `<p style="font-size:14px">${riassunto.map(esc).join(" · ")}</p>
-               <button type="button" class="link-btn" id="personalizza-apri" style="margin-top:8px">Rivedi le risposte</button>`
+            ? `<ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px">${elenco
+                 .map((o) => `<li style="font-size:14px">${o.emoji} ${esc(o.label)}</li>`)
+                 .join("")}</ul>
+               <button type="button" class="link-btn" id="personalizza-apri" style="margin-top:10px">Modifica gli obiettivi</button>`
             : `<p class="mono" style="color:var(--mute); font-size:13px">Rispondi a qualche domanda veloce: la coach potrà tarare meglio il lavoro su di te.</p>
                <button class="btn" type="button" id="personalizza-apri" style="width:100%; margin-top:10px">Inizia</button>`
         }
@@ -805,6 +864,134 @@ function initPersonalizza(content, p, onSaved) {
   });
 }
 
+// ─── Prima card: identità (foto + nome + livello). Matita in alto a destra →
+// modalità modifica di foto, nickname, nome, cognome e colore delle card. ───
+function identitaCardHtml(p) {
+  const nomeCompleto = `${p.nome ?? ""} ${p.cognome ?? ""}`.trim();
+  const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
+
+  const livelloLinea = p.livello
+    ? `<p class="mono" style="color:${p.livello.attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${p.livello.attuale.numero} — ${p.livello.attuale.nome}</p>`
+    : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — completa la tua prima settimana (Training + Challenges + Feedback) per sbloccarlo.</p>`;
+
+  const pastiglia = (hex, label, contenuto = "") => `
+    <button type="button" class="col-opt" data-colore="${hex}" aria-label="${label}"
+      style="width:28px; height:28px; border-radius:50%; background:${hex || "var(--surface-2)"};
+             display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--mute);
+             cursor:pointer; border:2px solid ${(p.cardColore ?? "") === hex ? "var(--text)" : "transparent"}">${contenuto}</button>`;
+
+  return `
+    <div class="card" id="identita-card" style="position:relative">
+      <button type="button" class="link-btn" id="identita-modifica" aria-label="Modifica profilo"
+        style="position:absolute; top:12px; right:12px; text-decoration:none; font-size:16px">✏️</button>
+
+      <div id="identita-vista">
+        ${fotoProfiloHtml(p.fotoUrl, iniziale, false)}
+        <p style="font-weight:700; font-size:20px; margin-top:10px; text-align:center">${esc(p.nickname || nomeCompleto || "Atleta")}</p>
+        ${
+          p.nickname && nomeCompleto
+            ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:2px; text-align:center">${esc(nomeCompleto)}</p>`
+            : ""
+        }
+        ${livelloLinea}
+      </div>
+
+      <form id="identita-form" hidden style="margin-top:6px">
+        ${fotoProfiloHtml(p.fotoUrl, iniziale, true)}
+        <div class="field" style="margin-top:12px">
+          <label for="id-nickname">Nickname</label>
+          <input id="id-nickname" type="text" maxlength="40" value="${esc(p.nickname ?? "")}" />
+        </div>
+        <div style="display:flex; gap:10px">
+          <div class="field" style="flex:1">
+            <label for="id-nome">Nome</label>
+            <input id="id-nome" type="text" maxlength="60" value="${esc(p.nome ?? "")}" />
+          </div>
+          <div class="field" style="flex:1">
+            <label for="id-cognome">Cognome</label>
+            <input id="id-cognome" type="text" maxlength="60" value="${esc(p.cognome ?? "")}" />
+          </div>
+        </div>
+        <p style="font-size:13px; color:var(--mute); margin:0 0 6px">Colore delle card</p>
+        <div id="id-colori" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px">
+          ${COLORI_CARD.map((hex) => pastiglia(hex, hex)).join("")}
+          ${pastiglia("", "Predefinito", "✕")}
+        </div>
+        <p class="error-text" id="identita-error" hidden></p>
+        <div style="display:flex; gap:8px">
+          <button class="btn" type="submit" style="flex:1">Salva</button>
+          <button type="button" class="btn" id="identita-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function initIdentita(content, p, onSaved) {
+  const card = content.querySelector("#identita-card");
+  if (!card) return;
+  const vista = card.querySelector("#identita-vista");
+  const form = card.querySelector("#identita-form");
+  const modifica = card.querySelector("#identita-modifica");
+  const errorEl = card.querySelector("#identita-error");
+  let coloreScelto = p.cardColore ?? "";
+
+  const apri = (mostra) => {
+    form.hidden = !mostra;
+    vista.hidden = mostra;
+    modifica.hidden = mostra;
+    // annullando, ripristina l'anteprima colore allo stato salvato
+    if (!mostra) {
+      coloreScelto = p.cardColore ?? "";
+      applicaColore(coloreScelto);
+    }
+  };
+  const applicaColore = (hex) => {
+    if (hex) content.style.setProperty("--accent", hex);
+    else content.style.removeProperty("--accent");
+    card.querySelectorAll(".col-opt").forEach((x) => {
+      x.style.borderColor = x.dataset.colore === hex ? "var(--text)" : "transparent";
+    });
+  };
+
+  modifica.addEventListener("click", () => apri(true));
+  card.querySelector("#identita-annulla").addEventListener("click", () => apri(false));
+
+  card.querySelectorAll(".col-opt").forEach((b) => {
+    b.addEventListener("click", () => {
+      coloreScelto = b.dataset.colore;
+      applicaColore(coloreScelto); // anteprima immediata
+    });
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+    const nome = card.querySelector("#id-nome").value.trim();
+    const cognome = card.querySelector("#id-cognome").value.trim();
+    if (!nome || !cognome) {
+      errorEl.textContent = "Nome e cognome non possono essere vuoti";
+      errorEl.hidden = false;
+      return;
+    }
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.post("/profilo/me", {
+        nickname: card.querySelector("#id-nickname").value.trim() || null,
+        nome,
+        cognome,
+        cardColore: coloreScelto || null,
+      });
+      onSaved();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+      btn.disabled = false;
+    }
+  });
+}
+
 async function loadProfilo(el) {
   const content = el.querySelector("#profilo-content");
   try {
@@ -817,109 +1004,70 @@ async function loadProfilo(el) {
       return;
     }
 
-    const nomeVisualizzato = p.nickname || p.nome || "Atleta";
+    const scalaCard = p.livello
+      ? `<div class="card" style="margin-top:12px; text-align:center">
+           <img src="/cards/card_final_${p.livello.attuale.numero}.png" alt="Livello ${p.livello.attuale.numero}"
+                style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
+           <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
+           <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
+         </div>`
+      : "";
 
-    const fotoHtml = fotoProfiloHtml(p.fotoUrl, nomeVisualizzato[0]?.toUpperCase() ?? "?");
-
-    const statsHtml = `
-      <div class="card" style="margin-top:12px; display:flex; justify-content:space-around; text-align:center">
-        <div>
-          <p style="font-weight:600; font-size:18px">${p.presenzeTotali}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Presenze tot.</p>
-        </div>
-        <div>
-          <p style="font-weight:600; font-size:18px">${p.anelli.settimaneCompletateTotali}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
-        </div>
-        <div>
-          <p style="font-weight:600; font-size:18px">${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}</p>
-          <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
-        </div>
-      </div>
-    `;
-
-    const achievementsCard = `
+    const progressiCard = `
       <div class="card" style="margin-top:12px">
-        <p class="mono" style="color:var(--mute); font-size:12px">Achievements</p>
-        <div style="margin-top:8px">${achievementsHtml(p.milestones)}</div>
+        <p class="sezione-label">I tuoi progressi</p>
+        <div style="display:flex; justify-content:space-around; text-align:center; margin-top:14px">
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.presenzeTotali}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Presenze tot.</p>
+          </div>
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.anelli.settimaneCompletateTotali}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
+          </div>
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
+          </div>
+        </div>
       </div>
     `;
 
-    const notificheCard = `
-      <div class="card" style="margin-top:12px" id="notifiche-card">
-        <p class="mono" style="color:var(--mute); font-size:12px">NOTIFICHE PUSH</p>
-        <div id="notifiche-stato" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
-      </div>
-    `;
-
-    const sicurezzaCard = sicurezzaCardHtml();
-    const datiCard = datiPersonaliCardHtml(p);
-    const personalizzaCard = personalizzaCardHtml(p);
-    const trofeiCard = `
+    const badgeCard = `
       <div class="card" style="margin-top:12px">
-        <p class="mono" style="color:var(--mute); font-size:12px">I TUOI TROFEI</p>
-        <div style="margin-top:10px">${trofeiRigaHtml(p.trofei)}</div>
+        <p class="sezione-label">I tuoi badge</p>
+        <div style="margin-top:12px">${trofeiRigaHtml(p.trofei)}</div>
       </div>`;
 
-    // Sotto la foto: nickname grande, poi Nome Cognome più piccolo. Senza nickname,
-    // il nome completo sta sulla riga grande e non c'è la seconda riga.
-    const nomeCompleto = `${p.nome ?? ""} ${p.cognome ?? ""}`.trim();
-    const nomeCard = `
-      <p style="font-weight:700; font-size:20px; margin-top:10px; text-align:center">${esc(p.nickname || nomeCompleto || "Atleta")}</p>
-      ${
-        p.nickname && nomeCompleto
-          ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:2px; text-align:center">${esc(nomeCompleto)}</p>`
-          : ""
-      }
+    content.innerHTML = `
+      ${identitaCardHtml(p)}
+      ${scalaCard}
+      ${datiPersonaliCardHtml(p)}
+      ${obiettiviCardHtml(p)}
+      ${badgeCard}
+      ${progressiCard}
+      ${impostazioniCardHtml()}
     `;
 
-    if (!p.livello) {
-      content.innerHTML = `
-        <div class="card">
-          ${fotoHtml}
-          ${nomeCard}
-          <p class="mono" style="color:var(--mute); margin-top:8px">
-            Nessun livello ancora — completa la tua prima settimana (Training + Challenges + Feedback) per sbloccarlo.
-          </p>
-        </div>
-        ${datiCard}
-        ${personalizzaCard}
-        ${trofeiCard}
-        ${statsHtml}
-        ${achievementsCard}
-        ${notificheCard}
-        ${sicurezzaCard}
-      `;
-    } else {
-      const { attuale } = p.livello;
-      content.innerHTML = `
-        <div class="card">
-          ${fotoHtml}
-          ${nomeCard}
-          <p class="mono" style="color:${attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${attuale.numero} — ${attuale.nome}</p>
-        </div>
-        <div class="card" style="margin-top:12px; text-align:center">
-          <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
-               style="width:120px; height:120px; border-radius:12px; object-fit:cover" />
-          <p class="mono" style="color:var(--mute); font-size:12px; margin-top:10px">Scala livelli</p>
-          <div style="margin-top:8px">${scalaLivelliHtml(p.livello)}</div>
-        </div>
-        ${datiCard}
-        ${personalizzaCard}
-        ${trofeiCard}
-        ${statsHtml}
-        ${achievementsCard}
-        ${notificheCard}
-        ${sicurezzaCard}
-      `;
-    }
+    // Colore d'accento scelto dall'atleta: applicato come --accent sul wrapper, così
+    // barrette .sezione-label, link e bottoni delle card prendono quel colore.
+    if (p.cardColore) content.style.setProperty("--accent", p.cardColore);
+    else content.style.removeProperty("--accent");
+
+    // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
+    // (resta solo per la coach, che non ha la card Impostazioni).
+    el.querySelector("#logout-btn")?.remove();
 
     attachFotoUpload(content, () => loadProfilo(el));
-
+    initIdentita(content, p, () => loadProfilo(el));
     initDatiPersonali(content, () => loadProfilo(el));
     initPersonalizza(content, p, () => loadProfilo(el));
     initNotifiche(content);
     initSicurezza(content);
+    content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {
+      await logout();
+      navigate("/login");
+    });
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }

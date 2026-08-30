@@ -103,6 +103,21 @@ export function costruisciQuestionario(container, domande, scelteIniziali = {}) 
   };
 }
 
+// [{ emoji, label }] — una voce per ogni opzione selezionata (non una per domanda).
+// Usato dalla card "Obiettivi personali" del profilo: elenco puntato con emoji.
+export function elencoRisposte(domande, risposte) {
+  const out = [];
+  for (const d of domande) {
+    const v = risposte?.[d.id];
+    if (v == null || (Array.isArray(v) && v.length === 0)) continue;
+    for (const x of Array.isArray(v) ? v : [v]) {
+      const o = d.opzioni?.find((op) => op.v === x);
+      out.push({ emoji: o?.emoji ?? "•", label: o?.label ?? String(x) });
+    }
+  }
+  return out;
+}
+
 // [{ testo, risposta }] con le label leggibili — per i riassunti (profilo + scheda coach).
 export function riassuntoRisposte(domande, risposte) {
   const out = [];

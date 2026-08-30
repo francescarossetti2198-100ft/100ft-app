@@ -13,6 +13,27 @@ const TIPO_INFO = {
 
 const EMOJI = ["👍", "🔥", "💪", "🎉"];
 
+// Playlist "ufficio 100FT" su Spotify — mini-banner in cima al Feed.
+// TODO: Francesca fornirà l'URL definitivo della playlist; poi rebuild + deploy frontend.
+const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/";
+
+// Nota musicale monocromatica (SVG inline) — niente asset esterni, niente embed Spotify.
+const NOTA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:18px;height:18px"><path d="M9 17.5a2.5 2.5 0 1 1-2.5-2.5c.5 0 .97.15 1.36.4L8 15V6.2c0-.56.38-1.05.92-1.19l7-1.87A1.23 1.23 0 0 1 17 4.32V13a2.5 2.5 0 1 1-2.5-2.5c.5 0 .97.15 1.36.4l.14.1V7.1L9 8.9v8.6z"/></svg>`;
+
+function bannerSpotifyHtml() {
+  return `
+    <a class="card" href="${SPOTIFY_PLAYLIST_URL}" target="_blank" rel="noopener"
+       style="display:flex; align-items:center; gap:12px; margin-bottom:14px; text-decoration:none">
+      <span style="flex:0 0 auto; width:38px; height:38px; border-radius:50%; background:#1DB954;
+                   color:#fff; display:flex; align-items:center; justify-content:center">${NOTA_SVG}</span>
+      <span style="min-width:0">
+        <strong style="display:block; font-size:14px">Playlist ufficio 100FT</strong>
+        <span class="mono" style="color:var(--mute); font-size:12px">Ascoltala su Spotify ↗</span>
+      </span>
+    </a>
+  `;
+}
+
 function tempoFa(dataIso) {
   const diffMs = Date.now() - new Date(dataIso + "Z").getTime();
   const minuti = Math.floor(diffMs / 60000);
@@ -29,6 +50,7 @@ export function renderFeed(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <h1>Feed</h1>
+    ${bannerSpotifyHtml()}
     <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
   appEl.appendChild(el);
