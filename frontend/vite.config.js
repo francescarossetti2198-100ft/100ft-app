@@ -23,6 +23,11 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
+      // Registriamo il SW a mano in main.js (con updateViaCache:"none") invece del
+      // registerSW.js generato: sul dominio custom Cloudflare serve /sw.js con
+      // Cache-Control: max-age=14400, quindi senza "none" il browser non si accorge
+      // di un nuovo SW per 4 ore dopo un deploy.
+      injectRegister: false,
       // Service worker scritto a mano (src/sw.js) invece che generato — serve per gestire
       // gli eventi "push"/"notificationclick" delle notifiche reali, non solo la cache offline.
       strategies: "injectManifest",

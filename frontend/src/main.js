@@ -26,17 +26,28 @@ registerRoute("/feed", { render: renderFeed });
 registerRoute("/profilo", { render: renderProfilo });
 registerRoute("/coach", { render: renderCoach });
 
-// Quando un nuovo service worker prende il controllo (dopo un deploy, vedi src/sw.js),
-// ricarica una volta sola così l'utente vede subito la versione aggiornata invece della
-// pagina servita dalla cache vecchia. Il controllo su `controller` esclude la primissima
-// visita (nessun SW ancora installato), dove il claim non è un aggiornamento.
-if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-  let inRicarica = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (inRicarica) return;
-    inRicarica = true;
-    window.location.reload();
+// Registrazione service worker (injectRegister:false in vite.config.js). `updateViaCache:
+// "none"` = per controllare se c'è un SW nuovo, il browser scarica sempre /sw.js dalla
+// rete, ignorando la cache HTTP: sul dominio custom Cloudflare serve /sw.js con
+// max-age=14400 (4h), quindi senza questo un deploy non verrebbe visto per ore.
+if ("serviceWorker" in navigator) {
+  const eraGiaControllato = Boolean(navigator.serviceWorker.controller);
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => {});
   });
+
+  // Quando il SW nuovo prende il controllo (skipWaiting + clients.claim in src/sw.js),
+  // ricarica una volta sola per mostrare subito la versione aggiornata. Il controllo su
+  // `eraGiaControllato` esclude la primissima visita, dove il claim non è un aggiornamento.
+  if (eraGiaControllato) {
+    let inRicarica = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (inRicarica) return;
+      inRicarica = true;
+      window.location.reload();
+    });
+  }
 }
 
 async function bootstrap() {
