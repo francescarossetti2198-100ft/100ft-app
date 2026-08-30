@@ -106,6 +106,10 @@ export function renderCoach(appEl) {
       </div>
 
       <p class="sezione-label" style="margin-top:20px">Merende fit</p>
+      <p class="mono" id="merende-mese-nota" style="color:var(--mute); font-size:12px; margin-top:6px">
+        Le merende qui sotto finiscono nel mese selezionato in alto. La data "Per il giorno"
+        dice solo agli atleti in che giorno vale — NON sposta la merenda in un altro mese.
+      </p>
       <div id="merende-rows" style="margin-top:10px; display:flex; flex-direction:column; gap:10px"></div>
       <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
 
@@ -309,6 +313,8 @@ function initPiano(el) {
   // mese nuovo senza merende). Se il caricamento fallisce restiamo a false e il salvataggio
   // NON invia il campo `merende` → il worker lascia intatte quelle già salvate.
   let merendeSincronizzate = false;
+  let primoCarica = true;
+  const nota = el.querySelector("#merende-mese-nota");
 
   async function carica() {
     errorEl.hidden = true;
@@ -317,10 +323,31 @@ function initPiano(el) {
     merendeRows.innerHTML = "";
     merendeSincronizzate = false;
 
-    const mese = Number(meseSel.value);
-    const anno = Number(annoInput.value);
+    let mese = Number(meseSel.value);
+    let anno = Number(annoInput.value);
     try {
       const { mesi } = await api.get("/programma");
+
+      // Al primo caricamento, se il mese di default (mese di calendario) è PRIMA dell'inizio
+      // della stagione, spostati sul primo mese disponibile. Senza questo, ad agosto la
+      // tendina parte da "Agosto" e il coach rischia di salvare contenuti/merende su un mese
+      // che non compare nel Programma (fuori stagione) — è successo davvero.
+      if (primoCarica && mesi.length) {
+        const chiave = (m) => m.anno * 100 + m.mese;
+        if (chiave({ mese, anno }) < chiave(mesi[0])) {
+          mese = mesi[0].mese;
+          anno = mesi[0].anno;
+          meseSel.value = String(mese);
+          annoInput.value = String(anno);
+        }
+      }
+      primoCarica = false;
+      if (nota) {
+        nota.textContent =
+          `Stai modificando ${MESI[mese - 1]} ${anno}. Le merende finiscono in questo mese; ` +
+          `la data "Per il giorno" dice solo agli atleti quando vale, non le sposta.`;
+      }
+
       const esistente = mesi.find((m) => m.mese === mese && m.anno === anno);
       if (!esistente) {
         merendeSincronizzate = true; // mese nuovo: nessuna merenda, form vuoto di proposito

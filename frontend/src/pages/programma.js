@@ -55,6 +55,32 @@ function merendaDisponibile(dataIso, ora = new Date()) {
   return ora >= disponibileDa && ora <= fineSettimana(giorno);
 }
 
+// Card di una merenda: grafica a piena larghezza in cima (cliccabile per ingrandirla),
+// poi data / titolo / descrizione / link video. Deve restare valido HTML dentro il
+// template di loadDettaglio.
+function merendaCard(mf) {
+  const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
+  const data = mf.data ? etichettaData(mf.data) : null;
+  const titolo = (mf.titolo ?? "").trim();
+  const foto = mf.fotoUrl ? mediaUrl(mf.fotoUrl) : null;
+
+  return `
+    <div class="card" style="background:var(--surface-2)">
+      ${
+        foto
+          ? `<a href="${foto}" target="_blank" rel="noopener noreferrer" style="display:block; margin-bottom:10px" aria-label="Apri l'immagine">
+               <img src="${foto}" alt="" style="width:100%; border-radius:12px; display:block" />
+             </a>`
+          : ""
+      }
+      ${data ? `<p class="mono" style="color:var(--accent); font-size:11px">${data}</p>` : ""}
+      ${titolo ? `<p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${titolo}</p>` : ""}
+      ${mf.descrizione ? descrizioneMerenda(mf.descrizione, data || titolo ? "4px" : "0") : ""}
+      ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:8px">▶ Guarda la video ricetta</a>` : ""}
+    </div>
+  `;
+}
+
 // Descrizione di una merenda: se ha più righe la mostra come elenco puntato (di solito
 // è una lista di ingredienti), altrimenti come singolo paragrafo.
 function descrizioneMerenda(testo, marginTop) {
@@ -230,22 +256,7 @@ async function loadDettaglio(content, id, bloccato = false) {
             ? `
               <p class="sezione-label" style="margin-top:20px">Merende fit</p>
               <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px">
-                ${merende
-                  .map((mf) => {
-                    const link = mf.linkUrl ? linkSicuro(mf.linkUrl) : null;
-                    const data = mf.data ? etichettaData(mf.data) : null;
-                    const titolo = (mf.titolo ?? "").trim();
-                    return `
-                      <div class="card" style="background:var(--surface-2)">
-                        ${mf.fotoUrl ? `<img src="${mediaUrl(mf.fotoUrl)}" alt="" style="width:100%; border-radius:12px; display:block; margin-bottom:10px" />` : ""}
-                        ${data ? `<p class="mono" style="color:var(--accent); font-size:11px">${data}</p>` : ""}
-                        ${titolo ? `<p style="font-weight:600; font-size:14px; margin-top:${data ? "2px" : "0"}">${titolo}</p>` : ""}
-                        ${mf.descrizione ? descrizioneMerenda(mf.descrizione, data || titolo ? "4px" : "0") : ""}
-                        ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="mono" style="color:var(--accent); font-size:12px; display:inline-block; margin-top:8px">▶ Guarda la video ricetta</a>` : ""}
-                      </div>
-                    `;
-                  })
-                  .join("")}
+                ${merende.map((mf) => merendaCard(mf)).join("")}
               </div>
             `
             : isCoach()

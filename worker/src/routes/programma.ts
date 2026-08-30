@@ -77,10 +77,11 @@ programma.get("/:id", requireAuth, async (c) => {
   }
 
   const { results: merende } = await c.env.DB.prepare(
-    `SELECT titolo, descrizione, link_url AS linkUrl, data, foto_url AS fotoUrl FROM merende_fit WHERE programma_id = ? ORDER BY data IS NULL, data, ordine`
+    `SELECT id, titolo, descrizione, link_url AS linkUrl, data, foto_url AS fotoUrl
+     FROM merende_fit WHERE programma_id = ? ORDER BY data IS NULL, data, ordine`
   )
     .bind(id)
-    .all<{ titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null; fotoUrl: string | null }>();
+    .all<{ id: number; titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null; fotoUrl: string | null }>();
 
   return c.json({ ...mese, merende });
 });
