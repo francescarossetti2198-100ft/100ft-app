@@ -139,6 +139,21 @@ export function renderProfilo(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
+    <style>
+      /* Colore scelto dall'atleta (--accent su #profilo-content): tinge in modo tenue
+         lo sfondo e il bordo di tutte le schede del profilo. */
+      #profilo-content.ha-colore .card {
+        background-color: color-mix(in srgb, var(--accent) 8%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+      }
+      /* Lineetta accento sotto il titolo della scheda "I tuoi dati" (il <summary> a
+         tendina non ha la barretta di .sezione-label). */
+      #profilo-content #dati-card > .blocco-mese > summary { position: relative; padding-bottom: 18px; }
+      #profilo-content #dati-card > .blocco-mese > summary::before {
+        content: ""; position: absolute; left: 0; bottom: 7px;
+        width: 26px; height: 3px; border-radius: 2px; background: var(--accent);
+      }
+    </style>
     <h1>Profilo</h1>
     <div id="profilo-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     <button class="btn" id="logout-btn" style="margin-top:20px">Esci</button>
@@ -949,6 +964,7 @@ function initIdentita(content, p, onSaved) {
   const applicaColore = (hex) => {
     if (hex) content.style.setProperty("--accent", hex);
     else content.style.removeProperty("--accent");
+    content.classList.toggle("ha-colore", !!hex);
     card.querySelectorAll(".col-opt").forEach((x) => {
       x.style.borderColor = x.dataset.colore === hex ? "var(--text)" : "transparent";
     });
@@ -1050,9 +1066,11 @@ async function loadProfilo(el) {
     `;
 
     // Colore d'accento scelto dall'atleta: applicato come --accent sul wrapper, così
-    // barrette .sezione-label, link e bottoni delle card prendono quel colore.
+    // barrette .sezione-label, link e bottoni prendono quel colore; la classe
+    // .ha-colore aggiunge la tinta tenue su sfondo/bordo di tutte le schede.
     if (p.cardColore) content.style.setProperty("--accent", p.cardColore);
     else content.style.removeProperty("--accent");
+    content.classList.toggle("ha-colore", !!p.cardColore);
 
     // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
     // (resta solo per la coach, che non ha la card Impostazioni).

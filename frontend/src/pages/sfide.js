@@ -37,10 +37,6 @@ const MESE_ACCENTO = {
   12: "#A85CFF", // Dicembre — viola (livello 6)
 };
 
-// Traguardo del mese a fine barra milestone. Icona Lucide "rocket": stroke
-// currentColor così prende il colore del mese (grigia/spenta o accesa via CSS).
-const ROCKET_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05z"/></svg>`;
-
 function meseNome(key) {
   return MESI[Number(key.split("-")[1]) - 1].toUpperCase();
 }
@@ -99,21 +95,18 @@ export function renderSfide(appEl) {
         color: var(--mese-accento, var(--accent));
       }
       /* Barra di avanzamento: una milestone per ogni sfida del mese, piena fino alle
-         completate. A fine barra il traguardo del mese (rocket): si accende quando
-         tutte le sfide del mese sono completate. */
+         completate. A fine barra la medaglia del mese: da lineata (in bianco/nero) a
+         colorata quando tutte le sfide del mese sono completate. */
       #sfide-blocco .mese-progress { display: flex; align-items: center; gap: 4px; margin: 12px 0 0; }
-      #sfide-blocco .mese-progress span:not(.mese-traguardo) {
-        flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2);
-      }
+      #sfide-blocco .mese-progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); }
       #sfide-blocco .mese-progress span.on { background: var(--mese-accento, var(--accent)); }
-      #sfide-blocco .mese-traguardo {
-        flex: 0 0 auto; margin-left: 6px; display: inline-flex;
-        color: var(--mute); opacity: 0.4; transition: opacity .2s ease, color .2s ease;
+      #sfide-blocco .mese-medaglia {
+        flex: 0 0 auto; width: 26px; height: 26px; margin-left: 8px; display: block;
+        object-fit: contain; opacity: 0.55; transition: opacity .2s ease, filter .2s ease;
       }
-      #sfide-blocco .mese-traguardo svg { width: 22px; height: 22px; display: block; }
-      #sfide-blocco .mese-traguardo.on {
-        color: var(--mese-accento, var(--accent)); opacity: 1;
-        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mese-accento, var(--accent)) 70%, transparent));
+      #sfide-blocco .mese-medaglia.on {
+        opacity: 1;
+        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mese-accento, var(--accent)) 55%, transparent));
       }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
@@ -406,15 +399,15 @@ async function loadSfide(el, meseVoluto) {
     kickerEl.textContent = `Sfide · ${key.split("-")[0]}`;
     titleEl.textContent = meseNome(key);
 
-    // Una milestone per sfida del mese, piena fino alle completate; a fine barra il
-    // traguardo del mese (rocket), acceso solo se tutte le sfide del mese sono fatte.
+    // Una milestone per sfida del mese, piena fino alle completate; a fine barra la
+    // medaglia del mese: colorata solo se tutte le sfide del mese sono completate.
     const meseCompleto = items.length > 0 && completate === items.length;
     progressEl.hidden = items.length === 0;
     progressEl.innerHTML =
       items.map((_, i) => `<span class="${i < completate ? "on" : ""}"></span>`).join("") +
-      `<span class="mese-traguardo${meseCompleto ? " on" : ""}" title="${
+      `<img class="mese-medaglia${meseCompleto ? " on" : ""}" src="/medal-${meseCompleto ? "on" : "off"}.png" alt="" title="${
         meseCompleto ? "Traguardo del mese raggiunto" : "Completa tutte le sfide del mese"
-      }">${ROCKET_SVG}</span>`;
+      }" />`;
 
     track.innerHTML = items.length
       ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:6px">` +
