@@ -152,6 +152,16 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">APPELLO</p>
+      <select id="appello-data" style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
+              border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:15px"></select>
+      <div id="appello-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+      <p class="error-text" id="appello-error" hidden></p>
+      <p class="success-text" id="appello-success" hidden>Appello confermato ✓</p>
+      <button class="btn" id="appello-salva" style="width:100%; margin-top:8px" hidden>Conferma appello</button>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE PRE-ALLENAMENTO DI OGGI</p>
       <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
       <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
@@ -167,7 +177,98 @@ export function renderCoach(appEl) {
   initNota(el);
   initPiano(el);
   initSfida(el);
+  initAppello(el);
   initRichieste(el);
+}
+
+function formatGiornoBreve(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const g = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=dom
+  const nomi = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+  return `${nomi[g]} ${d}/${m}`;
+}
+
+// Appello digitale: il coach conferma chi era davvero presente all'allenamento; solo così
+// scattano i 10 punti presenza. Modificabile anche per le date passate.
+function initAppello(el) {
+  const sel = el.querySelector("#appello-data");
+  const lista = el.querySelector("#appello-lista");
+  const btn = el.querySelector("#appello-salva");
+  const errorEl = el.querySelector("#appello-error");
+  const successEl = el.querySelector("#appello-success");
+  let sessioneId = null;
+
+  async function carica() {
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    lista.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
+
+    let d;
+    try {
+      d = await api.get(`/presenze/appello${sel.value ? `?data=${sel.value}` : ""}`);
+    } catch (err) {
+      lista.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      return;
+    }
+
+    if (!sel.dataset.pop && d.giorniRecenti?.length) {
+      sel.innerHTML = d.giorniRecenti
+        .map((g) => `<option value="${g}">${g === oggiIso() ? "Oggi" : formatGiornoBreve(g)}</option>`)
+        .join("");
+      sel.value = d.data;
+      sel.dataset.pop = "1";
+    }
+
+    if (!d.sessione) {
+      sessioneId = null;
+      btn.hidden = true;
+      lista.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun allenamento in questa data.</p>`;
+      return;
+    }
+
+    sessioneId = d.sessione.id;
+    btn.hidden = false;
+    btn.textContent = d.confermato ? "Aggiorna appello" : "Conferma appello";
+
+    lista.innerHTML = d.atleti.length
+      ? d.atleti
+          .map((a) => {
+            const nome = a.nickname || a.nome;
+            const spuntato = a.confermata || a.richiesta ? "checked" : "";
+            const tag = a.richiesta
+              ? `<span class="mono" style="color:var(--accent); font-size:11px; white-space:nowrap">ha prenotato</span>`
+              : "";
+            return `
+              <label style="display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--border)">
+                <input type="checkbox" class="appello-check" data-user-id="${a.userId}" ${spuntato} />
+                <span style="flex:1; font-size:14px">${nome}</span>${tag}
+              </label>`;
+          })
+          .join("")
+      : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta.</p>`;
+  }
+
+  sel.addEventListener("change", carica);
+
+  btn.addEventListener("click", async () => {
+    if (!sessioneId) return;
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    const presentiUserIds = [...lista.querySelectorAll(".appello-check:checked")].map((c) => Number(c.dataset.userId));
+    btn.disabled = true;
+    try {
+      await api.post("/presenze/appello", { data: sel.value, sessioneId, presentiUserIds });
+      successEl.hidden = false;
+      await carica();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  carica();
 }
 
 function initNota(el) {

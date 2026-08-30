@@ -427,6 +427,10 @@ async function loadTimeline(el) {
         segno = "✓ ";
         stato = "PRESENTE";
         statoColore = "var(--accent)";
+      } else if (s.stato === "in_attesa") {
+        segno = conclusa ? "◔ " : "● ";
+        stato = conclusa ? "IN ATTESA" : "PRENOTATO";
+        statoColore = conclusa ? "var(--mute)" : "var(--accent)";
       } else if (s.stato === "assente" || (s.stato === "indeciso" && conclusa)) {
         segno = "✗ ";
         stato = "ASSENTE";
@@ -442,7 +446,7 @@ async function loadTimeline(el) {
         <p class="gt-nome">${segno}${giorno}</p>
         <p class="gt-ora mono">${orario}</p>
         <p class="gt-stato mono" style="color:${statoColore}">${stato}</p>
-        ${oggi ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per confermare" : "tocca per cambiare"}</p>` : ""}
+        ${oggi ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per prenotare" : s.stato === "in_attesa" ? "tocca per annullare" : "tocca per cambiare"}</p>` : ""}
       `;
 
       return oggi
@@ -468,7 +472,8 @@ async function loadTimeline(el) {
 
     card.querySelector(".giorno-tile.oggi")?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
-      const presente = btn.dataset.stato !== "presente"; // presente ⇄ assente; da "indeciso" → presente
+      // Se ha già prenotato (o è confermato presente) il tocco annulla, altrimenti prenota.
+      const presente = !["in_attesa", "presente"].includes(btn.dataset.stato);
       btn.disabled = true;
       try {
         await api.post("/presenze/conferma", { presente });
@@ -605,7 +610,7 @@ async function loadRichieste(el) {
 async function loadFeedback(el) {
   const card = el.querySelector("#ao-feedback");
   try {
-    const { sessione, confermata } = await api.get("/presenze/oggi");
+    const { sessione, richiesta } = await api.get("/presenze/oggi");
 
     if (!sessione) {
       card.innerHTML = "";
@@ -625,7 +630,7 @@ async function loadFeedback(el) {
       return;
     }
 
-    if (!confermata) {
+    if (!richiesta) {
       card.innerHTML = sezione(
         "POST ALLENAMENTO",
         `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px">SESSIONE NON FREQUENTATA</p>`

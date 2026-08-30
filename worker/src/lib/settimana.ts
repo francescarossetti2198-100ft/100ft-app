@@ -76,8 +76,9 @@ export type SessioneSettimana = {
   oraInizio: string;
   oraFine: string;
   confermata: boolean;
-  // "indeciso" = nessuna scelta ancora fatta; "assente" = ha segnato esplicitamente assenza.
-  stato: "presente" | "assente" | "indeciso";
+  // "indeciso" = nessuna scelta; "in_attesa" = ha prenotato, il coach non ha ancora fatto
+  // l'appello; "presente"/"assente" = esito dell'appello del coach.
+  stato: "presente" | "assente" | "in_attesa" | "indeciso";
 };
 
 // Le 3 (o quante sono) sessioni di questa settimana con lo stato di presenza — per la
@@ -93,11 +94,23 @@ export async function sessioniSettimanaConStato(db: D1Database, userId: number):
     const data = new Date(inizio);
     data.setUTCDate(data.getUTCDate() + (s.giornoSettimana - 1));
     const dataIso = data.toISOString().slice(0, 10);
-    const presenza = await db
-      .prepare(`SELECT confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`)
-      .bind(userId, s.id, dataIso)
-      .first<{ confermata: number }>();
-    const stato = presenza == null ? "indeciso" : presenza.confermata ? "presente" : "assente";
+    const [presenza, appello] = await Promise.all([
+      db
+        .prepare(`SELECT confermata, presenza_richiesta AS richiesta FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`)
+        .bind(userId, s.id, dataIso)
+        .first<{ confermata: number; richiesta: number }>(),
+      db
+        .prepare(`SELECT 1 FROM appello_conferme WHERE data = ? AND sessione_id = ?`)
+        .bind(dataIso, s.id)
+        .first(),
+    ]);
+
+    let stato: SessioneSettimana["stato"];
+    if (presenza == null) stato = "indeciso";
+    else if (presenza.confermata) stato = "presente";
+    else if (presenza.richiesta && !appello) stato = "in_attesa";
+    else stato = "assente";
+
     risultato.push({
       sessioneId: s.id,
       data: dataIso,

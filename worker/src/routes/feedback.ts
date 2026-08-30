@@ -26,7 +26,7 @@ feedback.get("/da-dare", requireAuth, async (c) => {
     `SELECT p.data, p.sessione_id AS sessioneId, s.ora_fine AS oraFine
      FROM presenze p
      JOIN sessioni_gruppo s ON s.id = p.sessione_id
-     WHERE p.user_id = ? AND p.confermata = 1 AND p.data BETWEEN ? AND ?
+     WHERE p.user_id = ? AND p.presenza_richiesta = 1 AND p.data BETWEEN ? AND ?
        AND NOT EXISTS (
          SELECT 1 FROM feedback_allenamento f
          WHERE f.user_id = p.user_id AND f.sessione_id = p.sessione_id AND f.data = p.data
@@ -61,7 +61,7 @@ feedback.post("/", requireAuth, async (c) => {
   if (!DIFFICOLTA.includes(difficolta)) return c.json({ error: "Difficoltà non valida" }, 400);
 
   const presenza = await c.env.DB.prepare(
-    `SELECT id FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ? AND confermata = 1`
+    `SELECT id FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ? AND presenza_richiesta = 1`
   )
     .bind(c.var.user.userId, sessioneId, data)
     .first();

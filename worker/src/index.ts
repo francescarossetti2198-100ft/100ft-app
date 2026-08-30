@@ -21,6 +21,7 @@ import performance from "./routes/performance";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
+import { inviaAppelloSeAttivo } from "./lib/appelloPush";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -80,5 +81,6 @@ export default {
     ctx.waitUntil(inviaDailyDropSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaAllenamentoSeAttivo(env));
     ctx.waitUntil(inviaFeedbackMensileSeAttivo(env));
+    ctx.waitUntil(inviaAppelloSeAttivo(env));
   },
 };

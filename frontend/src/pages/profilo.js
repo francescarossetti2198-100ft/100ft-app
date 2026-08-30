@@ -287,10 +287,20 @@ function renderProfiloCoach(content, p, onFotoCaricata) {
   function renderLista() {
     content.innerHTML = `
       <div class="card" style="margin-bottom:12px">${fotoProfiloHtml(p?.fotoUrl, "C")}</div>
+      <div class="card" style="margin-bottom:12px">
+        <details class="blocco-mese" id="notifiche-card">
+          <summary>Notifiche push</summary>
+          <div class="blocco-corpo">
+            <p class="mono" style="color:var(--mute); font-size:12px; margin-bottom:8px">Ricevi la notifica per fare l'appello a fine allenamento.</p>
+            <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+          </div>
+        </details>
+      </div>
       <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">PROFILI ATLETI</p>
       <div class="card" style="margin-top:10px" id="atleti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     `;
     attachFotoUpload(content, onFotoCaricata ?? (() => {}));
+    initNotifiche(content);
 
     const list = content.querySelector("#atleti-list");
     api
