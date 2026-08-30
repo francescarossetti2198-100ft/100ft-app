@@ -1,5 +1,10 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
+import { getUser } from "../auth.js";
+
+// Il coach usa questa pagina come anteprima: vede tutti i mesi (anche quelli bloccati
+// per gli atleti) e tutte le merende (senza il filtro di visibilità settimanale).
+const isCoach = () => getUser()?.role === "coach";
 
 // Solo http/https: evita che un link_url malformato (es. "javascript:...") diventi un href eseguibile.
 function linkSicuro(url) {
@@ -105,7 +110,11 @@ export function renderProgramma(appEl) {
     <h1>Programma</h1>
     <div id="mesi-tabs" style="display:flex; gap:8px; overflow-x:auto; padding:12px 0"></div>
     <p class="mono" style="color:var(--mute); font-size:12px">
-      I mesi futuri si sbloccano quando arrivano — niente spoiler sul programma 😉
+      ${
+        isCoach()
+          ? "Anteprima coach — vedi tutti i mesi e tutte le merende, anche quelli ancora bloccati per gli atleti."
+          : "I mesi futuri si sbloccano quando arrivano — niente spoiler sul programma 😉"
+      }
     </p>
     <div id="mese-content" style="margin-top:16px"></div>
   `;
@@ -128,9 +137,17 @@ async function loadMesi(el) {
       return;
     }
 
-    // Default: l'ultimo mese sbloccato (il più recente disponibile).
-    const sbloccati = mesi.filter((m) => m.sbloccato);
-    let selezionato = (sbloccati.at(-1) ?? mesi[0]).id;
+    // Default atleta: l'ultimo mese sbloccato. Default coach: il mese corrente (o il
+    // primo futuro se la stagione non è ancora iniziata).
+    let selezionato;
+    if (isCoach()) {
+      const oggi = new Date();
+      const chiaveOggi = oggi.getFullYear() * 100 + (oggi.getMonth() + 1);
+      selezionato = (mesi.find((m) => m.anno * 100 + m.mese >= chiaveOggi) ?? mesi.at(-1) ?? mesi[0]).id;
+    } else {
+      const sbloccati = mesi.filter((m) => m.sbloccato);
+      selezionato = (sbloccati.at(-1) ?? mesi[0]).id;
+    }
 
     tabs.innerHTML = mesi
       .map(
@@ -160,28 +177,34 @@ async function loadMesi(el) {
       btn.addEventListener("click", () => {
         const id = Number(btn.dataset.id);
         const mese = mesi.find((m) => m.id === id);
-        if (!mese.sbloccato) return;
+        if (!mese.sbloccato && !isCoach()) return;
         selezionaTab(id);
-        loadDettaglio(content, id);
+        loadDettaglio(content, id, !mese.sbloccato);
       });
     });
 
-    loadDettaglio(content, selezionato);
+    loadDettaglio(content, selezionato, !mesi.find((m) => m.id === selezionato)?.sbloccato);
   } catch (err) {
     tabs.remove();
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }
 }
 
-async function loadDettaglio(content, id) {
+async function loadDettaglio(content, id, bloccato = false) {
   content.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
   try {
     const m = await api.get(`/programma/${id}`);
-    const merende = (m.merende ?? []).filter((mf) => merendaDisponibile(mf.data));
+    // Il coach vede tutte le merende; l'atleta solo quelle nella finestra della settimana.
+    const merende = isCoach() ? (m.merende ?? []) : (m.merende ?? []).filter((mf) => merendaDisponibile(mf.data));
 
     content.innerHTML = `
       <div class="card">
         <p class="mono" style="color:var(--accent); font-size:12px">${MESI[m.mese - 1].toUpperCase()} · ${m.anno}</p>
+        ${
+          bloccato && isCoach()
+            ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">🔒 Bloccato per gli atleti — lo vedi solo tu in anteprima</p>`
+            : ""
+        }
 
         <p class="sezione-label" style="margin-top:14px">Focus del mese</p>
         <h2 style="margin-top:10px; color:var(--accent)">${m.focusTema ?? "Focus del mese"}</h2>
