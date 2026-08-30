@@ -7,8 +7,8 @@
 // - CHALLENGES: sfide completate questo MESE / quota mensile (QUOTA_SFIDE_MESE sotto —
 //   provvisoria finché non sarà configurabile dal coach, come la probabilità del Daily Drop).
 //   Basato sul numero di sfide, non sui punti XP (sistema separato).
-// - FEEDBACK: feedback dati questa settimana / sessioni EFFETTIVAMENTE frequentate questa
-//   settimana — chi non si allena non viene penalizzato sul denominatore.
+// - FEEDBACK: feedback dati questa settimana / sessioni programmate questa settimana (stesso
+//   denominatore di TRAINING — 3 allenamenti a settimana = 3 feedback post-workout attesi).
 //
 // "Settimana completata" = tutti e 3 gli anelli chiusi quella settimana. Per una settimana
 // passata, la quota CHALLENGES si valuta sul mese a cui appartiene (il mese del suo lunedì —
@@ -141,8 +141,10 @@ export async function calcolaAnelli(db: D1Database, userId: number): Promise<Sta
   const sfidePerMese = contaPerMese(dateSfide);
 
   const trainingFattiCorrente = Math.min(presenzePerSett.get(chiaveSettCorrente) ?? 0, sessioniPerSettimana);
-  const feedbackTotaliCorrente = presenzePerSett.get(chiaveSettCorrente) ?? 0;
-  const feedbackFattiCorrente = Math.min(feedbackPerSett.get(chiaveSettCorrente) ?? 0, feedbackTotaliCorrente);
+  // Denominatore FEEDBACK = sessioni programmate a settimana (come TRAINING): l'atleta si
+  // aspetta "1/3, 2/3, 3/3" perché sono 3 allenamenti = 3 feedback post-workout.
+  const feedbackTotaliCorrente = sessioniPerSettimana;
+  const feedbackFattiCorrente = Math.min(feedbackPerSett.get(chiaveSettCorrente) ?? 0, sessioniPerSettimana);
   const challengesFatteCorrente = sfidePerMese.get(chiaveMeseCorrente) ?? 0;
 
   const meseDellaSettimana = (chiaveSettimana: string): string | null => {
@@ -154,7 +156,7 @@ export async function calcolaAnelli(db: D1Database, userId: number): Promise<Sta
   for (const [settimana, presenze] of presenzePerSett) {
     if (presenze < sessioniPerSettimana) continue; // TRAINING non chiuso
     const feedbackSett = feedbackPerSett.get(settimana) ?? 0;
-    if (feedbackSett < presenze) continue; // FEEDBACK non completo sulle sessioni frequentate
+    if (feedbackSett < sessioniPerSettimana) continue; // FEEDBACK non chiuso (serve 1 per sessione)
     const mese = meseDellaSettimana(settimana);
     const challengesMese = mese ? (sfidePerMese.get(mese) ?? 0) : 0;
     if (challengesMese < QUOTA_SFIDE_MESE) continue; // CHALLENGES non chiuso quel mese

@@ -14,8 +14,7 @@ const TIPO_INFO = {
 const EMOJI = ["👍", "🔥", "💪", "🎉"];
 
 // Playlist ufficiale di 100FT su Spotify — mini-banner in cima al Feed.
-// TODO: Francesca fornirà l'URL definitivo della playlist; poi rebuild + deploy frontend.
-const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/";
+const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/playlist/3Qw3Mw1PuhB8H1BslDyWaw";
 
 // Nota musicale monocromatica (SVG inline) — niente asset esterni, niente embed Spotify.
 const NOTA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:18px;height:18px"><path d="M9 17.5a2.5 2.5 0 1 1-2.5-2.5c.5 0 .97.15 1.36.4L8 15V6.2c0-.56.38-1.05.92-1.19l7-1.87A1.23 1.23 0 0 1 17 4.32V13a2.5 2.5 0 1 1-2.5-2.5c.5 0 .97.15 1.36.4l.14.1V7.1L9 8.9v8.6z"/></svg>`;
