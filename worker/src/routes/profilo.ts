@@ -30,7 +30,13 @@ profilo.get("/me", requireAuth, async (c) => {
     return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
   }
 
-  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei] = await Promise.all([
+  // Abbonamento = pagamento segnato dalla coach per il MESE corrente (stessa chiave
+  // di POST /api/pagamenti). Nessuna riga = non attivo.
+  const oraAbb = new Date();
+  const meseAbb = oraAbb.getUTCMonth() + 1;
+  const annoAbb = oraAbb.getUTCFullYear();
+
+  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei, pagamento] = await Promise.all([
     c.env.DB.prepare(
       `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, card_colore AS cardColore
        FROM athlete_profile WHERE user_id = ?`
@@ -69,6 +75,9 @@ profilo.get("/me", requireAuth, async (c) => {
       .bind(userId)
       .first<{ posizione: number; totaleAtleti: number; punti: number }>(),
     statoTrofei(c.env.DB, userId),
+    c.env.DB.prepare(`SELECT stato FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
+      .bind(userId, meseAbb, annoAbb)
+      .first<{ stato: string }>(),
   ]);
 
   return c.json({
@@ -95,6 +104,7 @@ profilo.get("/me", requireAuth, async (c) => {
     trofei,
     milestones: milestones.results,
     sessioniSettimana,
+    abbonamentoAttivo: pagamento?.stato === "pagato",
   });
 });
 

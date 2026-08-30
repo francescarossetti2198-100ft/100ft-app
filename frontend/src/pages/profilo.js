@@ -153,6 +153,19 @@ export function renderProfilo(appEl) {
         content: ""; position: absolute; left: 0; bottom: 7px;
         width: 26px; height: 3px; border-radius: 2px; background: var(--accent);
       }
+      /* Luce stato abbonamento (card identità): rossa = non attivo, verde = attivo,
+         entrambe lampeggiano. */
+      #profilo-content .abbonamento-luce {
+        background: #ef4444; box-shadow: 0 0 7px #ef4444;
+        animation: abb-pulse 1.3s ease-in-out infinite;
+      }
+      #profilo-content .abbonamento-luce.attivo {
+        background: #22c55e; box-shadow: 0 0 7px #22c55e;
+      }
+      @keyframes abb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+      @media (prefers-reduced-motion: reduce) {
+        #profilo-content .abbonamento-luce { animation: none; }
+      }
     </style>
     <h1>Profilo</h1>
     <div id="profilo-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
@@ -208,7 +221,7 @@ function pagamentoBadgeHtml(userId, stato) {
   return `
     <button type="button" class="link-btn pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
       style="text-decoration:none; color:${colore}; font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
-      ${pagato ? "PAGATO ✓" : "DA PAGARE"}
+      ${pagato ? "ABBONAMENTO ATTIVO ✓" : "ABBONAMENTO NON ATTIVO"}
     </button>
   `;
 }
@@ -939,8 +952,17 @@ function identitaCardHtml(p) {
              display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--mute);
              cursor:pointer; border:2px solid ${(p.cardColore ?? "") === hex ? "var(--text)" : "transparent"}">${contenuto}</button>`;
 
+  const abbAttivo = !!p.abbonamentoAttivo;
+
   return `
     <div class="card" id="identita-card" style="position:relative">
+      <button type="button" class="abbonamento-luce${abbAttivo ? " attivo" : ""}" aria-label="Stato abbonamento"
+        style="position:absolute; top:16px; left:16px; width:13px; height:13px; border-radius:50%; border:none; padding:0; cursor:pointer"></button>
+      <span class="abbonamento-banner" hidden
+        style="position:absolute; top:36px; left:14px; z-index:3; font-size:11px; font-weight:700; letter-spacing:0.5px;
+               padding:4px 9px; border-radius:6px; white-space:nowrap; background:var(--surface-2); color:var(--text); border:1px solid var(--border)">
+        ${abbAttivo ? "Abbonamento attivo" : "Abbonamento non attivo"}
+      </span>
       <button type="button" class="link-btn" id="identita-modifica" aria-label="Modifica profilo"
         style="position:absolute; top:12px; right:12px; text-decoration:none; font-size:16px">✏️</button>
 
@@ -1016,6 +1038,25 @@ function initIdentita(content, p, onSaved) {
 
   modifica.addEventListener("click", () => apri(true));
   card.querySelector("#identita-annulla").addEventListener("click", () => apri(false));
+
+  // Luce stato abbonamento (in alto a sinistra): toccandola compare/sparisce il bannerino.
+  const luce = card.querySelector(".abbonamento-luce");
+  const bannerAbb = card.querySelector(".abbonamento-banner");
+  if (luce && bannerAbb) {
+    const chiudiFuori = (ev) => {
+      if (!luce.contains(ev.target)) {
+        bannerAbb.hidden = true;
+        document.removeEventListener("click", chiudiFuori);
+      }
+    };
+    luce.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const daMostrare = bannerAbb.hidden;
+      bannerAbb.hidden = !daMostrare;
+      if (daMostrare) setTimeout(() => document.addEventListener("click", chiudiFuori), 0);
+      else document.removeEventListener("click", chiudiFuori);
+    });
+  }
 
   card.querySelectorAll(".col-opt").forEach((b) => {
     b.addEventListener("click", () => {

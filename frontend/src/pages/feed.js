@@ -25,8 +25,8 @@ function bannerSpotifyHtml() {
        style="display:flex; align-items:center; gap:10px; text-decoration:none;
               max-width:290px; margin:18px 0 0 auto; padding:12px 14px">
       ${SPOTIFY_LOGO}
-      <span class="mono" style="color:var(--mute); font-size:12px; line-height:1.45">
-        Aggiungi la musica che ti dà la carica nella nostra <strong style="color:var(--text)">playlist di Spotify</strong> per ascoltarla durante gli allenamenti ↗
+      <span class="mono" style="color:var(--mute); font-size:12px; line-height:1.4">
+        La nostra <strong style="color:var(--text)">playlist di Spotify</strong> per allenarti con la carica ↗
       </span>
     </a>
   `;
