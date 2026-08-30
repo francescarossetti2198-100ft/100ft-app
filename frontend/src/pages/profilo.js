@@ -7,7 +7,8 @@ import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../co
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
-import { trofeiRigaHtml } from "../trofei.js";
+import { badgeMensiliHtml } from "../badge-mensili.js";
+import { initStatistiche } from "../statistiche.js";
 
 // Palette fissa di brand per l'accento delle card del Profilo (i 6 colori livello + il
 // viola accent). Deve restare allineata a COLORI_CARD in worker/src/routes/profilo.ts.
@@ -535,7 +536,7 @@ function schedaAtletaHtml(d) {
 
     <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">BADGE</p>
-      <div style="margin-top:10px">${trofeiRigaHtml(at.trofei)}</div>
+      <div style="margin-top:10px">${badgeMensiliHtml(at.badgeMensili)}</div>
     </div>
 
     <div class="card" style="margin-top:12px">
@@ -1105,7 +1106,12 @@ function identitaCardHtml(p) {
         ${abbAttivo ? "Abbonamento attivo" : "Abbonamento non attivo"}
       </span>
       <button type="button" class="link-btn" id="identita-modifica" aria-label="Modifica profilo"
-        style="position:absolute; top:12px; right:12px; text-decoration:none; font-size:16px">✏️</button>
+        style="position:absolute; top:12px; right:12px; text-decoration:none; color:var(--text); line-height:0; padding:4px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </button>
 
       <div id="identita-vista">
         ${fotoProfiloHtml(p.fotoUrl, iniziale, false)}
@@ -1272,13 +1278,19 @@ async function loadProfilo(el) {
             <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
           </div>
         </div>
+        <details class="blocco-mese" style="margin-top:16px">
+          <summary>Statistiche</summary>
+          <div class="blocco-corpo">
+            <div id="statistiche-box"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+          </div>
+        </details>
       </div>
     `;
 
     const badgeCard = `
       <div class="card" style="margin-top:12px">
         <p class="sezione-label">I tuoi badge</p>
-        <div style="margin-top:12px">${trofeiRigaHtml(p.trofei)}</div>
+        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili)}</div>
       </div>`;
 
     content.innerHTML = `
@@ -1307,6 +1319,7 @@ async function loadProfilo(el) {
     initDatiPersonali(content, () => loadProfilo(el));
     initPersonalizza(content, p, () => loadProfilo(el));
     initPerformance(content);
+    initStatistiche(content);
     initNotifiche(content);
     initSicurezza(content);
     content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {

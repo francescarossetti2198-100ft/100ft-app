@@ -13,9 +13,16 @@ function meseCorrente(): { mese: number; anno: number } {
   return { mese: now.getUTCMonth() + 1, anno: now.getUTCFullYear() };
 }
 
-function sbloccato(mese: number, anno: number): boolean {
+// Vero quando la data del mese è arrivata (a prescindere dalla pubblicazione anticipata).
+function dataArrivata(mese: number, anno: number): boolean {
   const c = meseCorrente();
   return anno < c.anno || (anno === c.anno && mese <= c.mese);
+}
+
+// Un mese è visibile agli atleti se la sua data è arrivata OPPURE se il coach l'ha
+// pubblicato in anticipo (programma_mensile.pubblicato).
+function sbloccato(mese: number, anno: number, pubblicato = 0): boolean {
+  return !!pubblicato || dataArrivata(mese, anno);
 }
 
 // Vero solo per il mese immediatamente successivo a quello corrente: agli atleti anticipiamo
@@ -30,18 +37,24 @@ function eProssimoMese(mese: number, anno: number): boolean {
 // il Programma parte dalla stagione reale (set 2026 in poi).
 programma.get("/", requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, mese, anno, focus_tema AS focusTema FROM programma_mensile
+    `SELECT id, mese, anno, focus_tema AS focusTema, pubblicato FROM programma_mensile
      WHERE anno > 2026 OR (anno = 2026 AND mese >= 9)
      ORDER BY anno, mese`
-  ).all<{ id: number; mese: number; anno: number; focusTema: string | null }>();
+  ).all<{ id: number; mese: number; anno: number; focusTema: string | null; pubblicato: number }>();
 
   // Il coach vede il focus di tutti i mesi (anche futuri) per poterli modificare — il lock
   // anti-spoiler resta per gli atleti.
   const isCoach = c.var.user.role === "coach";
   const mesi = results.map((r) => {
-    const sblocc = sbloccato(r.mese, r.anno);
+    const sblocc = sbloccato(r.mese, r.anno, r.pubblicato);
     const mostraFocus = sblocc || isCoach || eProssimoMese(r.mese, r.anno);
-    return { id: r.id, mese: r.mese, anno: r.anno, sbloccato: sblocc, focusTema: mostraFocus ? r.focusTema : null };
+    return {
+      id: r.id, mese: r.mese, anno: r.anno,
+      sbloccato: sblocc,
+      pubblicato: !!r.pubblicato,
+      bloccatoPerData: !dataArrivata(r.mese, r.anno),
+      focusTema: mostraFocus ? r.focusTema : null,
+    };
   });
 
   return c.json({ mesi });
@@ -50,7 +63,7 @@ programma.get("/", requireAuth, async (c) => {
 programma.get("/:id", requireAuth, async (c) => {
   const id = Number(c.req.param("id"));
   const mese = await c.env.DB.prepare(
-    `SELECT id, mese, anno, focus_tema AS focusTema, descrizione,
+    `SELECT id, mese, anno, focus_tema AS focusTema, descrizione, pubblicato,
             obiettivo, perche_mese AS percheMese, risultato_atteso AS risultatoAtteso,
             focus_nutrizionale AS focusNutrizionale, linee_guida_nutrizionali AS lineeGuidaNutrizionali,
             obiettivo_nutrizionale AS obiettivoNutrizionale
@@ -63,6 +76,7 @@ programma.get("/:id", requireAuth, async (c) => {
       anno: number;
       focusTema: string | null;
       descrizione: string | null;
+      pubblicato: number;
       obiettivo: string | null;
       percheMese: string | null;
       risultatoAtteso: string | null;
@@ -72,9 +86,10 @@ programma.get("/:id", requireAuth, async (c) => {
     }>();
 
   if (!mese) return c.json({ error: "Mese non trovato" }, 404);
-  if (!sbloccato(mese.mese, mese.anno) && c.var.user.role !== "coach") {
+  if (!sbloccato(mese.mese, mese.anno, mese.pubblicato) && c.var.user.role !== "coach") {
     return c.json({ error: "Questo mese non è ancora disponibile" }, 403);
   }
+  const bloccatoPerData = !dataArrivata(mese.mese, mese.anno);
 
   const { results: merende } = await c.env.DB.prepare(
     `SELECT id, titolo, descrizione, link_url AS linkUrl, data, foto_url AS fotoUrl
@@ -83,7 +98,7 @@ programma.get("/:id", requireAuth, async (c) => {
     .bind(id)
     .all<{ id: number; titolo: string; descrizione: string | null; linkUrl: string | null; data: string | null; fotoUrl: string | null }>();
 
-  return c.json({ ...mese, merende });
+  return c.json({ ...mese, pubblicato: !!mese.pubblicato, bloccatoPerData, merende });
 });
 
 // Gestione Focus del mese / Merende fit — riservata al coach (brief, sezione 15).
@@ -146,6 +161,16 @@ programma.post("/", requireCoach, async (c) => {
   }
 
   return c.json({ id: programmaId?.id }, 201);
+});
+
+// Pubblica / nasconde in anticipo un mese agli atleti (programma + sfide del mese).
+programma.post("/:id/pubblica", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  const { pubblicato } = await c.req.json<{ pubblicato?: boolean }>();
+  await c.env.DB.prepare(`UPDATE programma_mensile SET pubblicato = ? WHERE id = ?`)
+    .bind(pubblicato ? 1 : 0, id)
+    .run();
+  return c.json({ ok: true, pubblicato: !!pubblicato });
 });
 
 // Upload della grafica di una merenda (immagine gia' composta dal coach). Separato dal

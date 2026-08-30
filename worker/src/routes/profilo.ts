@@ -7,6 +7,7 @@ import { salvaFoto } from "../lib/storage";
 import { parseRisposte, validaRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
 import { verificaTraguardi } from "../lib/traguardi";
+import { statoBadgeMensili } from "../lib/badgeMensili";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -41,7 +42,7 @@ profilo.get("/me", requireAuth, async (c) => {
   const meseAbb = oraAbb.getUTCMonth() + 1;
   const annoAbb = oraAbb.getUTCFullYear();
 
-  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei, pagamento] = await Promise.all([
+  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei, pagamento, badgeMensili] = await Promise.all([
     c.env.DB.prepare(
       `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, card_colore AS cardColore
        FROM athlete_profile WHERE user_id = ?`
@@ -83,6 +84,7 @@ profilo.get("/me", requireAuth, async (c) => {
     c.env.DB.prepare(`SELECT stato FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
       .bind(userId, meseAbb, annoAbb)
       .first<{ stato: string }>(),
+    statoBadgeMensili(c.env.DB, userId),
   ]);
 
   return c.json({
@@ -107,9 +109,42 @@ profilo.get("/me", requireAuth, async (c) => {
     sfideCompletate: sfideCompletate?.n ?? 0,
     presenzeTotali: presenzeTotali?.n ?? 0,
     trofei,
+    badgeMensili,
     milestones: milestones.results,
     sessioniSettimana,
     abbonamentoAttivo: pagamento?.stato === "pagato",
+  });
+});
+
+// Dati per la sotto-sezione "Statistiche" del Profilo (card "I tuoi progressi").
+// Righe grezze: il bucketing per periodo (settimana/mese/trimestre/semestre/totale)
+// lo fa il frontend (frontend/src/statistiche.js).
+profilo.get("/statistiche", requireAuth, async (c) => {
+  if (c.var.user.role !== "atleta") return c.json({ error: "Solo per gli atleti" }, 403);
+  const userId = c.var.user.userId;
+
+  const [presenze, feedback, sfide, anelli, allen] = await Promise.all([
+    c.env.DB.prepare(`SELECT data FROM presenze WHERE user_id = ? AND confermata = 1 ORDER BY data`)
+      .bind(userId)
+      .all<{ data: string }>(),
+    c.env.DB.prepare(`SELECT data, faccina, difficolta FROM feedback_allenamento WHERE user_id = ? ORDER BY data`)
+      .bind(userId)
+      .all<{ data: string; faccina: number | null; difficolta: string | null }>(),
+    c.env.DB.prepare(`SELECT data, punti_assegnati AS punti FROM partecipazioni_sfide WHERE user_id = ? ORDER BY data`)
+      .bind(userId)
+      .all<{ data: string; punti: number | null }>(),
+    calcolaAnelli(c.env.DB, userId),
+    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
+      .bind(userId)
+      .first<{ n: number }>(),
+  ]);
+
+  return c.json({
+    presenze: presenze.results.map((r) => r.data),
+    feedback: feedback.results,
+    sfide: sfide.results,
+    settimaneCompletateTotali: anelli.settimaneCompletateTotali,
+    allenamentiFatti: allen?.n ?? 0,
   });
 });
 

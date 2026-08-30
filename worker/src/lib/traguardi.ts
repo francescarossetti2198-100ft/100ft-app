@@ -75,7 +75,9 @@ export async function verificaTraguardi(db: D1Database, userId: number): Promise
     .prepare(
       `SELECT s.id, s.criterio, s.data_inizio, s.data_fine
        FROM sfide s
-       WHERE s.tipo = 'traguardo' AND s.data_inizio <= ? AND s.data_fine >= ?
+       WHERE s.tipo = 'traguardo' AND s.data_fine >= ?
+         AND (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
+           (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))
          AND NOT EXISTS (SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?)`
     )
     .bind(oggi, oggi, userId)

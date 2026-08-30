@@ -127,7 +127,8 @@ sfide.get("/", requireAuth, async (c) => {
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
-     ${isCoach ? "" : "WHERE s.data_inizio <= ?"}
+     ${isCoach ? "" : `WHERE (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
+       (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))`}
      ORDER BY s.data_fine DESC`
   )
     .bind(...(isCoach ? [c.var.user.userId] : [c.var.user.userId, oggi]))

@@ -5,6 +5,7 @@ import { calcolaLivello } from "../lib/livelli";
 import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
+import { statoBadgeMensili } from "../lib/badgeMensili";
 
 // Età in anni interi da una data YYYY-MM-DD (null se manca / non valida).
 function calcolaEta(dataNascita: string | null): number | null {
@@ -129,7 +130,7 @@ atleti.get("/:id", requireCoach, async (c) => {
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 
-  const [presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei, performance] =
+  const [presenzeTotali, presenze4Sett, feedbackRecenti, sfideFatte, richiesteRecenti, pagamento, feedbackMensile, trofei, performance, badgeMensili] =
     await Promise.all([
       db.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`).bind(id).first<{ n: number }>(),
       db
@@ -180,6 +181,7 @@ atleti.get("/:id", requireCoach, async (c) => {
         )
         .bind(id)
         .all<{ esercizio: string; peso: number; data: string }>(),
+      statoBadgeMensili(db, id),
     ]);
 
   return c.json({
@@ -213,6 +215,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       richiesteRecenti: richiesteRecenti.results,
       pagamentoMese: pagamento?.stato ?? "non_pagato",
       trofei,
+      badgeMensili,
       performance: performance.results,
     },
   });

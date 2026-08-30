@@ -205,32 +205,42 @@ async function loadMesi(el) {
         const mese = mesi.find((m) => m.id === id);
         if (!mese.sbloccato && !isCoach()) return;
         selezionaTab(id);
-        loadDettaglio(content, id, !mese.sbloccato);
+        loadDettaglio(content, id, !mese.sbloccato, el);
       });
     });
 
-    loadDettaglio(content, selezionato, !mesi.find((m) => m.id === selezionato)?.sbloccato);
+    loadDettaglio(content, selezionato, !mesi.find((m) => m.id === selezionato)?.sbloccato, el);
   } catch (err) {
     tabs.remove();
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }
 }
 
-async function loadDettaglio(content, id, bloccato = false) {
+async function loadDettaglio(content, id, bloccato = false, el = null) {
   content.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
   try {
     const m = await api.get(`/programma/${id}`);
     // Il coach vede tutte le merende; l'atleta solo quelle nella finestra della settimana.
     const merende = isCoach() ? (m.merende ?? []) : (m.merende ?? []).filter((mf) => merendaDisponibile(mf.data));
 
+    // Il coach può pubblicare in anticipo un mese ancora bloccato per data (programma + sfide).
+    const statoPubblicazione =
+      m.bloccatoPerData && isCoach()
+        ? m.pubblicato
+          ? `<div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+               <span class="mono" style="color:var(--livello-1); font-size:11px">✅ Pubblicato agli atleti in anticipo</span>
+               <button type="button" class="link-btn" id="btn-pubblica" data-pub="0">Torna a nascondere</button>
+             </div>`
+          : `<div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+               <span class="mono" style="color:var(--mute); font-size:11px">🔒 Bloccato per gli atleti — lo vedi solo tu in anteprima</span>
+               <button type="button" class="btn" id="btn-pubblica" data-pub="1" style="padding:6px 12px; font-size:13px">Pubblica agli atleti ora</button>
+             </div>`
+        : "";
+
     content.innerHTML = `
       <div class="card">
         <p class="mono" style="color:var(--accent); font-size:12px">${MESI[m.mese - 1].toUpperCase()} · ${m.anno}</p>
-        ${
-          bloccato && isCoach()
-            ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">🔒 Bloccato per gli atleti — lo vedi solo tu in anteprima</p>`
-            : ""
-        }
+        ${statoPubblicazione}
 
         <p class="sezione-label" style="margin-top:14px">Focus del mese</p>
         <h2 style="margin-top:10px; color:var(--accent)">${m.focusTema ?? "Focus del mese"}</h2>
@@ -270,6 +280,21 @@ async function loadDettaglio(content, id, bloccato = false) {
         }
       </div>
     `;
+
+    const btnPub = content.querySelector("#btn-pubblica");
+    if (btnPub) {
+      btnPub.addEventListener("click", async () => {
+        btnPub.disabled = true;
+        try {
+          await api.post(`/programma/${id}/pubblica`, { pubblicato: btnPub.dataset.pub === "1" });
+          if (el) loadMesi(el);
+          else loadDettaglio(content, id, bloccato, el);
+        } catch (err) {
+          btnPub.disabled = false;
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+        }
+      });
+    }
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }
