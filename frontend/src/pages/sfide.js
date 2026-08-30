@@ -26,6 +26,31 @@ const PERIODI = [
   { valore: "totale", label: "Totale" },
 ];
 
+// <input type=file> camuffato da bottone: il testo nativo ("Scegli file") non si può
+// cambiare, quindi l'input è nascosto dentro una <label> che fa da bottone "Scatta la
+// foto". Scelto un file, l'etichetta lo conferma. `cls` = classe sull'input per il resto
+// del codice (`.foto-input`, `.dd-foto`).
+function fotoInputHtml(cls) {
+  return `
+    <label class="foto-btn" style="position:relative; width:100%; margin-top:10px; display:flex;
+           align-items:center; justify-content:center; gap:8px; padding:12px 20px; border-radius:10px;
+           background:var(--surface-2); color:var(--text); font-weight:600; font-size:15px; cursor:pointer">
+      <span class="foto-btn-txt">📷 Scatta la foto</span>
+      <input class="${cls}" type="file" accept="image/*" capture="environment"
+             style="position:absolute; width:1px; height:1px; opacity:0" />
+    </label>
+  `;
+}
+
+function attachFotoInput(scope) {
+  scope.querySelectorAll(".foto-btn input[type=file]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const txt = input.closest(".foto-btn")?.querySelector(".foto-btn-txt");
+      if (txt) txt.textContent = input.files[0] ? "✓ Foto pronta — tocca per cambiare" : "📷 Scatta la foto";
+    });
+  });
+}
+
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
@@ -176,15 +201,16 @@ async function loadDailyDrop(el) {
       <p class="kicker">💧 DAILY DROP</p>
       <p style="margin-top:6px">Una foto al volo, ovunque tu sia in questo momento.</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
-      <input id="dd-foto" type="file" accept="image/*" capture="environment"
-             style="margin-top:10px; width:100%; color:var(--text)" />
+      ${fotoInputHtml("dd-foto")}
       <p class="error-text" id="dd-error" hidden style="margin-top:6px"></p>
       <button class="btn" id="dd-submit" style="width:100%; margin-top:10px">Rispondi</button>
     `;
 
+    attachFotoInput(card);
+
     card.querySelector("#dd-submit").addEventListener("click", async (e) => {
       const errorEl = card.querySelector("#dd-error");
-      const input = card.querySelector("#dd-foto");
+      const input = card.querySelector(".dd-foto");
       errorEl.hidden = true;
 
       if (!input.files[0]) {
@@ -276,8 +302,7 @@ function sfidaItemHtml(s, oggi) {
         ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">${criterioTesto(s.criterio)}</p>`
         : s.tipo === "foto"
           ? `
-          <input class="foto-input" type="file" accept="image/*" capture="environment"
-                 style="margin-top:10px; width:100%; color:var(--text)" />
+          ${fotoInputHtml("foto-input")}
           <p class="error-text foto-error" hidden style="margin-top:6px"></p>
           <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
         `
@@ -447,6 +472,7 @@ async function loadSfide(el, meseVoluto) {
     });
 
     attachPartecipa(track, el, () => loadSfide(el, mesi[idx]));
+    attachFotoInput(track);
   };
 
   const vaiA = (nuovoIdx, dir) => {

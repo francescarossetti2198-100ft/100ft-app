@@ -24,7 +24,7 @@ function bannerSpotifyHtml() {
   return `
     <a class="card" href="${SPOTIFY_PLAYLIST_URL}" target="_blank" rel="noopener"
        style="display:flex; align-items:center; gap:10px; text-decoration:none;
-              max-width:290px; margin:18px 0 0 auto; padding:12px 14px">
+              margin:10px 0 0; padding:10px 14px">
       ${SPOTIFY_LOGO}
       <span class="mono" style="color:var(--mute); font-size:12px; line-height:1.4">
         La nostra <strong style="color:var(--text)">playlist di Spotify</strong> per allenarti con la carica ↗
@@ -47,10 +47,14 @@ function tempoFa(dataIso) {
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
+  // Testata fissa: "Feed" + banner Spotify restano in cima mentre la lista scorre sotto.
+  // I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
   el.innerHTML = `
-    <h1>Feed</h1>
+    <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
+      <h1 style="margin:0; padding-right:48px">Feed</h1>
+      ${bannerSpotifyHtml()}
+    </div>
     <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-    ${bannerSpotifyHtml()}
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());

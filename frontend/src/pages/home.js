@@ -38,6 +38,25 @@ function sezione(titolo, corpo) {
   return `<p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">${titolo}</p>${corpo}`;
 }
 
+// Overlay a schermo intero per guardare un'immagine da vicino (card del livello in Home).
+// Si chiude toccando ovunque o con Esc.
+function apriLightbox(src, alt = "") {
+  const ov = document.createElement("div");
+  ov.style.cssText =
+    "position:fixed; inset:0; z-index:100; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out";
+  ov.innerHTML = `<img src="${src}" alt="${alt}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:12px" />`;
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") chiudi();
+  };
+  ov.addEventListener("click", chiudi);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(ov);
+}
+
 // Le richieste di oggi (nome + testo libero) sono scritte dagli atleti e ora visibili a
 // tutto il gruppo: vanno messe nell'HTML come testo, non come markup.
 function esc(s) {
@@ -366,11 +385,11 @@ async function loadSettimana(el) {
 
       livelloHtml = `
         <div style="display:flex; align-items:center; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
-          <img src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero}"
-               style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0" />
+          <img class="livello-img" src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero} — ${attuale.nome}"
+               style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:zoom-in" />
           <div style="flex:1; min-width:0">
-            <p class="mono" style="color:var(--mute); font-size:11px">
-              ${allenamentiFatti}${prossimo ? ` / ${prossimo.allenamentiMin}` : ""} ALLENAMENTI · <span style="color:${attuale.colore}">LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}</span>
+            <p class="mono" style="color:${attuale.colore}; font-size:11px">
+              LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}
             </p>
             <div style="background:var(--surface-2); border-radius:4px; height:4px; margin-top:6px; overflow:hidden">
               <div style="background:${attuale.colore}; width:${pctBarra}%; height:100%"></div>
@@ -390,6 +409,9 @@ async function loadSettimana(el) {
         ${livelloHtml}
       `
     );
+
+    const img = card.querySelector(".livello-img");
+    if (img) img.addEventListener("click", () => apriLightbox(img.src, img.alt));
   } catch {
     card.remove();
   }
