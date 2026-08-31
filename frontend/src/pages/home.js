@@ -217,10 +217,12 @@ async function loadFeedbackMese(el) {
 // il countdown al prossimo allenamento se oggi non c'è nulla (niente sessione, niente
 // messaggio della coach).
 async function loadAllenamentoOggi(el) {
-  await Promise.all([loadCoach(el), loadRichieste(el), loadFeedback(el)]);
+  // "Prima dell'allenamento" (richieste: parte alta / bassa / ecc.) nascosta per ora —
+  // riattivare rimettendo `loadRichieste(el)` qui e `"#ao-richieste"` nella lista sotto.
+  await Promise.all([loadCoach(el), loadFeedback(el)]);
   const card = el.querySelector("#allenamento-oggi-card");
   if (!card) return;
-  const vuoto = ["#ao-coach", "#ao-richieste", "#ao-feedback"].every(
+  const vuoto = ["#ao-coach", "#ao-feedback"].every(
     (sel) => !card.querySelector(sel)?.innerHTML.trim()
   );
   const box = card.querySelector("#ao-empty");
