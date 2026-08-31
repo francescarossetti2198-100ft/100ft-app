@@ -1,6 +1,6 @@
 // I 5 piani di abbonamento 100FT — chiave, nome, prezzo (in €).
 // ⚠️ Tenere in sync con frontend/src/abbonamenti.js.
-export type PianoKey = "full" | "trio" | "duo" | "solo" | "mix";
+export type PianoKey = "full" | "trio" | "duo" | "solo" | "mix" | "fitnessdream";
 
 export const PIANI: { key: PianoKey; nome: string; prezzo: number }[] = [
   { key: "full", nome: "FULL", prezzo: 60 },
@@ -8,6 +8,7 @@ export const PIANI: { key: PianoKey; nome: string; prezzo: number }[] = [
   { key: "duo", nome: "DUO", prezzo: 35 },
   { key: "solo", nome: "SOLO", prezzo: 25 },
   { key: "mix", nome: "MIX", prezzo: 50 },
+  { key: "fitnessdream", nome: "FITNESSDREAM", prezzo: 30 },
 ];
 
 const BY_KEY = new Map(PIANI.map((p) => [p.key, p]));

@@ -36,6 +36,13 @@ export const PIANI = [
     prezzo: 50,
     colore: "var(--livello-6)",
   },
+  {
+    key: "fitnessdream",
+    nome: "FITNESSDREAM",
+    giorni: "Lun · Mer · Ven — per chi è già iscritto in palestra",
+    prezzo: 30,
+    colore: "var(--sessione-extra)",
+  },
 ];
 
 export function pianoByKey(key) {
