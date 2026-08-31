@@ -151,11 +151,17 @@ export function renderCoach(appEl) {
 
       <p class="sezione-label" style="margin-top:20px">Merende fit</p>
       <p class="mono" id="merende-mese-nota" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Le merende qui sotto finiscono nel mese selezionato in alto. La data "Per il giorno"
+        Le merende finiscono nel mese selezionato in alto. La data "Per il giorno"
         dice solo agli atleti in che giorno vale — NON sposta la merenda in un altro mese.
       </p>
-      <div id="merende-rows" style="margin-top:10px; display:flex; flex-direction:column; gap:10px"></div>
-      <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
+      <div id="merende-calendario" style="margin-top:12px"></div>
+      <details class="blocco-mese" id="merende-dettaglio" style="margin-top:12px">
+        <summary><span id="merende-summary">Merende del mese</span></summary>
+        <div class="blocco-corpo">
+          <div id="merende-rows" style="display:flex; flex-direction:column; gap:10px"></div>
+          <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
+        </div>
+      </details>
 
       <p class="error-text" id="piano-error" hidden style="margin-top:10px"></p>
       <p class="success-text" id="piano-success" hidden style="margin-top:10px">Salvato ✓</p>
@@ -167,22 +173,6 @@ export function renderCoach(appEl) {
 
       <div id="sfide-elenco" style="margin-top:10px">
         <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>
-      </div>
-
-      <div id="sfide-duplica" hidden style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
-        <p class="mono" style="color:var(--mute); font-size:12px">DUPLICA UN MESE</p>
-        <div style="display:flex; gap:8px; margin-top:8px; align-items:flex-end; flex-wrap:wrap">
-          <div class="field" style="flex:1; min-width:110px; margin:0">
-            <label>Da</label>
-            <select id="dup-da" style="${SEL_STYLE}"></select>
-          </div>
-          <div class="field" style="flex:1; min-width:110px; margin:0">
-            <label>A</label>
-            <select id="dup-a" style="${SEL_STYLE}"></select>
-          </div>
-          <button class="btn" id="dup-btn" style="background:var(--surface-2); color:var(--text)">Duplica</button>
-        </div>
-        <p class="mono" id="dup-msg" hidden style="font-size:12px; margin-top:6px"></p>
       </div>
 
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
@@ -211,23 +201,34 @@ export function renderCoach(appEl) {
           <input id="sfida-criterio-n" type="number" min="1" max="99" value="6" hidden
                  style="margin-top:8px; ${SEL_STYLE}" />
         </div>
-        <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin:4px 0 12px; cursor:pointer">
+        <div class="field">
+          <label>Mese della sfida</label>
+          <div style="display:flex; gap:8px">
+            <select id="sfida-mese" style="flex:2; ${SEL_STYLE}">
+              ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
+            </select>
+            <input id="sfida-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
+          </div>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px">
+            La sfida dura tutto il mese, dal primo all'ultimo giorno.
+          </p>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin:4px 0 10px; cursor:pointer">
           <input type="checkbox" id="sfida-flash" /> ⚡ Sfida lampo (badge dedicato, di pochi giorni)
         </label>
-        <div style="display:flex; gap:12px; margin-bottom:8px">
-          <button type="button" class="link-btn" data-preset="mese">Questo mese</button>
-          <button type="button" class="link-btn" data-preset="prossimo">Prossimo mese</button>
-        </div>
-        <div style="display:flex; gap:10px">
-          <div class="field" style="flex:1">
-            <label>Inizio</label>
-            <input id="sfida-inizio" type="date" />
+        <details id="sfida-date-precise" style="margin-bottom:10px">
+          <summary class="mono" style="cursor:pointer; color:var(--mute); font-size:12px">Date precise (per le sfide lampo)</summary>
+          <div style="display:flex; gap:10px; margin-top:8px">
+            <div class="field" style="flex:1">
+              <label>Inizio</label>
+              <input id="sfida-inizio" type="date" />
+            </div>
+            <div class="field" style="flex:1">
+              <label>Fine</label>
+              <input id="sfida-fine" type="date" />
+            </div>
           </div>
-          <div class="field" style="flex:1">
-            <label>Fine</label>
-            <input id="sfida-fine" type="date" />
-          </div>
-        </div>
+        </details>
         <p class="mono" style="color:var(--mute); font-size:12px">Ogni sfida completata vale 10 punti.</p>
         <p class="error-text" id="sfida-error" hidden></p>
         <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
@@ -331,7 +332,7 @@ function initAppello(el) {
     lista.innerHTML = d.atleti.length
       ? d.atleti
           .map((a) => {
-            const nome = a.nickname || a.nome;
+            const nome = [a.nome, a.cognome].filter(Boolean).join(" ") || a.nickname || a.nome;
             const spuntato = a.confermata || a.richiesta ? "checked" : "";
             const tag = a.richiesta
               ? `<span class="mono" style="color:var(--accent); font-size:11px; white-space:nowrap">ha prenotato</span>`
@@ -445,7 +446,7 @@ function initAnnuncio(el) {
   });
 }
 
-function rigaMerenda(m = {}) {
+function rigaMerenda(m = {}, onChange = () => {}) {
   const row = document.createElement("div");
   row.className = "merenda-row";
   row.style.cssText = "border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px";
@@ -512,7 +513,11 @@ function rigaMerenda(m = {}) {
   });
 
   rimuoviFoto.addEventListener("click", () => mostraFoto(""));
-  row.querySelector(".merenda-rimuovi").addEventListener("click", () => row.remove());
+  row.querySelector(".merenda-rimuovi").addEventListener("click", () => {
+    row.remove();
+    onChange();
+  });
+  row.querySelector(".merenda-data").addEventListener("change", () => onChange());
   return row;
 }
 
@@ -529,8 +534,83 @@ function initPiano(el) {
     obiettivoNutrizionale: el.querySelector("#piano-obiettivo-nutri"),
   };
   const merendeRows = el.querySelector("#merende-rows");
+  const calWrap = el.querySelector("#merende-calendario");
+  const dettaglioMerende = el.querySelector("#merende-dettaglio");
+  const summaryMerende = el.querySelector("#merende-summary");
   const errorEl = el.querySelector("#piano-error");
   const successEl = el.querySelector("#piano-success");
+
+  // Calendario merende: solo i giorni di allenamento (lun/mer/ven) del mese selezionato,
+  // perché le merende esistono solo in quei giorni. Serve alla coach per vedere a colpo
+  // d'occhio quali L/M/V sono ancora senza merenda.
+  const NOMI_G = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+  function giorniLMV(anno, mese) {
+    const out = [];
+    const ultimo = new Date(Date.UTC(anno, mese, 0)).getUTCDate();
+    for (let d = 1; d <= ultimo; d++) {
+      const dow = new Date(Date.UTC(anno, mese - 1, d)).getUTCDay();
+      if (dow === 1 || dow === 3 || dow === 5) {
+        out.push({ iso: `${anno}-${String(mese).padStart(2, "0")}-${String(d).padStart(2, "0")}`, label: `${NOMI_G[dow]} ${d}` });
+      }
+    }
+    return out;
+  }
+  function merendePerData() {
+    const m = new Map();
+    for (const row of merendeRows.querySelectorAll(".merenda-row")) {
+      const iso = row.querySelector(".merenda-data").value;
+      if (iso && !m.has(iso)) m.set(iso, row);
+    }
+    return m;
+  }
+  function disegnaCalendarioMerende() {
+    const anno = Number(annoInput.value);
+    const mese = Number(meseSel.value);
+    const giorni = giorniLMV(anno, mese);
+    const mappa = merendePerData();
+    let assegnate = 0;
+
+    calWrap.innerHTML = `
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:6px">
+        ${giorni
+          .map((g) => {
+            const ha = mappa.has(g.iso);
+            if (ha) assegnate++;
+            return `
+              <button type="button" class="merenda-cal-cell" data-iso="${g.iso}"
+                style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; font-size:12px;
+                       border:1px solid ${ha ? "var(--livello-1)" : "var(--border)"}; border-radius:8px; cursor:pointer;
+                       background:${ha ? "color-mix(in srgb, var(--livello-1) 12%, transparent)" : "var(--surface-2)"};
+                       color:var(--text); font-family:inherit">
+                <span>${g.label}</span>
+                <span style="width:8px; height:8px; border-radius:50%; background:${ha ? "var(--livello-1)" : "var(--mute)"}"></span>
+              </button>`;
+          })
+          .join("")}
+      </div>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
+        Pallino verde = merenda pronta. Tocca un giorno per aggiungerla o modificarla.
+      </p>`;
+
+    summaryMerende.textContent = `Merende del mese — ${assegnate} su ${giorni.length} giorni`;
+
+    calWrap.querySelectorAll(".merenda-cal-cell").forEach((cell) => {
+      cell.addEventListener("click", () => {
+        const iso = cell.dataset.iso;
+        let row = merendePerData().get(iso);
+        if (!row) {
+          row = rigaMerenda({ data: iso }, disegnaCalendarioMerende);
+          merendeRows.appendChild(row);
+          disegnaCalendarioMerende();
+        }
+        dettaglioMerende.open = true;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.style.outline = "2px solid var(--accent)";
+        row.style.transition = "outline-color .3s";
+        setTimeout(() => { row.style.outline = "2px solid transparent"; }, 1200);
+      });
+    });
+  }
 
   // Vero solo quando le merende del mese corrente sono state caricate con successo (o è un
   // mese nuovo senza merende). Se il caricamento fallisce restiamo a false e il salvataggio
@@ -574,21 +654,24 @@ function initPiano(el) {
       const esistente = mesi.find((m) => m.mese === mese && m.anno === anno);
       if (!esistente) {
         merendeSincronizzate = true; // mese nuovo: nessuna merenda, form vuoto di proposito
-        return;
+      } else {
+        const dettaglio = await api.get(`/programma/${esistente.id}`);
+        for (const [chiave, input] of Object.entries(campi)) input.value = dettaglio[chiave] ?? "";
+        for (const m of dettaglio.merende ?? []) merendeRows.appendChild(rigaMerenda(m, disegnaCalendarioMerende));
+        merendeSincronizzate = true;
       }
-
-      const dettaglio = await api.get(`/programma/${esistente.id}`);
-      for (const [chiave, input] of Object.entries(campi)) input.value = dettaglio[chiave] ?? "";
-      for (const m of dettaglio.merende ?? []) merendeRows.appendChild(rigaMerenda(m));
-      merendeSincronizzate = true;
     } catch {
       // Errore di rete: non sappiamo lo stato reale delle merende — non toccarle al salvataggio.
     }
+    disegnaCalendarioMerende();
   }
 
   meseSel.addEventListener("change", carica);
   annoInput.addEventListener("change", carica);
-  el.querySelector("#merenda-aggiungi").addEventListener("click", () => merendeRows.appendChild(rigaMerenda()));
+  el.querySelector("#merenda-aggiungi").addEventListener("click", () => {
+    merendeRows.appendChild(rigaMerenda({}, disegnaCalendarioMerende));
+    disegnaCalendarioMerende();
+  });
 
   el.querySelector("#piano-salva").addEventListener("click", async (e) => {
     errorEl.hidden = true;
@@ -632,13 +715,12 @@ function initSfida(el) {
   const criterioSel = el.querySelector("#sfida-criterio");
   const criterioN = el.querySelector("#sfida-criterio-n");
   const flashChk = el.querySelector("#sfida-flash");
+  const meseSel = el.querySelector("#sfida-mese");
+  const annoInput = el.querySelector("#sfida-anno");
+  const datePrecise = el.querySelector("#sfida-date-precise");
   const inizioInput = el.querySelector("#sfida-inizio");
   const fineInput = el.querySelector("#sfida-fine");
   const elenco = el.querySelector("#sfide-elenco");
-  const dupWrap = el.querySelector("#sfide-duplica");
-  const dupDa = el.querySelector("#dup-da");
-  const dupA = el.querySelector("#dup-a");
-  const dupMsg = el.querySelector("#dup-msg");
 
   let sfideCache = [];
 
@@ -712,21 +794,6 @@ function initSfida(el) {
         });
       });
     }
-
-    // ─── C. Duplica un mese: popola i select ───
-    const mesiConSfide = [...new Set(sfideCache.map((s) => (s.data_inizio || "").slice(0, 7)))]
-      .filter(Boolean)
-      .sort()
-      .reverse();
-    const now = oraCorrente();
-    const mesiTarget = Array.from({ length: 4 }, (_, i) => {
-      const d = new Date(Date.UTC(now.anno, now.mese - 1 + i, 1));
-      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    });
-    const optLabel = (k) => `${MESI[+k.slice(5) - 1]} ${k.slice(0, 4)}`;
-    dupWrap.hidden = mesiConSfide.length === 0;
-    dupDa.innerHTML = mesiConSfide.map((k) => `<option value="${k}">${optLabel(k)}</option>`).join("");
-    dupA.innerHTML = mesiTarget.map((k) => `<option value="${k}">${optLabel(k)}</option>`).join("");
   }
 
   // ─── B. Form nuova sfida ─────────────────────────────────────────────────
@@ -739,26 +806,27 @@ function initSfida(el) {
   criterioSel.addEventListener("change", aggiornaCriterio);
   aggiornaCriterio();
 
-  const setDate = (inizio, fine) => {
-    inizioInput.value = inizio;
-    fineInput.value = fine;
-  };
-  el.querySelectorAll("[data-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const now = oraCorrente();
-      const off = btn.dataset.preset === "prossimo" ? 1 : 0;
-      const d = new Date(Date.UTC(now.anno, now.mese - 1 + off, 1));
-      const { inizio, fine } = estremiMese(d.getUTCFullYear(), d.getUTCMonth() + 1);
-      setDate(inizio, fine);
-    });
-  });
+  // Spuntando "sfida lampo" apro le date precise e propongo i prossimi 7 giorni.
   flashChk.addEventListener("change", () => {
-    if (flashChk.checked && !inizioInput.value && !fineInput.value) {
-      const d = new Date();
-      const fine = new Date(d.getTime() + 7 * 86400000);
-      setDate(d.toISOString().slice(0, 10), fine.toISOString().slice(0, 10));
+    if (flashChk.checked) {
+      datePrecise.open = true;
+      if (!inizioInput.value && !fineInput.value) {
+        const d = new Date();
+        const fine = new Date(d.getTime() + 7 * 86400000);
+        inizioInput.value = d.toISOString().slice(0, 10);
+        fineInput.value = fine.toISOString().slice(0, 10);
+      }
     }
   });
+
+  // Periodo della sfida: date precise se sono state compilate entrambe (per le lampo),
+  // altrimenti tutto il mese scelto nella tendina.
+  function periodoSfida() {
+    if (inizioInput.value && fineInput.value) {
+      return { inizio: inizioInput.value, fine: fineInput.value };
+    }
+    return estremiMese(Number(annoInput.value), Number(meseSel.value));
+  }
 
   el.querySelector("#sfida-crea").addEventListener("click", async (e) => {
     errorEl.hidden = true;
@@ -767,15 +835,19 @@ function initSfida(el) {
     const titolo = el.querySelector("#sfida-titolo").value.trim();
     const descrizione = el.querySelector("#sfida-descrizione").value.trim();
     const tipo = tipoSel.value;
-    const dataInizio = inizioInput.value;
-    const dataFine = fineInput.value;
+    const { inizio: dataInizio, fine: dataFine } = periodoSfida();
     let criterio;
     if (tipo === "traguardo") {
       criterio = criterioSel.value === "presenze" ? `presenze:${Number(criterioN.value) || 1}` : criterioSel.value;
     }
 
     if (!titolo || !dataInizio || !dataFine) {
-      errorEl.textContent = "Titolo, data di inizio e data di fine sono obbligatori";
+      errorEl.textContent = "Titolo e mese della sfida sono obbligatori";
+      errorEl.hidden = false;
+      return;
+    }
+    if (dataFine < dataInizio) {
+      errorEl.textContent = "La data di fine è prima di quella di inizio";
       errorEl.hidden = false;
       return;
     }
@@ -795,58 +867,13 @@ function initSfida(el) {
       el.querySelector("#sfida-titolo").value = "";
       el.querySelector("#sfida-descrizione").value = "";
       flashChk.checked = false;
-      setDate("", "");
+      inizioInput.value = "";
+      fineInput.value = "";
+      datePrecise.open = false;
       await carica();
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
       errorEl.hidden = false;
-    } finally {
-      e.target.disabled = false;
-    }
-  });
-
-  // ─── C. Duplica un mese ──────────────────────────────────────────────────
-  el.querySelector("#dup-btn").addEventListener("click", async (e) => {
-    dupMsg.hidden = true;
-    const da = dupDa.value;
-    const a = dupA.value;
-    if (!da || !a || da === a) {
-      dupMsg.textContent = "Scegli due mesi diversi.";
-      dupMsg.style.color = "var(--livello-5)";
-      dupMsg.hidden = false;
-      return;
-    }
-    const [tAnno, tMese] = a.split("-").map(Number);
-    const { inizio, fine } = estremiMese(tAnno, tMese);
-    const daCopiare = sfideCache.filter((s) => (s.data_inizio || "").slice(0, 7) === da);
-    const giaPresenti = new Set(
-      sfideCache.filter((s) => (s.data_inizio || "").slice(0, 7) === a).map((s) => s.titolo)
-    );
-
-    e.target.disabled = true;
-    let create = 0;
-    try {
-      for (const s of daCopiare) {
-        if (giaPresenti.has(s.titolo)) continue;
-        await api.post("/sfide", {
-          titolo: s.titolo,
-          descrizione: s.descrizione || undefined,
-          tipo: s.tipo,
-          criterio: s.criterio || undefined,
-          flash: s.flash ? 1 : 0,
-          data_inizio: inizio,
-          data_fine: fine,
-        });
-        create++;
-      }
-      dupMsg.textContent = create ? `Create ${create} sfide.` : "Niente da copiare (già presenti).";
-      dupMsg.style.color = "var(--livello-1)";
-      dupMsg.hidden = false;
-      await carica();
-    } catch (err) {
-      dupMsg.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
-      dupMsg.style.color = "var(--livello-5)";
-      dupMsg.hidden = false;
     } finally {
       e.target.disabled = false;
     }
@@ -871,20 +898,37 @@ function initSuddivisioni(el) {
       return;
     }
 
+    // Righe raggruppate per abbonamento. Chi ha pagato è in evidenza (✓), gli altri in grigio.
+    const gruppi = new Map();
+    for (const r of d.righe) {
+      const k = r.nomePiano ?? r.piano;
+      if (!gruppi.has(k)) gruppi.set(k, []);
+      gruppi.get(k).push(r);
+    }
     const righe = d.righe.length
-      ? d.righe
-          .map((r) => {
-            const quote =
-              r.quotaCoach != null
-                ? `<span style="color:var(--livello-1)">${eur(r.quotaCoach)}</span> / <span style="color:var(--mute)">${eur(r.quotaPalestra)}</span>`
-                : `<span style="color:var(--livello-5)">da definire</span>`;
+      ? [...gruppi.entries()]
+          .map(([nomeP, rs]) => {
+            const nPag = rs.filter((r) => r.pagato).length;
+            const corpo = rs
+              .map((r) => {
+                const quote =
+                  r.quotaCoach != null
+                    ? `<span style="color:var(--livello-1)">${eur(r.quotaCoach)}</span> / <span style="color:var(--mute)">${eur(r.quotaPalestra)}</span>`
+                    : `<span style="color:var(--livello-5)">da definire</span>`;
+                return `
+                  <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); opacity:${r.pagato ? 1 : 0.55}">
+                    <span style="font-size:13px; min-width:0">${esc(r.nome)}
+                      <span class="mono" style="color:var(--mute); font-size:11px"> · ${eur(r.prezzo)} ${r.pagato ? "✓ pagato" : "· non pagato"}</span>
+                    </span>
+                    <span class="mono" style="font-size:12px; white-space:nowrap">${quote}</span>
+                  </div>`;
+              })
+              .join("");
             return `
-              <div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--border)">
-                <span style="font-size:13px; min-width:0">${esc(r.nome)}
-                  <span class="mono" style="color:var(--mute); font-size:11px"> · ${r.nomePiano ?? r.piano} · ${eur(r.prezzo)}${r.stato === "pagato" ? " ✓" : ""}</span>
-                </span>
-                <span class="mono" style="font-size:12px; white-space:nowrap">${quote}</span>
-              </div>`;
+              <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:14px 0 0">
+                ${esc(nomeP).toUpperCase()} · ${nPag}/${rs.length} pagat${nPag === 1 ? "o" : "i"}
+              </p>
+              ${corpo}`;
           })
           .join("")
       : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta con abbonamento questo mese.</p>`;
@@ -895,7 +939,9 @@ function initSuddivisioni(el) {
         <span class="mono" style="font-size:12px">A te: <strong style="color:var(--livello-1)">${eur(t.coach)}</strong></span>
         <span class="mono" style="font-size:12px">Palestra: <strong>${eur(t.palestra)}</strong></span>
         ${t.daDefinire ? `<span class="mono" style="font-size:12px; color:var(--livello-5)">Da definire: ${eur(t.daDefinire)}</span>` : ""}
-      </div>`;
+      </div>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">Totali e PDF contano solo chi ha pagato.</p>
+      <button type="button" class="btn" id="sudd-pdf" style="width:100%; margin-top:10px; background:var(--surface-2); color:var(--text)">Scarica PDF</button>`;
 
     const config = `
       <div style="margin-top:14px; padding-top:10px; border-top:1px solid var(--border)">
@@ -915,6 +961,23 @@ function initSuddivisioni(el) {
       </div>`;
 
     body.innerHTML = righe + totali + config;
+
+    const pdfBtn = body.querySelector("#sudd-pdf");
+    if (pdfBtn) {
+      pdfBtn.addEventListener("click", async () => {
+        pdfBtn.disabled = true;
+        pdfBtn.textContent = "Preparo il PDF…";
+        try {
+          const { scaricaSuddivisioniPdf } = await import("../pdf/suddivisioni-pdf.js");
+          await scaricaSuddivisioniPdf(d, MESI);
+        } catch {
+          alert("Non sono riuscito a generare il PDF.");
+        } finally {
+          pdfBtn.disabled = false;
+          pdfBtn.textContent = "Scarica PDF";
+        }
+      });
+    }
 
     body.querySelectorAll(".sudd-pct").forEach((inp) => {
       inp.addEventListener("change", async () => {

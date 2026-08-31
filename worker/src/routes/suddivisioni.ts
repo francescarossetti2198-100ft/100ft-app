@@ -16,7 +16,7 @@ suddivisioni.get("/", requireCoach, async (c) => {
 
   const [{ results: atleti }, { results: pagRows }, { results: cfgRows }] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT u.id AS userId, COALESCE(p.nickname, p.nome || ' ' || p.cognome) AS nome
+      `SELECT u.id AS userId, COALESCE(NULLIF(TRIM(p.nome || ' ' || COALESCE(p.cognome, '')), ''), p.nome) AS nome
        FROM users u JOIN athlete_profile p ON p.user_id = u.id
        WHERE u.role = 'atleta' AND u.status = 'attivo'
        ORDER BY nome`
@@ -38,6 +38,13 @@ suddivisioni.get("/", requireCoach, async (c) => {
   let palestra = 0;
   let daDefinire = 0;
 
+  // Aggregato per piano, calcolato SOLO sugli iscritti che hanno pagato: è il resoconto
+  // da consegnare alla palestra.
+  const perPianoMap = new Map<
+    string,
+    { piano: string; nomePiano: string; prezzo: number; pct: number | null; nPaganti: number; incassato: number; quotaCoach: number; quotaPalestra: number }
+  >();
+
   for (const a of atleti) {
     const pag = pagMap.get(a.userId);
     const piano = pag?.piano ?? (await pianoDelMese(c.env.DB, a.userId, anno, mese));
@@ -47,12 +54,26 @@ suddivisioni.get("/", requireCoach, async (c) => {
     const pct = cfgMap.get(piano);
     const quotaCoach = pct != null ? Math.round(prezzo * pct) / 100 : null;
     const quotaPalestra = quotaCoach != null ? prezzo - quotaCoach : null;
+    const pagato = pag?.stato === "pagato";
 
-    if (quotaCoach != null) {
-      coach += quotaCoach;
-      palestra += quotaPalestra ?? 0;
-    } else {
-      daDefinire += prezzo;
+    // I totali generali e il PDF contano solo chi ha pagato.
+    if (pagato) {
+      if (quotaCoach != null) {
+        coach += quotaCoach;
+        palestra += quotaPalestra ?? 0;
+      } else {
+        daDefinire += prezzo;
+      }
+
+      let agg = perPianoMap.get(piano);
+      if (!agg) {
+        agg = { piano, nomePiano: nomePiano(piano) ?? piano, prezzo, pct: pct ?? null, nPaganti: 0, incassato: 0, quotaCoach: 0, quotaPalestra: 0 };
+        perPianoMap.set(piano, agg);
+      }
+      agg.nPaganti += 1;
+      agg.incassato += prezzo;
+      agg.quotaCoach += quotaCoach ?? 0;
+      agg.quotaPalestra += quotaPalestra ?? 0;
     }
 
     righe.push({
@@ -62,15 +83,21 @@ suddivisioni.get("/", requireCoach, async (c) => {
       nomePiano: nomePiano(piano),
       prezzo,
       stato: pag?.stato ?? "non_pagato",
+      pagato,
       quotaCoach,
       quotaPalestra,
     });
   }
 
+  const perPiano = PIANI.map((p) => perPianoMap.get(p.key)).filter(
+    (x): x is NonNullable<typeof x> => x != null
+  );
+
   return c.json({
     anno,
     mese,
     righe,
+    perPiano,
     config: Object.fromEntries(PIANI.map((p) => [p.key, cfgMap.get(p.key) ?? null])),
     totali: { coach, palestra, daDefinire },
   });

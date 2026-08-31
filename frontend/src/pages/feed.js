@@ -33,6 +33,16 @@ function bannerSpotifyHtml() {
   `;
 }
 
+// Link per inoltrare un post su WhatsApp: apre WhatsApp col testo già pronto, poi è
+// l'utente a scegliere la chat (il gruppo palestra). wa.me non permette di postare
+// direttamente in un gruppo specifico.
+function linkWhatsApp(testoPost, autore, azione) {
+  const righe = [`${autore}${azione ? ` ${azione}` : ""} — 100FT`];
+  const testo = String(testoPost ?? "").replace(/<[^>]*>/g, "").trim();
+  if (testo) righe.push("", testo);
+  return `https://wa.me/?text=${encodeURIComponent(righe.join("\n"))}`;
+}
+
 function tempoFa(dataIso) {
   const diffMs = Date.now() - new Date(dataIso + "Z").getTime();
   const minuti = Math.floor(diffMs / 60000);
@@ -113,7 +123,13 @@ async function loadFeed(el) {
             </p>
             <p style="margin-top:8px">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
-            <div style="display:flex; gap:6px; margin-top:10px">${reazioniHtml}</div>
+            <div style="display:flex; gap:6px; margin-top:10px; align-items:center">
+              ${reazioniHtml}
+              <a href="${linkWhatsApp(p.testo, autore, info.azione)}" target="_blank" rel="noopener"
+                 class="mono" style="margin-left:auto; color:#1ED760; font-size:12px; text-decoration:none; white-space:nowrap">
+                ↗ WhatsApp
+              </a>
+            </div>
           </div>
         `;
       })

@@ -1,5 +1,6 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
+import { getUser } from "../auth.js";
 
 const TIPO_LABEL = {
   presenza: "Sfida di gruppo",
@@ -294,19 +295,22 @@ async function loadClassifica(el, periodo) {
 function sfidaItemHtml(s, oggi) {
   const scaduta = s.data_fine < oggi;
   const done = !!s.partecipato;
+  const isCoach = getUser()?.role === "coach";
   const azione = done
     ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>`
     : scaduta
       ? `<button class="btn" style="width:100%; margin-top:10px" disabled>Sfida terminata</button>`
       : s.tipo === "traguardo"
         ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">${criterioTesto(s.criterio)}</p>`
-        : s.tipo === "foto"
-          ? `
+        : isCoach
+          ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">Come coach non partecipi alle sfide.</p>`
+          : s.tipo === "foto"
+            ? `
           ${fotoInputHtml("foto-input")}
           <p class="error-text foto-error" hidden style="margin-top:6px"></p>
           <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
         `
-          : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
+            : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
 
   return `
     <div class="sfida-item${done ? " done" : ""}" data-id="${s.id}" data-tipo="${s.tipo}">

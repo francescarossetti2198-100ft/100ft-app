@@ -109,17 +109,17 @@ presenze.get("/appello", requireCoach, async (c) => {
 
   const [atleti, conferma] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT u.id AS userId, p.nome, p.nickname,
+      `SELECT u.id AS userId, p.nome, p.cognome, p.nickname,
               COALESCE(pr.presenza_richiesta, 0) AS richiesta,
               COALESCE(pr.confermata, 0) AS confermata
        FROM users u
        JOIN athlete_profile p ON p.user_id = u.id
        LEFT JOIN presenze pr ON pr.user_id = u.id AND pr.sessione_id = ? AND pr.data = ?
        WHERE u.role = 'atleta' AND u.status = 'attivo'
-       ORDER BY p.nome`
+       ORDER BY p.nome, p.cognome`
     )
       .bind(sessione.id, data)
-      .all<{ userId: number; nome: string; nickname: string | null; richiesta: number; confermata: number }>(),
+      .all<{ userId: number; nome: string; cognome: string | null; nickname: string | null; richiesta: number; confermata: number }>(),
     c.env.DB.prepare(`SELECT 1 FROM appello_conferme WHERE data = ? AND sessione_id = ?`)
       .bind(data, sessione.id)
       .first(),
@@ -131,6 +131,7 @@ presenze.get("/appello", requireCoach, async (c) => {
     atleti: atleti.results.map((a) => ({
       userId: a.userId,
       nome: a.nome,
+      cognome: a.cognome,
       nickname: a.nickname,
       richiesta: !!a.richiesta,
       confermata: !!a.confermata,

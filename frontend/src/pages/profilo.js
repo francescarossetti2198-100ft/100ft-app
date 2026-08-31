@@ -756,6 +756,7 @@ function abbonamentoCardHtml(p) {
   return `
     <div class="card" style="margin-top:12px" id="abbonamento-card">
       <p class="sezione-label">Abbonamenti</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${LEGENDA_GIORNI}</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
         ${attuale ? "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo." : "Scegli il tuo piano per iniziare."}
       </p>
@@ -764,7 +765,6 @@ function abbonamentoCardHtml(p) {
         ${PIANI.map(pillHtml).join("")}
       </div>
       ${collassa ? `<button type="button" class="link-btn" id="abb-cambia" style="margin-top:8px">Cambia piano ▾</button>` : ""}
-      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">${LEGENDA_GIORNI}</p>
     </div>`;
 }
 
