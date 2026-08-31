@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0A0A" />
     <title>100FT — Functional Training</title>
+    <!-- Anteprima quando il link viene condiviso (WhatsApp, ecc.): il crawler non esegue JS,
+         legge questi tag statici. Il link porta comunque al Feed dell'app. -->
+    <meta name="description" content="Guarda cosa è successo oggi nel gruppo 100FT — sfide, livelli, allenamenti." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="100FT" />
+    <meta property="og:title" content="100FT — Feed" />
+    <meta property="og:description" content="Guarda cosa è successo oggi nel gruppo 100FT — sfide, livelli, allenamenti." />
+    <meta property="og:url" content="https://app.100-ft.com/#/feed" />
+    <meta property="og:image" content="https://app.100-ft.com/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
     <!-- Normalizza l'hostname con il punto finale ("app.100-ft.com." → "app.100-ft.com").
          È un FQDN valido che i browser accettano, ma conta come origin diversa: da lì
          ogni chiamata a api.100-ft.com fallisce il controllo CORS e l'app mostra

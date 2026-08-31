@@ -35,11 +35,13 @@ function bannerSpotifyHtml() {
 
 // Link per inoltrare un post su WhatsApp: apre WhatsApp col testo già pronto, poi è
 // l'utente a scegliere la chat (il gruppo palestra). wa.me non permette di postare
-// direttamente in un gruppo specifico.
+// direttamente in un gruppo specifico. In fondo al messaggio c'è il link al Feed: WhatsApp
+// ne mostra l'anteprima (meta OG in index.html) e chi legge può aprirlo per vedere il post.
 function linkWhatsApp(testoPost, autore, azione) {
   const righe = [`${autore}${azione ? ` ${azione}` : ""} — 100FT`];
   const testo = String(testoPost ?? "").replace(/<[^>]*>/g, "").trim();
   if (testo) righe.push("", testo);
+  righe.push("", `Guarda nel Feed 👉 ${location.origin}/#/feed`);
   return `https://wa.me/?text=${encodeURIComponent(righe.join("\n"))}`;
 }
 

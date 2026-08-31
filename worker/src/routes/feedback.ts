@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
-import { inizioSettimana } from "../lib/settimana";
 import { adessoRoma } from "../lib/oggi";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { awardXp } from "../lib/xp";
@@ -16,31 +15,31 @@ const DIFFICOLTA = ["facile", "giusto", "impegnativo", "tostissimo"];
 type Variables = { user: SessionUser };
 const feedback = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Sessioni di questa settimana a cui l'atleta ha partecipato ma senza feedback ancora dato —
-// disponibili solo dopo la fine della sessione (Presenza -> Allenamento -> Feedback).
+// Feedback post-allenamento: si può dare SOLO per la sessione di OGGI, dalla fine della
+// sessione fino allo scoccare della mezzanotte (poi il giorno cambia e il feedback scade),
+// e solo se l'atleta ha partecipato (`presenza_richiesta = 1`).
 feedback.get("/da-dare", requireAuth, async (c) => {
-  const inizioSett = inizioSettimana(adessoRoma());
-  const fineSett = new Date(inizioSett);
-  fineSett.setUTCDate(fineSett.getUTCDate() + 6);
+  const ora = adessoRoma();
+  const oggiIso = ora.toISOString().slice(0, 10);
 
-  const { results } = await c.env.DB.prepare(
+  const riga = await c.env.DB.prepare(
     `SELECT p.data, p.sessione_id AS sessioneId, s.ora_fine AS oraFine
      FROM presenze p
      JOIN sessioni_gruppo s ON s.id = p.sessione_id
-     WHERE p.user_id = ? AND p.presenza_richiesta = 1 AND p.data BETWEEN ? AND ?
+     WHERE p.user_id = ? AND p.presenza_richiesta = 1 AND p.data = ?
        AND NOT EXISTS (
          SELECT 1 FROM feedback_allenamento f
          WHERE f.user_id = p.user_id AND f.sessione_id = p.sessione_id AND f.data = p.data
-       )
-     ORDER BY p.data`
+       )`
   )
-    .bind(c.var.user.userId, inizioSett.toISOString().slice(0, 10), fineSett.toISOString().slice(0, 10))
-    .all<{ data: string; sessioneId: number; oraFine: string }>();
+    .bind(c.var.user.userId, oggiIso)
+    .first<{ data: string; sessioneId: number; oraFine: string }>();
 
-  const ora = adessoRoma();
-  const daDare = results.filter((r) => new Date(`${r.data}T${r.oraFine}:00Z`) <= ora);
+  const disponibile = riga && new Date(`${riga.data}T${riga.oraFine}:00Z`) <= ora;
 
-  return c.json({ sessioni: daDare.map(({ data, sessioneId }) => ({ data, sessioneId })) });
+  return c.json({
+    sessioni: disponibile ? [{ data: riga.data, sessioneId: riga.sessioneId }] : [],
+  });
 });
 
 feedback.post("/", requireAuth, async (c) => {
@@ -61,6 +60,12 @@ feedback.post("/", requireAuth, async (c) => {
   if (!FACCE.includes(faccina)) return c.json({ error: "Faccina non valida" }, 400);
   if (!DIFFICOLTA.includes(difficolta)) return c.json({ error: "Difficoltà non valida" }, 400);
 
+  // Il feedback si dà solo il giorno stesso dell'allenamento: dopo la mezzanotte scade.
+  const ora = adessoRoma();
+  if (data !== ora.toISOString().slice(0, 10)) {
+    return c.json({ error: "Il feedback si dà entro la mezzanotte del giorno dell'allenamento" }, 400);
+  }
+
   const presenza = await c.env.DB.prepare(
     `SELECT id FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ? AND presenza_richiesta = 1`
   )
@@ -71,7 +76,7 @@ feedback.post("/", requireAuth, async (c) => {
   const sessione = await c.env.DB.prepare(`SELECT ora_fine FROM sessioni_gruppo WHERE id = ?`)
     .bind(sessioneId)
     .first<{ ora_fine: string }>();
-  if (sessione && new Date(`${data}T${sessione.ora_fine}:00Z`) > adessoRoma()) {
+  if (sessione && new Date(`${data}T${sessione.ora_fine}:00Z`) > ora) {
     return c.json({ error: "Il feedback è disponibile solo dopo la fine della sessione" }, 400);
   }
 
