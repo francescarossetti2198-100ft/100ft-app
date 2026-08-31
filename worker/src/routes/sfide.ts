@@ -124,7 +124,7 @@ sfide.get("/", requireAuth, async (c) => {
   if (!isCoach) await verificaTraguardi(c.env.DB, c.var.user.userId);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.data_inizio, s.data_fine,
+    `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.flash, s.data_inizio, s.data_fine,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
@@ -146,10 +146,10 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
 
   const sfida = await c.env.DB.prepare(
-    `SELECT id, titolo, tipo, punti, data_inizio, data_fine FROM sfide WHERE id = ?`
+    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine FROM sfide WHERE id = ?`
   )
     .bind(sfidaId)
-    .first<{ id: number; titolo: string; tipo: string; punti: number; data_inizio: string; data_fine: string }>();
+    .first<{ id: number; titolo: string; tipo: string; punti: number; flash: number; data_inizio: string; data_fine: string }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
   if (sfida.tipo === "traguardo") {
     return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
@@ -182,13 +182,13 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     .bind(sfidaId, c.var.user.userId, valore, fotoUrl, oggi, sfida.punti)
     .run();
 
-  await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti);
+  await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti, sfida.id);
 
   // Ogni sfida completata finisce nel Feed (scelta di Francesca, 31 ago): quelle foto con
-  // la foto, le altre (presenza/valore_manuale) solo col titolo. I traguardi automatici
-  // pubblicano da lib/traguardi.ts.
+  // la foto, le altre (presenza/valore_manuale) solo col titolo; le "lampo" col prefisso ⚡.
+  // I traguardi automatici pubblicano da lib/traguardi.ts.
   await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
-    .bind(c.var.user.userId, fotoUrl, sfida.titolo)
+    .bind(c.var.user.userId, fotoUrl, sfida.flash ? `⚡ ${sfida.titolo}` : sfida.titolo)
     .run();
 
   // Completare una sfida chiude l'anello CHALLENGES del mese, che può chiudere una
@@ -221,10 +221,12 @@ sfide.post("/", requireCoach, async (c) => {
     descrizione?: string;
     tipo?: string;
     criterio?: string;
+    flash?: boolean | number;
     data_inizio?: string;
     data_fine?: string;
   }>();
   const { titolo, descrizione, tipo, criterio, data_inizio, data_fine } = body;
+  const flash = body.flash ? 1 : 0;
 
   if (!titolo || !tipo || !data_inizio || !data_fine) {
     return c.json({ error: "Titolo, tipo, data_inizio e data_fine sono obbligatori" }, 400);
@@ -235,16 +237,90 @@ sfide.post("/", requireCoach, async (c) => {
   if (tipo === "traguardo" && (!criterio || !criterioValido(criterio))) {
     return c.json({ error: "Criterio del traguardo mancante o non valido" }, 400);
   }
+  if (data_fine < data_inizio) {
+    return c.json({ error: "La data di fine è prima di quella di inizio" }, 400);
+  }
 
   // Ogni sfida completata vale 10 punti fissi (sistema punti 2026-08) — non più deciso dal coach.
   const PUNTI_SFIDA = 10;
   const result = await c.env.DB.prepare(
-    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, data_inizio, data_fine) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, data_inizio, data_fine)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(titolo, descrizione ?? null, tipo, tipo === "traguardo" ? criterio : null, PUNTI_SFIDA, data_inizio, data_fine)
+    .bind(
+      titolo,
+      descrizione ?? null,
+      tipo,
+      tipo === "traguardo" ? criterio : null,
+      PUNTI_SFIDA,
+      flash,
+      data_inizio,
+      data_fine
+    )
     .run();
 
   return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+// Eliminazione sfida dalla dashboard coach — cancella anche partecipazioni, punti e post nel
+// Feed collegati (la classifica si ricalcola da xp_log). Scelta di Francesca (ago 2026).
+sfide.delete("/:id", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "ID sfida non valido" }, 400);
+
+  const sfida = await c.env.DB.prepare(`SELECT titolo, flash FROM sfide WHERE id = ?`)
+    .bind(id)
+    .first<{ titolo: string; flash: number }>();
+  if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
+
+  const { results: parti } = await c.env.DB.prepare(
+    `SELECT user_id AS userId, COUNT(*) AS n, COALESCE(SUM(punti_assegnati), 0) AS punti
+     FROM partecipazioni_sfide WHERE sfida_id = ? GROUP BY user_id`
+  )
+    .bind(id)
+    .all<{ userId: number; n: number; punti: number }>();
+  const puntiRimossi = parti.reduce((tot, p) => tot + p.punti, 0);
+
+  // 1. Post nel Feed di questa sfida (match per titolo, con/senza prefisso ⚡, e utenti coinvolti).
+  if (parti.length) {
+    const ph = parti.map(() => "?").join(",");
+    await c.env.DB.prepare(
+      `DELETE FROM post_feed WHERE tipo = 'sfida' AND testo IN (?, ?) AND user_id IN (${ph})`
+    )
+      .bind(sfida.titolo, `⚡ ${sfida.titolo}`, ...parti.map((p) => p.userId))
+      .run();
+  }
+
+  // 2. Punti: via xp_log.sfida_id (esatto). Fallback per le sfide create prima della 0029
+  //    (sfida_id NULL): per ogni partecipante, tolgo le righe 'sfida' generiche mancanti.
+  const { results: xpLinkati } = await c.env.DB.prepare(
+    `SELECT user_id AS userId, COUNT(*) AS n FROM xp_log WHERE sfida_id = ? GROUP BY user_id`
+  )
+    .bind(id)
+    .all<{ userId: number; n: number }>();
+  const linkatiPerUtente = new Map(xpLinkati.map((r) => [r.userId, r.n]));
+
+  await c.env.DB.prepare(`DELETE FROM xp_log WHERE sfida_id = ?`).bind(id).run();
+
+  for (const p of parti) {
+    const daTogliere = p.n - (linkatiPerUtente.get(p.userId) ?? 0);
+    if (daTogliere > 0) {
+      await c.env.DB.prepare(
+        `DELETE FROM xp_log WHERE id IN (
+           SELECT id FROM xp_log WHERE user_id = ? AND azione = 'sfida' AND sfida_id IS NULL
+           ORDER BY id DESC LIMIT ?
+         )`
+      )
+        .bind(p.userId, daTogliere)
+        .run();
+    }
+  }
+
+  // 3. Partecipazioni + 4. sfida.
+  await c.env.DB.prepare(`DELETE FROM partecipazioni_sfide WHERE sfida_id = ?`).bind(id).run();
+  await c.env.DB.prepare(`DELETE FROM sfide WHERE id = ?`).bind(id).run();
+
+  return c.json({ ok: true, puntiRimossi, atletiCoinvolti: parti.length });
 });
 
 export default sfide;

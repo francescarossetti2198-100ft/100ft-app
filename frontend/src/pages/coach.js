@@ -9,20 +9,41 @@ const MESI = [
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
-const TIPO_SFIDA_LABEL = {
-  presenza: "Sfida di gruppo",
-  foto: "Sfida foto",
-  valore_manuale: "Sfida personale",
-  traguardo: "Traguardo (automatico)",
-};
+// Stile condiviso dei <select> della dashboard.
+const SEL_STYLE =
+  "background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px";
 
 // Criteri per le sfide "traguardo": si completano da sole quando l'atleta li raggiunge.
 const CRITERI_TRAGUARDO = [
-  { v: "profilo_completo", label: "Profilo + I tuoi dati completi" },
-  { v: "obiettivi_completi", label: "Obiettivi personali compilati" },
-  { v: "daily_drop", label: "Almeno un daily drop" },
-  { v: "presenze", label: "N presenze (nel periodo della sfida)" },
+  { v: "profilo_completo", label: "ha completato profilo + «I tuoi dati»" },
+  { v: "obiettivi_completi", label: "ha compilato gli obiettivi personali" },
+  { v: "daily_drop", label: "ha fatto almeno un daily drop" },
+  { v: "presenze", label: "raggiunge N presenze confermate" },
 ];
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// Riga leggibile per una sfida nell'elenco della dashboard.
+function descriviSfida(s) {
+  if (s.tipo === "foto") return "📸 Foto";
+  if (s.tipo !== "traguardo") return "👋 Di gruppo";
+  const c = s.criterio || "";
+  if (c === "profilo_completo") return "🏅 Automatica — profilo completo";
+  if (c === "obiettivi_completi") return "🏅 Automatica — obiettivi compilati";
+  if (c === "daily_drop") return "🏅 Automatica — un daily drop";
+  const m = c.match(/^presenze:(\d+)$/);
+  if (m) return `🏅 Automatica — ${m[1]} presenze`;
+  return "🏅 Automatica";
+}
+
+// Primo e ultimo giorno (YYYY-MM-DD) di un mese dato anno + mese 1-12.
+function estremiMese(anno, mese) {
+  return {
+    inizio: `${anno}-${String(mese).padStart(2, "0")}-01`,
+    fine: new Date(Date.UTC(anno, mese, 0)).toISOString().slice(0, 10),
+  };
+}
 
 function oraCorrente() {
   const now = new Date();
@@ -141,45 +162,76 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">CREA SFIDA</p>
-      <div class="field" style="margin-top:10px">
-        <label>Titolo</label>
-        <input id="sfida-titolo" type="text" />
+      <p class="mono" style="color:var(--mute); font-size:12px">SFIDE</p>
+
+      <div id="sfide-elenco" style="margin-top:10px">
+        <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>
       </div>
-      <div class="field">
-        <label>Descrizione</label>
-        <input id="sfida-descrizione" type="text" />
-      </div>
-      <div class="field">
-        <label>Tipo</label>
-        <select id="sfida-tipo" style="background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px">
-          ${Object.entries(TIPO_SFIDA_LABEL).map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}
-        </select>
-      </div>
-      <div class="field" id="sfida-criterio-wrap" hidden>
-        <label>Criterio</label>
-        <select id="sfida-criterio" style="background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px">
-          ${CRITERI_TRAGUARDO.map((x) => `<option value="${x.v}">${x.label}</option>`).join("")}
-        </select>
-        <input id="sfida-criterio-n" type="number" min="1" max="99" value="6" hidden
-               style="margin-top:8px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px" />
-      </div>
-      <div style="display:flex; gap:10px">
-        <div class="field" style="flex:1">
-          <label>Inizio</label>
-          <input id="sfida-inizio" type="date" />
+
+      <div id="sfide-duplica" hidden style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+        <p class="mono" style="color:var(--mute); font-size:12px">DUPLICA UN MESE</p>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:flex-end; flex-wrap:wrap">
+          <div class="field" style="flex:1; min-width:110px; margin:0">
+            <label>Da</label>
+            <select id="dup-da" style="${SEL_STYLE}"></select>
+          </div>
+          <div class="field" style="flex:1; min-width:110px; margin:0">
+            <label>A</label>
+            <select id="dup-a" style="${SEL_STYLE}"></select>
+          </div>
+          <button class="btn" id="dup-btn" style="background:var(--surface-2); color:var(--text)">Duplica</button>
         </div>
-        <div class="field" style="flex:1">
-          <label>Fine</label>
-          <input id="sfida-fine" type="date" />
-        </div>
+        <p class="mono" id="dup-msg" hidden style="font-size:12px; margin-top:6px"></p>
       </div>
-      <p class="mono" style="color:var(--mute); font-size:12px">Ogni sfida completata vale 10 punti.</p>
-      <p class="error-text" id="sfida-error" hidden></p>
-      <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
-      <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
+
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+        <p class="mono" style="color:var(--mute); font-size:12px">NUOVA SFIDA</p>
+        <div class="field" style="margin-top:10px">
+          <label>Titolo</label>
+          <input id="sfida-titolo" type="text" />
+        </div>
+        <div class="field">
+          <label>Descrizione</label>
+          <input id="sfida-descrizione" type="text" />
+        </div>
+        <div class="field">
+          <label>Come si completa</label>
+          <select id="sfida-tipo" style="${SEL_STYLE}">
+            <option value="foto">Foto — l'atleta carica una foto</option>
+            <option value="traguardo">Automatica — si completa da sola</option>
+            <option value="presenza">Di gruppo — l'atleta conferma «fatto»</option>
+          </select>
+        </div>
+        <div class="field" id="sfida-criterio-wrap" style="display:none">
+          <label>Si completa quando l'atleta…</label>
+          <select id="sfida-criterio" style="${SEL_STYLE}">
+            ${CRITERI_TRAGUARDO.map((x) => `<option value="${x.v}">${x.label}</option>`).join("")}
+          </select>
+          <input id="sfida-criterio-n" type="number" min="1" max="99" value="6" hidden
+                 style="margin-top:8px; ${SEL_STYLE}" />
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin:4px 0 12px; cursor:pointer">
+          <input type="checkbox" id="sfida-flash" /> ⚡ Sfida lampo (badge dedicato, di pochi giorni)
+        </label>
+        <div style="display:flex; gap:12px; margin-bottom:8px">
+          <button type="button" class="link-btn" data-preset="mese">Questo mese</button>
+          <button type="button" class="link-btn" data-preset="prossimo">Prossimo mese</button>
+        </div>
+        <div style="display:flex; gap:10px">
+          <div class="field" style="flex:1">
+            <label>Inizio</label>
+            <input id="sfida-inizio" type="date" />
+          </div>
+          <div class="field" style="flex:1">
+            <label>Fine</label>
+            <input id="sfida-fine" type="date" />
+          </div>
+        </div>
+        <p class="mono" style="color:var(--mute); font-size:12px">Ogni sfida completata vale 10 punti.</p>
+        <p class="error-text" id="sfida-error" hidden></p>
+        <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
+        <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
+      </div>
     </div>
 
     <div class="card" style="margin-top:16px">
@@ -565,14 +617,134 @@ function initSfida(el) {
   const criterioWrap = el.querySelector("#sfida-criterio-wrap");
   const criterioSel = el.querySelector("#sfida-criterio");
   const criterioN = el.querySelector("#sfida-criterio-n");
+  const flashChk = el.querySelector("#sfida-flash");
+  const inizioInput = el.querySelector("#sfida-inizio");
+  const fineInput = el.querySelector("#sfida-fine");
+  const elenco = el.querySelector("#sfide-elenco");
+  const dupWrap = el.querySelector("#sfide-duplica");
+  const dupDa = el.querySelector("#dup-da");
+  const dupA = el.querySelector("#dup-a");
+  const dupMsg = el.querySelector("#dup-msg");
 
+  let sfideCache = [];
+
+  // ─── A. Elenco ───────────────────────────────────────────────────────────
+  async function carica() {
+    try {
+      const { sfide } = await api.get("/sfide");
+      sfideCache = sfide;
+    } catch {
+      elenco.innerHTML = `<p class="error-text">Impossibile caricare le sfide</p>`;
+      return;
+    }
+
+    if (!sfideCache.length) {
+      elenco.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Ancora nessuna sfida.</p>`;
+    } else {
+      const perMese = new Map();
+      for (const s of sfideCache) {
+        const k = (s.data_inizio || "").slice(0, 7);
+        if (!perMese.has(k)) perMese.set(k, []);
+        perMese.get(k).push(s);
+      }
+      const mesi = [...perMese.keys()].sort().reverse();
+      elenco.innerHTML = mesi
+        .map((k) => {
+          const [anno, mm] = k.split("-");
+          const righe = perMese
+            .get(k)
+            .sort((a, b) => (a.data_fine < b.data_fine ? 1 : -1))
+            .map((s) => {
+              const dd = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+              const flashBadge = s.flash
+                ? ` <span class="mono" style="color:var(--sessione-b); font-size:10px">⚡ LAMPO</span>`
+                : "";
+              return `
+                <div style="display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-top:1px solid var(--border)">
+                  <div style="flex:1; min-width:0">
+                    <p style="font-size:14px; font-weight:600">${esc(s.titolo)}${flashBadge}</p>
+                    <p class="mono" style="color:var(--mute); font-size:11px; margin-top:2px">
+                      ${descriviSfida(s)} · ${dd(s.data_inizio)}–${dd(s.data_fine)} · ${s.numeroPartecipanti} partecipanti
+                    </p>
+                  </div>
+                  <button type="button" class="link-btn sfida-del" data-id="${s.id}"
+                    style="color:var(--livello-5); flex-shrink:0; text-decoration:none; font-size:16px">🗑</button>
+                </div>`;
+            })
+            .join("");
+          return `
+            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:12px 0 0">
+              ${(MESI[+mm - 1] || "").toUpperCase()} ${anno}
+            </p>
+            ${righe}`;
+        })
+        .join("");
+
+      elenco.querySelectorAll(".sfida-del").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const s = sfideCache.find((x) => String(x.id) === btn.dataset.id);
+          if (!s) return;
+          const n = Number(s.numeroPartecipanti) || 0;
+          const avviso = n > 0 ? ` Toglierai ~${n * 10} punti a ${n} atlet${n === 1 ? "a" : "i"}.` : "";
+          if (!confirm(`Eliminare «${s.titolo}»?${avviso}`)) return;
+          btn.disabled = true;
+          try {
+            await api.del(`/sfide/${s.id}`);
+            await carica();
+          } catch (err) {
+            alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    // ─── C. Duplica un mese: popola i select ───
+    const mesiConSfide = [...new Set(sfideCache.map((s) => (s.data_inizio || "").slice(0, 7)))]
+      .filter(Boolean)
+      .sort()
+      .reverse();
+    const now = oraCorrente();
+    const mesiTarget = Array.from({ length: 4 }, (_, i) => {
+      const d = new Date(Date.UTC(now.anno, now.mese - 1 + i, 1));
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    });
+    const optLabel = (k) => `${MESI[+k.slice(5) - 1]} ${k.slice(0, 4)}`;
+    dupWrap.hidden = mesiConSfide.length === 0;
+    dupDa.innerHTML = mesiConSfide.map((k) => `<option value="${k}">${optLabel(k)}</option>`).join("");
+    dupA.innerHTML = mesiTarget.map((k) => `<option value="${k}">${optLabel(k)}</option>`).join("");
+  }
+
+  // ─── B. Form nuova sfida ─────────────────────────────────────────────────
   const aggiornaCriterio = () => {
-    criterioWrap.hidden = tipoSel.value !== "traguardo";
+    // `.field` ha display:flex, che vince su [hidden] -> uso style.display.
+    criterioWrap.style.display = tipoSel.value === "traguardo" ? "" : "none";
     criterioN.hidden = !(tipoSel.value === "traguardo" && criterioSel.value === "presenze");
   };
   tipoSel.addEventListener("change", aggiornaCriterio);
   criterioSel.addEventListener("change", aggiornaCriterio);
   aggiornaCriterio();
+
+  const setDate = (inizio, fine) => {
+    inizioInput.value = inizio;
+    fineInput.value = fine;
+  };
+  el.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const now = oraCorrente();
+      const off = btn.dataset.preset === "prossimo" ? 1 : 0;
+      const d = new Date(Date.UTC(now.anno, now.mese - 1 + off, 1));
+      const { inizio, fine } = estremiMese(d.getUTCFullYear(), d.getUTCMonth() + 1);
+      setDate(inizio, fine);
+    });
+  });
+  flashChk.addEventListener("change", () => {
+    if (flashChk.checked && !inizioInput.value && !fineInput.value) {
+      const d = new Date();
+      const fine = new Date(d.getTime() + 7 * 86400000);
+      setDate(d.toISOString().slice(0, 10), fine.toISOString().slice(0, 10));
+    }
+  });
 
   el.querySelector("#sfida-crea").addEventListener("click", async (e) => {
     errorEl.hidden = true;
@@ -581,8 +753,8 @@ function initSfida(el) {
     const titolo = el.querySelector("#sfida-titolo").value.trim();
     const descrizione = el.querySelector("#sfida-descrizione").value.trim();
     const tipo = tipoSel.value;
-    const dataInizio = el.querySelector("#sfida-inizio").value;
-    const dataFine = el.querySelector("#sfida-fine").value;
+    const dataInizio = inizioInput.value;
+    const dataFine = fineInput.value;
     let criterio;
     if (tipo === "traguardo") {
       criterio = criterioSel.value === "presenze" ? `presenze:${Number(criterioN.value) || 1}` : criterioSel.value;
@@ -601,14 +773,16 @@ function initSfida(el) {
         descrizione: descrizione || undefined,
         tipo,
         criterio,
+        flash: flashChk.checked ? 1 : 0,
         data_inizio: dataInizio,
         data_fine: dataFine,
       });
       successEl.hidden = false;
       el.querySelector("#sfida-titolo").value = "";
       el.querySelector("#sfida-descrizione").value = "";
-      el.querySelector("#sfida-inizio").value = "";
-      el.querySelector("#sfida-fine").value = "";
+      flashChk.checked = false;
+      setDate("", "");
+      await carica();
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
       errorEl.hidden = false;
@@ -616,6 +790,55 @@ function initSfida(el) {
       e.target.disabled = false;
     }
   });
+
+  // ─── C. Duplica un mese ──────────────────────────────────────────────────
+  el.querySelector("#dup-btn").addEventListener("click", async (e) => {
+    dupMsg.hidden = true;
+    const da = dupDa.value;
+    const a = dupA.value;
+    if (!da || !a || da === a) {
+      dupMsg.textContent = "Scegli due mesi diversi.";
+      dupMsg.style.color = "var(--livello-5)";
+      dupMsg.hidden = false;
+      return;
+    }
+    const [tAnno, tMese] = a.split("-").map(Number);
+    const { inizio, fine } = estremiMese(tAnno, tMese);
+    const daCopiare = sfideCache.filter((s) => (s.data_inizio || "").slice(0, 7) === da);
+    const giaPresenti = new Set(
+      sfideCache.filter((s) => (s.data_inizio || "").slice(0, 7) === a).map((s) => s.titolo)
+    );
+
+    e.target.disabled = true;
+    let create = 0;
+    try {
+      for (const s of daCopiare) {
+        if (giaPresenti.has(s.titolo)) continue;
+        await api.post("/sfide", {
+          titolo: s.titolo,
+          descrizione: s.descrizione || undefined,
+          tipo: s.tipo,
+          criterio: s.criterio || undefined,
+          flash: s.flash ? 1 : 0,
+          data_inizio: inizio,
+          data_fine: fine,
+        });
+        create++;
+      }
+      dupMsg.textContent = create ? `Create ${create} sfide.` : "Niente da copiare (già presenti).";
+      dupMsg.style.color = "var(--livello-1)";
+      dupMsg.hidden = false;
+      await carica();
+    } catch (err) {
+      dupMsg.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      dupMsg.style.color = "var(--livello-5)";
+      dupMsg.hidden = false;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  carica();
 }
 
 function initRichieste(el) {

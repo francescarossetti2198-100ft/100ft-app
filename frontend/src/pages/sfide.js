@@ -310,7 +310,9 @@ function sfidaItemHtml(s, oggi) {
 
   return `
     <div class="sfida-item${done ? " done" : ""}" data-id="${s.id}" data-tipo="${s.tipo}">
-      <p class="mono" style="color:var(--mute); font-size:11px">${TIPO_LABEL[s.tipo] ?? s.tipo}${done ? " · ARCHIVIATA" : ""}</p>
+      <p class="mono" style="color:var(--mute); font-size:11px">${
+        s.flash ? `<span style="color:var(--sessione-b)">⚡ LAMPO</span> · ` : ""
+      }${TIPO_LABEL[s.tipo] ?? s.tipo}${done ? " · ARCHIVIATA" : ""}</p>
       <p style="font-weight:600; margin-top:2px">${s.titolo}</p>
       ${s.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">${s.descrizione}</p>` : ""}
       <p class="mono" style="color:var(--accent); font-size:13px; margin-top:8px">+${s.punti} PT · ${s.numeroPartecipanti} partecipanti</p>

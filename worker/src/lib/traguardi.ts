@@ -30,6 +30,7 @@ export function criterioValido(criterio: string): boolean {
 type SfidaTraguardo = {
   id: number;
   titolo: string;
+  flash: number;
   criterio: string | null;
   data_inizio: string;
   data_fine: string;
@@ -86,7 +87,7 @@ export async function verificaTraguardi(db: D1Database, userId: number): Promise
   const oggi = adessoRoma().toISOString().slice(0, 10);
   const { results } = await db
     .prepare(
-      `SELECT s.id, s.titolo, s.criterio, s.data_inizio, s.data_fine
+      `SELECT s.id, s.titolo, s.flash, s.criterio, s.data_inizio, s.data_fine
        FROM sfide s
        WHERE s.tipo = 'traguardo' AND s.data_fine >= ?
          AND (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
@@ -107,11 +108,11 @@ export async function verificaTraguardi(db: D1Database, userId: number): Promise
       )
       .bind(s.id, userId, oggi, PUNTI_SFIDA)
       .run();
-    await awardXp(db, userId, "sfida", PUNTI_SFIDA);
-    // Ogni sfida completata (traguardi inclusi) compare nel Feed.
+    await awardXp(db, userId, "sfida", PUNTI_SFIDA, s.id);
+    // Ogni sfida completata (traguardi inclusi) compare nel Feed; le "lampo" col prefisso ⚡.
     await db
       .prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', NULL, ?)`)
-      .bind(userId, s.titolo)
+      .bind(userId, s.flash ? `⚡ ${s.titolo}` : s.titolo)
       .run();
     const dopo = await snapshotProgressione(db, userId);
     await segnalaAvanzamento(db, userId, prima, dopo);
