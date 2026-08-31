@@ -35,6 +35,15 @@ export function mesePrecedente(now: Date = new Date()): { mese: number; anno: nu
   return m === 0 ? { mese: 12, anno: r.getUTCFullYear() - 1 } : { mese: m, anno: r.getUTCFullYear() };
 }
 
+// La stagione 100FT parte a settembre 2026. Ad agosto (e nei mesi precedenti l'avvio) non
+// ci si allena, quindi il feedback mensile su quei mesi non va né chiesto né raccolto.
+export const PRIMO_MESE_STAGIONE = "2026-09";
+
+export function meseFeedbackValido(mese: number, anno: number): boolean {
+  const ym = `${anno}-${String(mese).padStart(2, "0")}`;
+  return ym >= PRIMO_MESE_STAGIONE && mese !== 8; // agosto è sempre fuori stagione
+}
+
 export type SessioneOggi = { id: number; ora_inizio: string; ora_fine: string; tipo_sessione: string };
 
 export async function sessioneOggi(db: D1Database): Promise<SessioneOggi | null> {

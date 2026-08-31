@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { validaRisposte } from "../lib/questionario";
-import { mesePrecedente, adessoRoma } from "../lib/oggi";
+import { mesePrecedente, adessoRoma, meseFeedbackValido } from "../lib/oggi";
 import { awardXp } from "../lib/xp";
 
 // Punti classifica per aver compilato il feedback del mese.
@@ -23,7 +23,8 @@ feedbackMensile.get("/stato", requireAuth, async (c) => {
   )
     .bind(c.var.user.userId, mese, anno)
     .first();
-  return c.json({ mese, anno, giaInviato: !!gia, disponibile: nellaFinestra() });
+  const disponibile = nellaFinestra() && meseFeedbackValido(mese, anno);
+  return c.json({ mese, anno, giaInviato: !!gia, disponibile });
 });
 
 feedbackMensile.post("/", requireAuth, async (c) => {
@@ -33,13 +34,17 @@ feedbackMensile.post("/", requireAuth, async (c) => {
     return c.json({ error: "Il feedback del mese si compila entro il giorno 7" }, 409);
   }
 
+  // mese/anno decisi dal server, non dal client.
+  const { mese, anno } = mesePrecedente();
+
+  if (!meseFeedbackValido(mese, anno)) {
+    return c.json({ error: "Non c'è un feedback da compilare per questo mese" }, 409);
+  }
+
   const body = await c.req.json<{ risposte?: unknown }>();
   if (!validaRisposte(body.risposte) || Object.keys(body.risposte).length === 0) {
     return c.json({ error: "Rispondi ad almeno una domanda" }, 400);
   }
-
-  // mese/anno decisi dal server, non dal client.
-  const { mese, anno } = mesePrecedente();
 
   const gia = await c.env.DB.prepare(
     `SELECT 1 FROM feedback_mensile WHERE user_id = ? AND mese = ? AND anno = ?`

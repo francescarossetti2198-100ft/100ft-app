@@ -387,8 +387,10 @@ async function loadSfide(el, meseVoluto) {
     /* nessun focus: la scheda mostra solo il mese */
   }
 
-  // La stagione parte a settembre 2026: mesi precedenti non compaiono nel carosello.
+  // La stagione va da settembre 2026 a luglio 2027: i mesi fuori da questa finestra non
+  // compaiono nel carosello.
   const INIZIO_STAGIONE = "2026-09";
+  const FINE_STAGIONE = "2027-07";
   const oggi = new Date().toISOString().slice(0, 10);
   const meseOggi = oggi.slice(0, 7);
   const meseCorrente = meseOggi < INIZIO_STAGIONE ? INIZIO_STAGIONE : meseOggi;
@@ -402,6 +404,16 @@ async function loadSfide(el, meseVoluto) {
     perMese.get(key).push(s);
   }
   if (!perMese.has(meseCorrente)) perMese.set(meseCorrente, []);
+
+  // Tutti i mesi della stagione compaiono nel carosello, anche prima che la coach inserisca
+  // le sfide: i mesi futuri si vedono come anteprima ("5 sfide + coccarda, in arrivo") così
+  // gli atleti sanno che ogni mese c'è qualcosa da sbloccare.
+  for (let [y, m] = INIZIO_STAGIONE.split("-").map(Number); ; m++) {
+    if (m > 12) { m = 1; y++; }
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    if (key > FINE_STAGIONE) break;
+    if (!perMese.has(key)) perMese.set(key, []);
+  }
 
   // Il prossimo mese ha già il focus tematico (il worker lo anticipa agli atleti): mostralo
   // nel carosello anche se non ha ancora nessuna sfida, così l'anticipazione si vede.
@@ -439,11 +451,17 @@ async function loadSfide(el, meseVoluto) {
   const track = blocco.querySelector(".mese-track");
   const dotsBox = blocco.querySelector(".mese-dots");
 
+  // Quante "tacche" mostrare nell'anteprima di un mese non ancora inserito.
+  const TACCHE_ANTEPRIMA = 5;
+
   const disegnaMese = () => {
     const key = mesi[idx];
     const items = [...perMese.get(key)].sort((a, b) => (a.data_fine < b.data_fine ? 1 : -1));
     const completate = items.filter((s) => s.partecipato).length;
     const accento = meseAccento(key);
+    // Mese futuro ancora senza sfide: anteprima "in arrivo".
+    const anteprima = items.length === 0 && key > meseOggi;
+    const [annoKey, meseKey] = key.split("-").map(Number);
 
     blocco.style.setProperty("--mese-accento", accento);
     kickerEl.textContent = `Sfide · ${key.split("-")[0]}`;
@@ -451,20 +469,28 @@ async function loadSfide(el, meseVoluto) {
 
     // Una milestone per sfida del mese, piena fino alle completate; a fine barra la
     // medaglia del mese: colorata solo se tutte le sfide del mese sono completate.
+    // Nei mesi in anteprima: 5 tacche vuote + coccarda spenta, così si vede la struttura.
     const meseCompleto = items.length > 0 && completate === items.length;
-    progressEl.hidden = items.length === 0;
+    progressEl.hidden = items.length === 0 && !anteprima;
     progressEl.innerHTML =
-      items.map((_, i) => `<span class="${i < completate ? "on" : ""}"></span>`).join("") +
+      (anteprima
+        ? Array.from({ length: TACCHE_ANTEPRIMA }, () => `<span></span>`).join("")
+        : items.map((_, i) => `<span class="${i < completate ? "on" : ""}"></span>`).join("")) +
       `<img class="mese-medaglia${meseCompleto ? " on" : ""}" src="/medal-${meseCompleto ? "on" : "off"}.png" alt="" title="${
         meseCompleto ? "Traguardo del mese raggiunto" : "Completa tutte le sfide del mese"
       }" />`;
 
-    track.innerHTML = items.length
-      ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:6px">` +
-          `${items.length} sfid${items.length === 1 ? "a" : "e"}` +
-          `${completate ? ` · ${completate} completat${completate === 1 ? "a" : "e"}` : ""}</p>` +
-        items.map((s) => sfidaItemHtml(s, oggi)).join("")
-      : `<p class="mono" style="color:var(--mute); font-size:13px; padding:8px 0">Nessuna sfida per questo mese.</p>`;
+    track.innerHTML = anteprima
+      ? `<p class="mono" style="color:var(--mute); font-size:13px; padding:8px 0; line-height:1.6">
+           Sfide in arrivo — si sbloccano il 1° ${MESI[meseKey - 1]} ${annoKey}.<br>
+           Ogni mese: 5 sfide da completare e la coccarda del mese da conquistare.
+         </p>`
+      : items.length
+        ? `<p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:6px">` +
+            `${items.length} sfid${items.length === 1 ? "a" : "e"}` +
+            `${completate ? ` · ${completate} completat${completate === 1 ? "a" : "e"}` : ""}</p>` +
+          items.map((s) => sfidaItemHtml(s, oggi)).join("")
+        : `<p class="mono" style="color:var(--mute); font-size:13px; padding:8px 0">Nessuna sfida per questo mese.</p>`;
 
     dotsBox.innerHTML = mesi
       .map(

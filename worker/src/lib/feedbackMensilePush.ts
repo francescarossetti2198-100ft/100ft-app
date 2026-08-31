@@ -1,6 +1,6 @@
 import type { Env } from "../types";
 import { sendWebPush } from "./webPush";
-import { mesePrecedente } from "./oggi";
+import { mesePrecedente, meseFeedbackValido } from "./oggi";
 
 const MESI = [
   "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
@@ -29,6 +29,7 @@ export async function inviaFeedbackMensileSeAttivo(env: Env): Promise<void> {
   if (giorno !== 1 || oraMinuti !== "10:00") return;
 
   const { mese, anno } = mesePrecedente();
+  if (!meseFeedbackValido(mese, anno)) return; // fuori stagione: nessun feedback da chiedere
   const periodo = `${anno}-${String(mese).padStart(2, "0")}`;
 
   const inserito = await env.DB.prepare(
