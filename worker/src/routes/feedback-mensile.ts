@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { validaRisposte } from "../lib/questionario";
-import { mesePrecedente } from "../lib/oggi";
+import { mesePrecedente, adessoRoma } from "../lib/oggi";
 import { awardXp } from "../lib/xp";
 
 // Punti classifica per aver compilato il feedback del mese.
@@ -10,7 +10,7 @@ const XP_FEEDBACK_MENSILE = 15;
 
 // Si compila solo la prima settimana del mese (giorni 1–7), sul mese appena concluso.
 function nellaFinestra(): boolean {
-  return new Date().getUTCDate() <= 7;
+  return adessoRoma().getUTCDate() <= 7;
 }
 
 type Variables = { user: SessionUser };

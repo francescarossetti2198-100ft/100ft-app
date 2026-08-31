@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
-import { oggi, sessioneOggi } from "../lib/oggi";
+import { oggi, sessioneOggi, adessoRoma } from "../lib/oggi";
 import { assegnaMilestone } from "../lib/milestones";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 
@@ -21,7 +21,7 @@ async function giorniAllenamentoRecenti(db: D1Database, quante = 10, giorni = 28
     .all<{ giorno_settimana: number }>();
   const giorniConSessione = new Set(results.map((r) => r.giorno_settimana));
   const out: string[] = [];
-  const d = new Date();
+  const d = adessoRoma();
   for (let i = 0; i < giorni && out.length < quante; i++) {
     const iso = d.toISOString().slice(0, 10);
     if (giorniConSessione.has(giornoSettimanaDi(iso))) out.push(iso);

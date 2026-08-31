@@ -6,6 +6,7 @@ import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
 import { statoBadgeMensili } from "../lib/badgeMensili";
+import { adessoRoma } from "../lib/oggi";
 
 // Età in anni interi da una data YYYY-MM-DD (null se manca / non valida).
 function calcolaEta(dataNascita: string | null): number | null {
@@ -35,7 +36,7 @@ const atleti = new Hono<{ Bindings: Env; Variables: Variables }>();
 // nessun elenco atleti lato coach, solo le richieste del giorno.
 atleti.get("/", requireCoach, async (c) => {
   const db = c.env.DB;
-  const ora = new Date();
+  const ora = adessoRoma();
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 
@@ -126,7 +127,7 @@ atleti.get("/:id", requireCoach, async (c) => {
 
   if (!anagraficaRow) return c.json({ error: "Atleta non trovato" }, 404);
 
-  const ora = new Date();
+  const ora = adessoRoma();
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
 

@@ -3,11 +3,12 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { calcolaLivello } from "../lib/livelli";
 import { calcolaAnelli, sessioniSettimanaConStato } from "../lib/settimana";
-import { salvaFoto } from "../lib/storage";
+import { salvaFoto, eliminaFoto } from "../lib/storage";
 import { parseRisposte, validaRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
 import { verificaTraguardi } from "../lib/traguardi";
 import { statoBadgeMensili } from "../lib/badgeMensili";
+import { adessoRoma } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -38,7 +39,7 @@ profilo.get("/me", requireAuth, async (c) => {
 
   // Abbonamento = pagamento segnato dalla coach per il MESE corrente (stessa chiave
   // di POST /api/pagamenti). Nessuna riga = non attivo.
-  const oraAbb = new Date();
+  const oraAbb = adessoRoma();
   const meseAbb = oraAbb.getUTCMonth() + 1;
   const annoAbb = oraAbb.getUTCFullYear();
 
@@ -270,6 +271,10 @@ profilo.post("/foto", requireAuth, async (c) => {
   const file = body.foto instanceof File ? body.foto : null;
   if (!file) return c.json({ error: "Serve una foto" }, 400);
 
+  const vecchia = await c.env.DB.prepare(`SELECT foto_url AS url FROM athlete_profile WHERE user_id = ?`)
+    .bind(c.var.user.userId)
+    .first<{ url: string | null }>();
+
   const fotoUrl = await salvaFoto(c.env.FOTO_SFIDE, "profilo", file);
 
   await c.env.DB.prepare(
@@ -278,6 +283,9 @@ profilo.post("/foto", requireAuth, async (c) => {
   )
     .bind(c.var.user.userId, fotoUrl)
     .run();
+
+  // La foto precedente non serve più: toglila da R2 per non lasciare file orfani.
+  if (vecchia?.url && vecchia.url !== fotoUrl) await eliminaFoto(c.env.FOTO_SFIDE, vecchia.url);
 
   return c.json({ ok: true, fotoUrl });
 });

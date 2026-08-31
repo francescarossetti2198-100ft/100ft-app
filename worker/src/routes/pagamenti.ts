@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireCoach } from "../middleware/auth";
+import { adessoRoma } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const pagamenti = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -14,7 +15,7 @@ pagamenti.post("/", requireCoach, async (c) => {
     return c.json({ error: "Dati mancanti o non validi" }, 400);
   }
 
-  const ora = new Date();
+  const ora = adessoRoma();
   const mese = ora.getUTCMonth() + 1;
   const anno = ora.getUTCFullYear();
   const dataPagamento = stato === "pagato" ? ora.toISOString().slice(0, 10) : null;

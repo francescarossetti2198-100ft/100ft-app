@@ -5,6 +5,7 @@ import { awardXp } from "./xp";
 import { snapshotProgressione, segnalaAvanzamento } from "./progressione";
 import { stagioneDi, verificaEAssegnaTrofeo } from "./trofei";
 import { parseRisposte } from "./questionario";
+import { adessoRoma } from "./oggi";
 
 const PUNTI_SFIDA = 10;
 const PUNTI_BONUS_MESE = 10;
@@ -28,6 +29,7 @@ export function criterioValido(criterio: string): boolean {
 
 type SfidaTraguardo = {
   id: number;
+  titolo: string;
   criterio: string | null;
   data_inizio: string;
   data_fine: string;
@@ -81,10 +83,10 @@ async function criterioSoddisfatto(db: D1Database, userId: number, s: SfidaTragu
 }
 
 export async function verificaTraguardi(db: D1Database, userId: number): Promise<void> {
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = adessoRoma().toISOString().slice(0, 10);
   const { results } = await db
     .prepare(
-      `SELECT s.id, s.criterio, s.data_inizio, s.data_fine
+      `SELECT s.id, s.titolo, s.criterio, s.data_inizio, s.data_fine
        FROM sfide s
        WHERE s.tipo = 'traguardo' AND s.data_fine >= ?
          AND (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
@@ -106,6 +108,11 @@ export async function verificaTraguardi(db: D1Database, userId: number): Promise
       .bind(s.id, userId, oggi, PUNTI_SFIDA)
       .run();
     await awardXp(db, userId, "sfida", PUNTI_SFIDA);
+    // Ogni sfida completata (traguardi inclusi) compare nel Feed.
+    await db
+      .prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', NULL, ?)`)
+      .bind(userId, s.titolo)
+      .run();
     const dopo = await snapshotProgressione(db, userId);
     await segnalaAvanzamento(db, userId, prima, dopo);
 

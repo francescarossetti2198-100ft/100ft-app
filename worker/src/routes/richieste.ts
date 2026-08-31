@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
-import { oggi, sessioneOggi } from "../lib/oggi";
+import { oggi, sessioneOggi, adessoRoma } from "../lib/oggi";
 
 // Box guidati per la richiesta pre-allenamento (nuova spec Home). Niente più testo libero
 // nuovo; "Altro" resta come rete di sicurezza. Deve combaciare col CHECK della 0018 e con
@@ -23,10 +23,9 @@ const CATEGORIE = [
 type Variables = { user: SessionUser };
 const richieste = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Chiudono alle 13:00 del giorno della sessione (brief, sezione 3) — stessa semplificazione
-// sul fuso orario (UTC del Worker) già segnalata in lib/oggi.ts.
+// Chiudono alle 13:00 (ora di Roma) del giorno della sessione (brief, sezione 3).
 function apertoFinoAlle13(): boolean {
-  return new Date().getUTCHours() < 13;
+  return adessoRoma().getUTCHours() < 13;
 }
 
 // Conteggi per categoria delle richieste di oggi — quanti hanno chiesto Upper, quanti

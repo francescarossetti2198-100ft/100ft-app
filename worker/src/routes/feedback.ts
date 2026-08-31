@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { inizioSettimana } from "../lib/settimana";
+import { adessoRoma } from "../lib/oggi";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { awardXp } from "../lib/xp";
 
@@ -18,7 +19,7 @@ const feedback = new Hono<{ Bindings: Env; Variables: Variables }>();
 // Sessioni di questa settimana a cui l'atleta ha partecipato ma senza feedback ancora dato —
 // disponibili solo dopo la fine della sessione (Presenza -> Allenamento -> Feedback).
 feedback.get("/da-dare", requireAuth, async (c) => {
-  const inizioSett = inizioSettimana(new Date());
+  const inizioSett = inizioSettimana(adessoRoma());
   const fineSett = new Date(inizioSett);
   fineSett.setUTCDate(fineSett.getUTCDate() + 6);
 
@@ -36,7 +37,7 @@ feedback.get("/da-dare", requireAuth, async (c) => {
     .bind(c.var.user.userId, inizioSett.toISOString().slice(0, 10), fineSett.toISOString().slice(0, 10))
     .all<{ data: string; sessioneId: number; oraFine: string }>();
 
-  const ora = new Date();
+  const ora = adessoRoma();
   const daDare = results.filter((r) => new Date(`${r.data}T${r.oraFine}:00Z`) <= ora);
 
   return c.json({ sessioni: daDare.map(({ data, sessioneId }) => ({ data, sessioneId })) });
@@ -70,7 +71,7 @@ feedback.post("/", requireAuth, async (c) => {
   const sessione = await c.env.DB.prepare(`SELECT ora_fine FROM sessioni_gruppo WHERE id = ?`)
     .bind(sessioneId)
     .first<{ ora_fine: string }>();
-  if (sessione && new Date(`${data}T${sessione.ora_fine}:00Z`) > new Date()) {
+  if (sessione && new Date(`${data}T${sessione.ora_fine}:00Z`) > adessoRoma()) {
     return c.json({ error: "Il feedback è disponibile solo dopo la fine della sessione" }, 400);
   }
 

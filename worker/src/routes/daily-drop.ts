@@ -26,7 +26,7 @@ function attivoOra(): boolean {
   const { data, giornoSettimana } = oggiInfo();
   const orarioScatto = orarioDailyDrop(data, giornoSettimana);
   if (orarioScatto === null) return false; // oggi non è previsto (giorno sbagliato, o "non tocca")
-  return minutiOra(new Date()) >= orarioScatto;
+  return minutiOra() >= orarioScatto;
 }
 
 dailyDrop.get("/oggi", requireAuth, async (c) => {

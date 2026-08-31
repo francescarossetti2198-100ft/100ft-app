@@ -20,6 +20,8 @@
 // eccezioni per singola data — richiederebbe una tabella dedicata e una UI coach (Coach
 // Dashboard, non ancora costruita). Da fare quando servirà davvero.
 
+import { adessoRoma } from "./oggi";
+
 export const QUOTA_SFIDE_MESE = 4; // provvisorio, andrebbe reso configurabile dal coach
 
 export function inizioSettimana(d: Date): Date {
@@ -84,7 +86,7 @@ export type SessioneSettimana = {
 // Le 3 (o quante sono) sessioni di questa settimana con lo stato di presenza — per la
 // checklist "Lunedì ✓ / Mercoledì / Venerdì" sotto l'anello Allenamenti in Home.
 export async function sessioniSettimanaConStato(db: D1Database, userId: number): Promise<SessioneSettimana[]> {
-  const inizio = inizioSettimana(new Date());
+  const inizio = inizioSettimana(adessoRoma());
   const { results: sessioni } = await db
     .prepare(`SELECT id, giorno_settimana AS giornoSettimana, ora_inizio AS oraInizio, ora_fine AS oraFine FROM sessioni_gruppo ORDER BY giorno_settimana`)
     .all<{ id: number; giornoSettimana: number; oraInizio: string; oraFine: string }>();
@@ -137,7 +139,7 @@ export type StatoAnelli = {
 };
 
 export async function calcolaAnelli(db: D1Database, userId: number): Promise<StatoAnelli> {
-  const oggi = new Date();
+  const oggi = adessoRoma();
   const chiaveSettCorrente = weekKey(oggi);
   const chiaveMeseCorrente = monthKey(oggi);
 

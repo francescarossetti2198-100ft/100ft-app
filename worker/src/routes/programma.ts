@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { salvaFoto } from "../lib/storage";
+import { adessoRoma } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const programma = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -9,7 +10,7 @@ const programma = new Hono<{ Bindings: Env; Variables: Variables }>();
 // Mesi futuri bloccati, niente spoiler sul programma (brief, sezione 9) — applicato
 // server-side, non solo nascosto in UI (come richiesto per i dati privati, sezione 3).
 function meseCorrente(): { mese: number; anno: number } {
-  const now = new Date();
+  const now = adessoRoma();
   return { mese: now.getUTCMonth() + 1, anno: now.getUTCFullYear() };
 }
 

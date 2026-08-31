@@ -4,6 +4,8 @@
 // La stagione parte a settembre; gen..lug appartiene alla stagione iniziata a settembre
 // dell'anno prima. Agosto è fuori stagione (nessun trofeo).
 
+import { adessoRoma } from "./oggi";
+
 export type Blocco = "autunno" | "primavera";
 
 export const BLOCCO_ETICHETTA: Record<Blocco, string> = {
@@ -29,7 +31,7 @@ export function intervalloBlocco(stagione: number, blocco: Blocco): [string, str
 }
 
 // Stagione "corrente" (agosto rotola già alla stagione nuova).
-export function stagioneCorrente(now = new Date()): number {
+export function stagioneCorrente(now: Date = adessoRoma()): number {
   const m = now.getUTCMonth() + 1;
   return m >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }

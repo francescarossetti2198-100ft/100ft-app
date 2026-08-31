@@ -1,3 +1,5 @@
+import { adessoRoma } from "./oggi";
+
 // Orario del Daily Drop (brief, sezione 8): solo nei giorni di allenamento (lun/mer/ven),
 // ma non ogni volta — è occasionale ("non per forza tutti i giorni, è una tantum"). Quando
 // capita, è alla stessa ora per tutti (nessuna variazione per singolo atleta). L'orario è
@@ -56,6 +58,6 @@ export function orarioDailyDrop(data: string, giornoSettimana: number): number |
   return minuti;
 }
 
-export function minutiOra(now: Date): number {
+export function minutiOra(now: Date = adessoRoma()): number {
   return now.getUTCHours() * 60 + now.getUTCMinutes();
 }

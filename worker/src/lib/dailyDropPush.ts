@@ -10,7 +10,7 @@ export async function inviaDailyDropSeAttivo(env: Env): Promise<void> {
   const { data, giornoSettimana } = oggi();
   const orarioScatto = orarioDailyDrop(data, giornoSettimana);
   if (orarioScatto === null) return; // oggi non previsto
-  if (minutiOra(new Date()) < orarioScatto) return; // non è ancora ora
+  if (minutiOra() < orarioScatto) return; // non è ancora ora
 
   const inserito = await env.DB.prepare(`INSERT OR IGNORE INTO daily_drop_notifiche (data) VALUES (?)`)
     .bind(data)

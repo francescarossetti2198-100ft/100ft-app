@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import type { Env, SessionUser } from "./types";
 import { attachUser, requireAuth } from "./middleware/auth";
 import auth from "./routes/auth";
@@ -72,6 +73,14 @@ app.route("/api/performance", performance);
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).
 app.get("/api/ping", requireAuth, (c) => c.json({ user: c.var.user }));
+
+// Qualsiasi errore non gestito in una rotta torna JSON `{ error }` (status 500), non un
+// 500 testuale — così l'app mostra un messaggio pulito invece di "Errore imprevisto".
+app.onError((err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
+  console.error("Errore non gestito:", err instanceof Error ? (err.stack ?? err.message) : err);
+  return c.json({ error: "Si è verificato un errore imprevisto. Riprova tra poco." }, 500);
+});
 
 export default {
   fetch: app.fetch,

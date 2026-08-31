@@ -7,6 +7,7 @@ import { inizioSettimana } from "../lib/settimana";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { stagioneDi, verificaEAssegnaTrofeo, statoTrofei } from "../lib/trofei";
 import { verificaTraguardi, verificaBonusMese, criterioValido } from "../lib/traguardi";
+import { adessoRoma } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -25,7 +26,7 @@ sfide.get("/classifica", requireAuth, async (c) => {
   const richiesto = c.req.query("periodo");
   const periodo: Periodo = PERIODI.includes(richiesto as Periodo) ? (richiesto as Periodo) : "mese";
 
-  const oggi = new Date();
+  const oggi = adessoRoma();
   const primoDelMese = (d: Date) =>
     `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
@@ -117,7 +118,7 @@ sfide.get("/", requireAuth, async (c) => {
   // restano bloccate agli atleti finché data_inizio non arriva, stesso principio anti-spoiler
   // già applicato al Programma mensile.
   const isCoach = c.var.user.role === "coach";
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = adessoRoma().toISOString().slice(0, 10);
 
   // Aprendo le Sfide l'atleta fa scattare le "traguardo" già maturate.
   if (!isCoach) await verificaTraguardi(c.env.DB, c.var.user.userId);
@@ -154,7 +155,7 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
   }
 
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = adessoRoma().toISOString().slice(0, 10);
   if (sfida.data_fine < oggi) return c.json({ error: "Sfida terminata" }, 400);
 
   const esistente = await c.env.DB.prepare(`SELECT id FROM partecipazioni_sfide WHERE sfida_id = ? AND user_id = ?`)
@@ -183,13 +184,12 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti);
 
-  // Le sfide-foto finiscono anche nel Feed (come il Daily Drop) — le altre (presenza,
-  // valore_manuale) non hanno una foto da mostrare, restano solo in classifica.
-  if (fotoUrl) {
-    await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
-      .bind(c.var.user.userId, fotoUrl, sfida.titolo)
-      .run();
-  }
+  // Ogni sfida completata finisce nel Feed (scelta di Francesca, 31 ago): quelle foto con
+  // la foto, le altre (presenza/valore_manuale) solo col titolo. I traguardi automatici
+  // pubblicano da lib/traguardi.ts.
+  await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
+    .bind(c.var.user.userId, fotoUrl, sfida.titolo)
+    .run();
 
   // Completare una sfida chiude l'anello CHALLENGES del mese, che può chiudere una
   // settimana (e far salire di livello) — non solo confermare la presenza.
