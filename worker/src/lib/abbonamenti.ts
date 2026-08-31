@@ -24,6 +24,8 @@ export async function pianoDelMese(
 }
 
 // Piano che entrerà in vigore in un mese futuro (cambio già impostato dall'atleta), o null.
+// Se la scelta futura coincide col piano attuale (es. cambio annullato) non è un vero
+// cambio in sospeso -> null.
 export async function pianoProssimo(db: D1Database, userId: number): Promise<string | null> {
   const ora = adessoRoma();
   const anno = ora.getUTCFullYear();
@@ -37,7 +39,9 @@ export async function pianoProssimo(db: D1Database, userId: number): Promise<str
     )
     .bind(userId, anno, anno, mese)
     .first<{ piano: string }>();
-  return row?.piano ?? null;
+  if (!row) return null;
+  const attuale = await pianoDelMese(db, userId, anno, mese);
+  return row.piano === attuale ? null : row.piano;
 }
 
 // Mese successivo a "adesso" (ora di Roma).

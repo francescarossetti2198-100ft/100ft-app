@@ -37,6 +37,9 @@ export async function inviaPromemoriaAllenamentoSeAttivo(env: Env): Promise<void
     .first();
   if (!sessioneOggi) return; // oggi non c'è allenamento
 
+  const chiuso = await env.DB.prepare(`SELECT 1 FROM giorni_chiusi WHERE data = ?`).bind(data).first();
+  if (chiuso) return; // oggi la palestra è chiusa
+
   const inserito = await env.DB.prepare(`INSERT OR IGNORE INTO allenamento_notifiche (data) VALUES (?)`)
     .bind(data)
     .run();

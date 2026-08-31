@@ -32,6 +32,9 @@ export async function inviaAppelloSeAttivo(env: Env): Promise<void> {
     .first<{ id: number; oraFine: string }>();
   if (!sessione || sessione.oraFine !== oraMinuti) return;
 
+  const chiuso = await env.DB.prepare(`SELECT 1 FROM giorni_chiusi WHERE data = ?`).bind(data).first();
+  if (chiuso) return; // palestra chiusa: nessun appello da fare
+
   const inserito = await env.DB.prepare(
     `INSERT OR IGNORE INTO appello_notifiche (data, sessione_id) VALUES (?, ?)`
   )

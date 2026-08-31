@@ -46,8 +46,15 @@ export function meseFeedbackValido(mese: number, anno: number): boolean {
 
 export type SessioneOggi = { id: number; ora_inizio: string; ora_fine: string; tipo_sessione: string };
 
+// Festività / palestra chiusa: quella data non ha allenamento anche se cade su lun/mer/ven.
+export async function giornoChiuso(db: D1Database, data: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT 1 FROM giorni_chiusi WHERE data = ?`).bind(data).first();
+  return !!row;
+}
+
 export async function sessioneOggi(db: D1Database): Promise<SessioneOggi | null> {
-  const { giornoSettimana } = oggi();
+  const { data, giornoSettimana } = oggi();
+  if (await giornoChiuso(db, data)) return null; // oggi la palestra è chiusa
   const sessione = await db
     .prepare(`SELECT id, ora_inizio, ora_fine, tipo_sessione FROM sessioni_gruppo WHERE giorno_settimana = ?`)
     .bind(giornoSettimana)

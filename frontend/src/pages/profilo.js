@@ -728,65 +728,97 @@ function regolamentoHtml() {
   ).join("");
 }
 
-// ─── Card "ABBONAMENTI" (vista atleta): sceglie il piano tra i 5. Niente prezzo —
+// ─── Card "ABBONAMENTI" (vista atleta): sceglie il piano tra i 6. Niente prezzo —
 // quello lo vede solo la coach. Il cambio vale dal mese successivo. ───
-function abbonamentoCardHtml(p) {
+function abbonamentoStato(p) {
   const attuale = p.abbonamento?.piano ?? null;
-  const prossimo = p.abbonamento?.pianoProssimo ?? null;
-  const prossimoNome = prossimo ? pianoByKey(prossimo)?.nome ?? prossimo : null;
-  // Se ha già un piano, in vista si mostra solo quello: gli altri compaiono al tocco di
-  // "Cambia piano".
+  const prossimoRaw = p.abbonamento?.pianoProssimo ?? null;
+  // Un "prossimo" uguale all'attuale = nessun cambio in sospeso (es. cambio annullato).
+  const prossimo = prossimoRaw && prossimoRaw !== attuale ? prossimoRaw : null;
+  const mostrato = prossimo ?? attuale; // il piano che vale "d'ora in avanti"
+  return { attuale, prossimo, mostrato };
+}
+
+function abbonamentoCardHtml(p) {
+  const { attuale, prossimo, mostrato } = abbonamentoStato(p);
+  const nomeDi = (k) => (k ? pianoByKey(k)?.nome ?? k : null);
+  // Con un piano già scelto la card è chiusa: si vede solo quello che vale ora, gli altri
+  // compaiono toccando "Cambia piano".
   const collassa = !!attuale;
 
   const pillHtml = (pl) => {
-    const on = pl.key === attuale;
+    const on = pl.key === mostrato;
     const nascosta = collassa && !on;
+    const tag = on
+      ? pl.key === prossimo
+        ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· DAL MESE PROSSIMO</span>`
+        : ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>`
+      : "";
     return `
       <button type="button" class="abb-pill" data-key="${pl.key}"${nascosta ? " hidden" : ""}
         style="text-align:left; padding:10px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
                border:1px solid ${on ? pl.colore : "var(--border)"};
                background:${on ? `color-mix(in srgb, ${pl.colore} 12%, transparent)` : "var(--surface-2)"}; color:var(--text)">
-        <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${
-          on ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>` : ""
-        }
+        <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${tag}
         <span class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:2px">${pl.giorni}</span>
       </button>`;
   };
+
+  let info;
+  if (!attuale) info = "Scegli il tuo piano per iniziare.";
+  else if (prossimo)
+    info = `Ora sei su <strong>${nomeDi(attuale)}</strong>. Dal mese prossimo passi a <strong>${nomeDi(prossimo)}</strong> — tocca ${nomeDi(attuale)} per annullare.`;
+  else info = "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo.";
 
   return `
     <div class="card" style="margin-top:12px" id="abbonamento-card">
       <p class="sezione-label">Abbonamenti</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${LEGENDA_GIORNI}</p>
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
-        ${attuale ? "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo." : "Scegli il tuo piano per iniziare."}
-      </p>
-      ${prossimoNome ? `<p class="mono" style="color:var(--accent); font-size:12px; margin-top:6px">Dal mese prossimo: <strong>${prossimoNome}</strong></p>` : ""}
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${info}</p>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px">
         ${PIANI.map(pillHtml).join("")}
       </div>
-      ${collassa ? `<button type="button" class="link-btn" id="abb-cambia" style="margin-top:8px">Cambia piano ▾</button>` : ""}
+      ${
+        collassa
+          ? `<button type="button" class="link-btn" id="abb-cambia" style="margin-top:8px">Cambia piano ▾</button>
+             <button type="button" class="link-btn" id="abb-chiudi" hidden style="margin-top:8px">Chiudi ▴</button>`
+          : ""
+      }
     </div>`;
 }
 
 function initAbbonamento(content, p, onSaved) {
   const card = content.querySelector("#abbonamento-card");
   if (!card) return;
-  const attuale = p.abbonamento?.piano ?? null;
+  const { attuale, prossimo, mostrato } = abbonamentoStato(p);
+  const nomeDi = (k) => pianoByKey(k)?.nome ?? k;
 
   const cambia = card.querySelector("#abb-cambia");
-  if (cambia) {
+  const chiudi = card.querySelector("#abb-chiudi");
+  const pills = [...card.querySelectorAll(".abb-pill")];
+  if (cambia && chiudi) {
     cambia.addEventListener("click", () => {
-      card.querySelectorAll(".abb-pill[hidden]").forEach((b) => (b.hidden = false));
-      cambia.remove();
+      pills.forEach((b) => (b.hidden = false));
+      cambia.hidden = true;
+      chiudi.hidden = false;
+    });
+    chiudi.addEventListener("click", () => {
+      pills.forEach((b) => (b.hidden = b.dataset.key !== mostrato));
+      chiudi.hidden = true;
+      cambia.hidden = false;
     });
   }
 
-  card.querySelectorAll(".abb-pill").forEach((btn) => {
+  pills.forEach((btn) => {
     btn.addEventListener("click", async () => {
       const key = btn.dataset.key;
-      if (key === attuale) return;
-      const nome = pianoByKey(key)?.nome ?? key;
-      const msg = attuale ? `Passi al piano ${nome} dal mese prossimo?` : `Scegli il piano ${nome}?`;
+      if (key === mostrato) return; // è già il piano che vale d'ora in avanti
+      const msg =
+        key === attuale && prossimo
+          ? `Annulli il passaggio a ${nomeDi(prossimo)} e resti su ${nomeDi(attuale)}?`
+          : attuale
+            ? `Passi al piano ${nomeDi(key)} dal mese prossimo?`
+            : `Scegli il piano ${nomeDi(key)}?`;
       if (!confirm(msg)) return;
       btn.disabled = true;
       try {

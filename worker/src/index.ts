@@ -21,6 +21,7 @@ import feedbackMensile from "./routes/feedback-mensile";
 import performance from "./routes/performance";
 import abbonamento from "./routes/abbonamento";
 import suddivisioni from "./routes/suddivisioni";
+import chiusure from "./routes/chiusure";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
@@ -73,6 +74,7 @@ app.route("/api/feedback-mensile", feedbackMensile);
 app.route("/api/performance", performance);
 app.route("/api/abbonamento", abbonamento);
 app.route("/api/suddivisioni", suddivisioni);
+app.route("/api/chiusure", chiusure);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).

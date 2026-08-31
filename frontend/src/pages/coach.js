@@ -259,6 +259,26 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">GIORNI DI CHIUSURA</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
+        Festività o palestra chiusa: quella settimana gli anelli diventano 2/2 invece di 3/3.
+      </p>
+      <div style="display:flex; gap:8px; margin-top:10px; align-items:flex-end; flex-wrap:wrap">
+        <div class="field" style="flex:1; min-width:130px; margin:0">
+          <label>Giorno</label>
+          <input id="chiusura-data" type="date" style="${SEL_STYLE}" />
+        </div>
+        <div class="field" style="flex:2; min-width:130px; margin:0">
+          <label>Motivo (facoltativo)</label>
+          <input id="chiusura-motivo" type="text" placeholder="es. Ferragosto" style="${SEL_STYLE}" />
+        </div>
+        <button class="btn" id="chiusura-aggiungi" style="background:var(--surface-2); color:var(--text)">Aggiungi</button>
+      </div>
+      <p class="error-text" id="chiusura-error" hidden style="margin-top:6px"></p>
+      <div id="chiusura-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE PRE-ALLENAMENTO DI OGGI</p>
       <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
       <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
@@ -277,7 +297,79 @@ export function renderCoach(appEl) {
   initSfida(el);
   initSuddivisioni(el);
   initAppello(el);
+  initChiusure(el);
   initRichieste(el);
+}
+
+// Giorni di chiusura / festività: tolti dal conteggio settimanale degli anelli.
+function initChiusure(el) {
+  const dataInput = el.querySelector("#chiusura-data");
+  const motivoInput = el.querySelector("#chiusura-motivo");
+  const errorEl = el.querySelector("#chiusura-error");
+  const lista = el.querySelector("#chiusura-lista");
+
+  const fmt = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const g = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    return `${["dom", "lun", "mar", "mer", "gio", "ven", "sab"][g]} ${d} ${MESI[m - 1].toLowerCase()} ${y}`;
+  };
+
+  async function carica() {
+    let giorni;
+    try {
+      ({ giorni } = await api.get("/chiusure"));
+    } catch {
+      lista.innerHTML = `<p class="error-text">Impossibile caricare</p>`;
+      return;
+    }
+    lista.innerHTML = giorni.length
+      ? giorni
+          .map(
+            (g) => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--border)">
+              <span style="font-size:13px">${fmt(g.data)}${g.motivo ? ` <span class="mono" style="color:var(--mute); font-size:11px">· ${esc(g.motivo)}</span>` : ""}</span>
+              <button type="button" class="link-btn chiusura-del" data-data="${g.data}" style="color:var(--livello-5); flex-shrink:0; font-size:16px; text-decoration:none">🗑</button>
+            </div>`
+          )
+          .join("")
+      : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun giorno di chiusura.</p>`;
+
+    lista.querySelectorAll(".chiusura-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await api.del(`/chiusure/${btn.dataset.data}`);
+          await carica();
+        } catch (err) {
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  el.querySelector("#chiusura-aggiungi").addEventListener("click", async (e) => {
+    errorEl.hidden = true;
+    if (!dataInput.value) {
+      errorEl.textContent = "Scegli un giorno";
+      errorEl.hidden = false;
+      return;
+    }
+    e.target.disabled = true;
+    try {
+      await api.post("/chiusure", { data: dataInput.value, motivo: motivoInput.value.trim() || undefined });
+      dataInput.value = "";
+      motivoInput.value = "";
+      await carica();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  carica();
 }
 
 function formatGiornoBreve(iso) {

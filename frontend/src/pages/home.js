@@ -363,12 +363,15 @@ async function loadSettimana(el) {
     const saluto = el.querySelector("#saluto-nome");
     if (saluto) saluto.textContent = `Bentornato ${nickname || nome || ""}`.trim();
 
-    const rigaLegenda = (colore, etichetta, fatti, totali) => `
+    const rigaLegenda = (colore, etichetta, fatti, totali) => {
+      const conteggio = totali > 0 ? `${fatti} / ${totali}` : "—";
+      return `
       <div>
         <p style="font-size:12px"><span style="color:${colore}">●</span> ${etichetta.toUpperCase()}</p>
-        <p style="margin-top:2px"><strong>${fatti} / ${totali}</strong> <span class="mono" style="color:var(--mute); font-size:12px">Attività</span></p>
+        <p style="margin-top:2px"><strong>${conteggio}</strong> <span class="mono" style="color:var(--mute); font-size:12px">Attività</span></p>
       </div>
     `;
+    };
 
     const legenda = `
       <div style="display:flex; flex-direction:column; gap:10px; justify-content:center">
@@ -381,12 +384,16 @@ async function loadSettimana(el) {
     let livelloHtml = "";
     if (livello) {
       const { attuale, prossimo, allenamentiFatti } = livello;
-      const range = prossimo ? prossimo.allenamentiMin - attuale.allenamentiMin : 0;
-      const progresso = prossimo ? allenamentiFatti - attuale.allenamentiMin : range;
-      const pctBarra = prossimo ? Math.max(0, Math.round((progresso / range) * 100)) : 100;
+      // Sotto il livello 1 (< 3 allenamenti) `attuale` e `prossimo` coincidono: la barra
+      // parte da 0, non dalla soglia del livello attuale.
+      const inRodaggio = prossimo && prossimo.numero === attuale.numero;
+      const base = prossimo && !inRodaggio ? attuale.allenamentiMin : 0;
+      const range = prossimo ? Math.max(1, prossimo.allenamentiMin - base) : 1;
+      const progresso = prossimo ? Math.max(0, allenamentiFatti - base) : range;
+      const pctBarra = prossimo ? Math.min(100, Math.round((progresso / range) * 100)) : 100;
 
       const allenText = prossimo
-        ? `${allenamentiFatti} fatti · ${prossimo.allenamentiMin - allenamentiFatti} al livello ${prossimo.numero}`
+        ? `${allenamentiFatti}/${prossimo.allenamentiMin} allenamenti al prossimo livello`
         : `${allenamentiFatti} allenamenti · livello massimo`;
 
       livelloHtml = `
@@ -449,10 +456,16 @@ async function loadTimeline(el) {
       // Occasione di partecipare finita: chi non ha risposto entro qui conta come assente.
       const conclusa = passato || (oggi && finita);
 
+      const chiuso = s.stato === "chiuso";
+      const cliccabile = oggi && !chiuso;
+
       let segno = "";
       let stato = "";
       let statoColore = "var(--mute)";
-      if (s.stato === "presente") {
+      if (chiuso) {
+        segno = "— ";
+        stato = "CHIUSO";
+      } else if (s.stato === "presente") {
         segno = "✓ ";
         stato = "PRESENTE";
         statoColore = "var(--accent)";
@@ -468,17 +481,17 @@ async function loadTimeline(el) {
         stato = oggi ? "CI SEI?" : "—";
       }
 
-      const dim = futuro || (!oggi && s.stato !== "presente");
-      const cls = `giorno-tile${oggi ? " oggi" : ""}${live ? " live" : ""}${dim ? " dim" : ""}`;
+      const dim = chiuso || futuro || (!oggi && s.stato !== "presente");
+      const cls = `giorno-tile${cliccabile ? " oggi" : ""}${live && !chiuso ? " live" : ""}${dim ? " dim" : ""}`;
 
       const corpo = `
         <p class="gt-nome">${segno}${giorno}</p>
-        <p class="gt-ora mono">${orario}</p>
+        <p class="gt-ora mono">${chiuso ? "festività / chiusura" : orario}</p>
         <p class="gt-stato mono" style="color:${statoColore}">${stato}</p>
-        ${oggi ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per prenotare" : s.stato === "in_attesa" ? "tocca per annullare" : "tocca per cambiare"}</p>` : ""}
+        ${cliccabile ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per prenotare" : s.stato === "in_attesa" ? "tocca per annullare" : "tocca per cambiare"}</p>` : ""}
       `;
 
-      return oggi
+      return cliccabile
         ? `<button type="button" class="${cls}" data-stato="${s.stato}">${corpo}</button>`
         : `<div class="${cls}">${corpo}</div>`;
     };
@@ -646,7 +659,9 @@ async function loadFeedback(el) {
       return;
     }
 
-    const finita = new Date(`${new Date().toISOString().slice(0, 10)}T${sessione.ora_fine}:00Z`) <= new Date();
+    // Ora locale (= ora di Roma per gli atleti), come la timeline "QUESTA SETTIMANA":
+    // niente "Z", altrimenti il feedback resta bloccato ~2 h dopo la fine reale.
+    const finita = new Date(`${new Date().toISOString().slice(0, 10)}T${sessione.ora_fine}:00`) <= new Date();
 
     if (!finita) {
       card.innerHTML = sezione(
