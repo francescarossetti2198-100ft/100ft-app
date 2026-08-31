@@ -1054,7 +1054,7 @@ function initSuddivisioni(el) {
         pdfBtn.textContent = "Preparo il PDF…";
         try {
           const { scaricaSuddivisioniPdf } = await import("../pdf/suddivisioni-pdf.js");
-          await scaricaSuddivisioniPdf(d, MESI);
+          await scaricaSuddivisioniPdf(d, MESI, PIANI);
         } catch {
           alert("Non sono riuscito a generare il PDF.");
         } finally {
