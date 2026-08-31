@@ -50,6 +50,21 @@ export function renderFeed(appEl) {
   // Testata fissa: "Feed" + banner Spotify restano in cima mentre la lista scorre sotto.
   // I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
   el.innerHTML = `
+    <style>
+      /* Piccola animazione dell'emoji quando si mette (o toglie) una reazione. */
+      .rz-emoji { display:inline-block; }
+      .reazione-btn.rz-animate .rz-emoji { animation: rz-pop .45s ease-out; }
+      @keyframes rz-pop {
+        0%   { transform: scale(1); }
+        30%  { transform: scale(1.45) rotate(-6deg); }
+        55%  { transform: scale(.9) rotate(4deg); }
+        75%  { transform: scale(1.12) rotate(-2deg); }
+        100% { transform: scale(1) rotate(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reazione-btn.rz-animate .rz-emoji { animation: none; }
+      }
+    </style>
     <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
       <h1 style="margin:0; padding-right:48px">Feed</h1>
       ${bannerSpotifyHtml()}
@@ -84,7 +99,7 @@ async function loadFeed(el) {
             <button type="button" class="reazione-btn" data-post="${p.id}" data-emoji="${e}"
               style="background:${attiva ? "var(--accent)" : "var(--surface-2)"}; border:none; border-radius:6px;
                      padding:4px 8px; font-size:13px; color:var(--text); cursor:pointer">
-              ${e} ${r?.n ?? ""}
+              <span class="rz-emoji">${e}</span> ${r?.n ?? ""}
             </button>
           `;
         }).join("");
@@ -106,11 +121,20 @@ async function loadFeed(el) {
 
     list.querySelectorAll(".reazione-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        // Fa "poppare" l'emoji; il reflow forza il riavvio dell'animazione a ogni tocco.
+        btn.classList.remove("rz-animate");
+        void btn.offsetWidth;
+        btn.classList.add("rz-animate");
         try {
-          await api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji });
+          // Aspetta sia la risposta sia la fine dell'animazione prima di ridisegnare la lista.
+          await Promise.all([
+            api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji }),
+            new Promise((r) => setTimeout(r, 420)),
+          ]);
           loadFeed(el);
         } catch {
           // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
+          btn.classList.remove("rz-animate");
         }
       });
     });
