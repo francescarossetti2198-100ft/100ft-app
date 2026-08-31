@@ -168,6 +168,11 @@ export function renderProfilo(appEl) {
       @media (prefers-reduced-motion: reduce) {
         #profilo-content .abbonamento-luce { animation: none; }
       }
+      /* Sotto-sezioni della Performance ("Parte bassa" / "Upper body"): ognuna a tendina,
+         titolo più grande delle altre etichette a tendina del profilo. */
+      #profilo-content .perf-cat > summary { font-size: 15px; padding: 13px 0; }
+      #profilo-content .perf-cat:first-of-type { border-top: none; }
+      #profilo-content .perf-cat > .blocco-corpo { padding-bottom: 4px; }
     </style>
     <h1>Profilo</h1>
     <div id="profilo-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
@@ -209,7 +214,7 @@ function pagamentoBadgeHtml(userId, stato) {
 function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
   const media = fotoUrl
     ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
-    : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute)">${iniziale}</span>`;
+    : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute); vertical-align:middle">${iniziale}</span>`;
 
   // Fuori dalla modalità modifica: solo la foto, niente "Cambia foto" / input.
   if (!modifica) return `<div style="text-align:center">${media}</div>`;
@@ -922,26 +927,30 @@ async function initPerformance(content) {
 
   box.innerHTML = PERFORMANCE_ESERCIZI.map(
     (cat) => `
-      <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:14px 0 2px">${cat.emoji} ${cat.categoria.toUpperCase()}</p>
-      ${cat.esercizi
-        .map((nome) => {
-          const e = per.get(nome) ?? {};
-          const ha = e.ultimoPeso != null;
-          return `
-            <div class="perf-riga" data-esercizio="${esc(nome)}" style="border-top:1px solid var(--border); padding:10px 0">
-              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
-                <div style="min-width:0">
-                  <p style="font-size:14px">${esc(nome)}</p>
-                  <p class="mono" style="color:${ha ? "var(--text)" : "var(--mute)"}; font-size:12px; margin-top:2px">
-                    ${ha ? `Ultimo peso: ${e.ultimoPeso} kg` : "Nessun peso registrato"}
-                  </p>
-                </div>
-                <button type="button" class="link-btn perf-apri" style="flex-shrink:0; text-decoration:none">${ha ? "Modifica" : "+ Aggiungi peso"}</button>
-              </div>
-              <div class="perf-panel" hidden style="margin-top:10px"></div>
-            </div>`;
-        })
-        .join("")}`
+      <details class="blocco-mese perf-cat">
+        <summary>${cat.emoji} ${cat.categoria}</summary>
+        <div class="blocco-corpo">
+          ${cat.esercizi
+            .map((nome) => {
+              const e = per.get(nome) ?? {};
+              const ha = e.ultimoPeso != null;
+              return `
+                <div class="perf-riga" data-esercizio="${esc(nome)}" style="border-top:1px solid var(--border); padding:10px 0">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+                    <div style="min-width:0">
+                      <p style="font-size:14px">${esc(nome)}</p>
+                      <p class="mono" style="color:${ha ? "var(--text)" : "var(--mute)"}; font-size:12px; margin-top:2px">
+                        ${ha ? `Ultimo peso: ${e.ultimoPeso} kg` : "Nessun peso registrato"}
+                      </p>
+                    </div>
+                    <button type="button" class="link-btn perf-apri" style="flex-shrink:0; text-decoration:none">${ha ? "Modifica" : "+ Aggiungi peso"}</button>
+                  </div>
+                  <div class="perf-panel" hidden style="margin-top:10px"></div>
+                </div>`;
+            })
+            .join("")}
+        </div>
+      </details>`
   ).join("");
 
   box.querySelectorAll(".perf-riga").forEach((riga) => {
