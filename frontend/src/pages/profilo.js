@@ -196,14 +196,22 @@ function giorniFa(dataIso) {
   return `${giorni}gg fa`;
 }
 
+// Interruttore pagamento del mese corrente — grande e tappabile, in cima alla scheda
+// atleta: per la coach segnare "pagato / non pagato" è l'azione più frequente e va fatta
+// al volo appena apre il profilo.
 function pagamentoBadgeHtml(userId, stato) {
   const pagato = stato === "pagato";
   const colore = pagato ? "var(--livello-1)" : "var(--livello-5)";
   return `
-    <button type="button" class="link-btn pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
-      style="text-decoration:none; color:${colore}; font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
-      ${pagato ? "ABBONAMENTO ATTIVO ✓" : "ABBONAMENTO NON ATTIVO"}
+    <button type="button" class="pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
+      style="margin-top:12px; width:100%; padding:11px 14px; border-radius:10px; cursor:pointer;
+             border:1px solid ${colore}; background:color-mix(in srgb, ${colore} 14%, transparent);
+             color:${colore}; font-family:var(--font-mono); font-size:13px; font-weight:700; letter-spacing:1px">
+      <span class="pagamento-label">${pagato ? "✓ ABBONAMENTO PAGATO" : "ABBONAMENTO DA PAGARE"}</span>
     </button>
+    <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px; text-align:center">
+      Mese corrente · tocca per cambiare
+    </p>
   `;
 }
 
@@ -343,7 +351,7 @@ function renderProfiloCoach(content, p, onFotoCaricata) {
       .get(`/atleti/${userId}`)
       .then((d) => {
         scheda.innerHTML = schedaAtletaHtml(d);
-        initSchedaAzioni(scheda, d, () => renderDettaglio(userId));
+        initSchedaAzioni(scheda);
       })
       .catch((err) => {
         scheda.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
@@ -459,6 +467,7 @@ function schedaAtletaHtml(d) {
           <p style="margin-top:2px">${livelloBadge}</p>
         </div>
       </div>
+      ${pagamentoBadgeHtml(d.userId, at.pagamentoMese)}
     </div>
 
     <div class="card" style="margin-top:12px">
@@ -520,8 +529,7 @@ function schedaAtletaHtml(d) {
 
     <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">GESTIONE</p>
-      <div style="margin-top:10px; display:flex; gap:14px; align-items:center; flex-wrap:wrap">
-        ${pagamentoBadgeHtml(d.userId, at.pagamentoMese)}
+      <div style="margin-top:10px">
         <button type="button" class="link-btn reset-password-btn" data-user-id="${d.userId}" data-nome="${esc(nome).replace(/"/g, "&quot;")}"
           style="text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
           RESET PASSWORD
@@ -532,15 +540,27 @@ function schedaAtletaHtml(d) {
   `;
 }
 
-function initSchedaAzioni(scheda, d, ricarica) {
+function initSchedaAzioni(scheda) {
   scheda.querySelectorAll(".pagamento-toggle").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const nuovoStato = btn.dataset.stato === "pagato" ? "non_pagato" : "pagato";
+      const pagato = btn.dataset.stato === "pagato";
+      const nuovoStato = pagato ? "non_pagato" : "pagato";
       btn.disabled = true;
       try {
         await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovoStato });
-        ricarica();
+        // Aggiornamento in loco: la coach vede subito l'esito, senza ricaricare la scheda.
+        const oraPagato = nuovoStato === "pagato";
+        const col = oraPagato ? "var(--livello-1)" : "var(--livello-5)";
+        btn.dataset.stato = oraPagato ? "pagato" : "non_pagato";
+        btn.style.borderColor = col;
+        btn.style.background = `color-mix(in srgb, ${col} 14%, transparent)`;
+        btn.style.color = col;
+        btn.querySelector(".pagamento-label").textContent = oraPagato
+          ? "✓ ABBONAMENTO PAGATO"
+          : "ABBONAMENTO DA PAGARE";
       } catch {
+        // errore silenzioso: lo stato resta quello di prima
+      } finally {
         btn.disabled = false;
       }
     });
