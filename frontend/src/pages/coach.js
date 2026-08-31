@@ -990,54 +990,47 @@ function initSuddivisioni(el) {
       return;
     }
 
-    // Righe raggruppate per abbonamento. Chi ha pagato è in evidenza (✓), gli altri in grigio.
-    const gruppi = new Map();
-    for (const r of d.righe) {
-      const k = r.nomePiano ?? r.piano;
-      if (!gruppi.has(k)) gruppi.set(k, []);
-      gruppi.get(k).push(r);
-    }
+    // Tabella piatta: tutti gli atleti con un abbonamento, in ordine di nome. Colonne:
+    // nome · abbonamento · quota a te · quota palestra. Chi non ha pagato è in grigio.
+    const intestazione = `
+      <div style="display:grid; grid-template-columns:1fr auto auto; gap:8px; padding:6px 0; border-bottom:1px solid var(--border)">
+        <span class="mono" style="font-size:10px; letter-spacing:1px; color:var(--mute)">NOME · ABBONAMENTO</span>
+        <span class="mono" style="font-size:10px; letter-spacing:1px; color:var(--mute); text-align:right">A TE</span>
+        <span class="mono" style="font-size:10px; letter-spacing:1px; color:var(--mute); text-align:right">PALESTRA</span>
+      </div>`;
     const righe = d.righe.length
-      ? [...gruppi.entries()]
-          .map(([nomeP, rs]) => {
-            const nPag = rs.filter((r) => r.pagato).length;
-            const corpo = rs
-              .map((r) => {
-                const quote =
-                  r.quotaCoach != null
-                    ? `<span style="color:var(--livello-1)">${eur(r.quotaCoach)}</span> / <span style="color:var(--mute)">${eur(r.quotaPalestra)}</span>`
-                    : `<span style="color:var(--livello-5)">da definire</span>`;
-                return `
-                  <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); opacity:${r.pagato ? 1 : 0.55}">
-                    <span style="font-size:13px; min-width:0">${esc(r.nome)}
-                      <span class="mono" style="color:var(--mute); font-size:11px"> · ${eur(r.prezzo)} ${r.pagato ? "✓ pagato" : "· non pagato"}</span>
-                    </span>
-                    <span class="mono" style="font-size:12px; white-space:nowrap">${quote}</span>
-                  </div>`;
-              })
-              .join("");
+      ? intestazione +
+        d.righe
+          .map((r) => {
+            const celleQuote =
+              r.quotaCoach != null
+                ? `<span class="mono" style="font-size:12px; text-align:right; color:var(--livello-1)">${eur(r.quotaCoach)}</span>
+                   <span class="mono" style="font-size:12px; text-align:right; color:var(--mute)">${eur(r.quotaPalestra)}</span>`
+                : `<span class="mono" style="font-size:11px; text-align:right; color:var(--livello-5); grid-column:2 / 4">% da definire</span>`;
             return `
-              <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:14px 0 0">
-                ${esc(nomeP).toUpperCase()} · ${nPag}/${rs.length} pagat${nPag === 1 ? "o" : "i"}
-              </p>
-              ${corpo}`;
+              <div style="display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:baseline; padding:7px 0; border-top:1px solid var(--border); opacity:${r.pagato ? 1 : 0.5}">
+                <span style="font-size:13px; min-width:0">${esc(r.nome)}
+                  <span class="mono" style="color:var(--mute); font-size:11px"> · ${r.nomePiano ?? r.piano}${r.pagato ? "" : " · da pagare"}</span>
+                </span>
+                ${celleQuote}
+              </div>`;
           })
           .join("")
       : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta con abbonamento questo mese.</p>`;
 
     const t = d.totali;
     const totali = `
-      <div style="margin-top:10px; padding-top:10px; border-top:2px solid var(--border); display:flex; flex-wrap:wrap; gap:12px">
-        <span class="mono" style="font-size:12px">A te: <strong style="color:var(--livello-1)">${eur(t.coach)}</strong></span>
-        <span class="mono" style="font-size:12px">Palestra: <strong>${eur(t.palestra)}</strong></span>
-        ${t.daDefinire ? `<span class="mono" style="font-size:12px; color:var(--livello-5)">Da definire: ${eur(t.daDefinire)}</span>` : ""}
+      <div style="margin-top:12px; padding-top:10px; border-top:2px solid var(--border)">
+        <div style="display:flex; justify-content:space-between; font-size:13px"><span>Totale a te</span><strong style="color:var(--livello-1)">${eur(t.coach)}</strong></div>
+        <div style="display:flex; justify-content:space-between; font-size:13px; margin-top:4px"><span>Totale a Cosimo</span><strong>${eur(t.palestra)}</strong></div>
+        ${t.daDefinire ? `<div style="display:flex; justify-content:space-between; font-size:13px; margin-top:4px; color:var(--livello-5)"><span>Da definire</span><strong>${eur(t.daDefinire)}</strong></div>` : ""}
       </div>
-      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">Totali e PDF contano solo chi ha pagato.</p>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">I totali contano solo chi ha pagato.</p>
       <button type="button" class="btn" id="sudd-pdf" style="width:100%; margin-top:10px; background:var(--surface-2); color:var(--text)">Scarica PDF</button>`;
 
     const config = `
       <div style="margin-top:14px; padding-top:10px; border-top:1px solid var(--border)">
-        <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">% CHE SPETTA A TE</p>
+        <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">PROMEMORIA · % CHE SPETTA A TE PER ABBONAMENTO</p>
         ${PIANI.map((pl) => {
           const val = d.config[pl.key];
           return `
