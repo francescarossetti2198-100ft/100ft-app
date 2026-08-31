@@ -9,6 +9,7 @@ import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { badgeMensiliHtml } from "../badge-mensili.js";
 import { initStatistiche } from "../statistiche.js";
+import { PIANI, pianoByKey } from "../abbonamenti.js";
 
 // Palette fissa di brand per l'accento delle card del Profilo (i 6 colori livello + il
 // viola accent). Deve restare allineata a COLORI_CARD in worker/src/routes/profilo.ts.
@@ -215,6 +216,27 @@ function pagamentoBadgeHtml(userId, stato) {
   `;
 }
 
+// Riga abbonamento nella scheda coach: piano + prezzo (lo vede solo la coach) e un
+// <select> per correggere il piano fatturato questo mese.
+function abbonamentoCoachHtml(userId, abb) {
+  const pl = abb?.piano ? pianoByKey(abb.piano) : null;
+  const colore = pl?.colore ?? "var(--mute)";
+  return `
+    <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border)">
+      <p class="mono" style="font-size:12px">
+        <span style="color:var(--mute)">ABBONAMENTO</span>
+        <span style="color:${colore}; font-weight:700; letter-spacing:1px"> ${abb?.nomePiano ?? "—"}</span>
+        ${abb?.prezzo != null ? `<span> · ${abb.prezzo} €</span>` : ""}
+        ${abb?.nomePianoProssimo ? `<span style="color:var(--mute)"> → ${abb.nomePianoProssimo} dal mese prossimo</span>` : ""}
+      </p>
+      <label class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:6px">Piano fatturato questo mese</label>
+      <select class="abb-piano-coach" data-user-id="${userId}"
+        style="margin-top:4px; width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-family:inherit; font-size:14px">
+        ${PIANI.map((x) => `<option value="${x.key}"${x.key === abb?.piano ? " selected" : ""}>${x.nome} · ${x.prezzo} €</option>`).join("")}
+      </select>
+    </div>`;
+}
+
 // Blocco foto profilo — usato sia dall'atleta sia dalla coach (il backend accetta la foto
 // per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
 // invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
@@ -317,7 +339,7 @@ function renderProfiloCoach(content, p, onFotoCaricata) {
                   ${livelloHtml}
                 </span>
                 <span class="mono" style="color:var(--mute); font-size:12px; display:block; margin-top:4px">
-                  ${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
+                  ${a.nomePiano ? `${a.nomePiano} · ` : ""}${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
                 </span>
               </button>
             `;
@@ -468,6 +490,7 @@ function schedaAtletaHtml(d) {
         </div>
       </div>
       ${pagamentoBadgeHtml(d.userId, at.pagamentoMese)}
+      ${abbonamentoCoachHtml(d.userId, at.abbonamento)}
     </div>
 
     <div class="card" style="margin-top:12px">
@@ -563,6 +586,18 @@ function initSchedaAzioni(scheda) {
       } finally {
         btn.disabled = false;
       }
+    });
+  });
+
+  scheda.querySelectorAll(".abb-piano-coach").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      sel.disabled = true;
+      try {
+        await api.post("/pagamenti", { userId: Number(sel.dataset.userId), piano: sel.value });
+      } catch {
+        // silenzioso
+      }
+      sel.disabled = false;
     });
   });
 
@@ -691,6 +726,60 @@ function regolamentoHtml() {
         ${r.extra ?? ""}
       </div>`
   ).join("");
+}
+
+// ─── Card "ABBONAMENTI" (vista atleta): sceglie il piano tra i 5. Niente prezzo —
+// quello lo vede solo la coach. Il cambio vale dal mese successivo. ───
+function abbonamentoCardHtml(p) {
+  const attuale = p.abbonamento?.piano ?? null;
+  const prossimo = p.abbonamento?.pianoProssimo ?? null;
+  const prossimoNome = prossimo ? pianoByKey(prossimo)?.nome ?? prossimo : null;
+  return `
+    <div class="card" style="margin-top:12px" id="abbonamento-card">
+      <p class="sezione-label">Abbonamenti</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
+        ${attuale ? "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo." : "Scegli il tuo piano per iniziare."}
+      </p>
+      ${prossimoNome ? `<p class="mono" style="color:var(--accent); font-size:12px; margin-top:6px">Dal mese prossimo: <strong>${prossimoNome}</strong></p>` : ""}
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px">
+        ${PIANI.map((pl) => {
+          const on = pl.key === attuale;
+          return `
+            <button type="button" class="abb-pill" data-key="${pl.key}"
+              style="text-align:left; padding:10px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
+                     border:1px solid ${on ? pl.colore : "var(--border)"};
+                     background:${on ? `color-mix(in srgb, ${pl.colore} 12%, transparent)` : "var(--surface-2)"}; color:var(--text)">
+              <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${
+                on ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>` : ""
+              }
+              <span class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:2px">${pl.giorni}</span>
+            </button>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
+function initAbbonamento(content, p, onSaved) {
+  const card = content.querySelector("#abbonamento-card");
+  if (!card) return;
+  const attuale = p.abbonamento?.piano ?? null;
+  card.querySelectorAll(".abb-pill").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const key = btn.dataset.key;
+      if (key === attuale) return;
+      const nome = pianoByKey(key)?.nome ?? key;
+      const msg = attuale ? `Passi al piano ${nome} dal mese prossimo?` : `Scegli il piano ${nome}?`;
+      if (!confirm(msg)) return;
+      btn.disabled = true;
+      try {
+        await api.post("/abbonamento", { piano: key });
+        onSaved();
+      } catch (err) {
+        alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 function impostazioniCardHtml() {
@@ -1295,6 +1384,7 @@ async function loadProfilo(el) {
       ${obiettiviCardHtml(p)}
       ${badgeCard}
       ${progressiCard}
+      ${abbonamentoCardHtml(p)}
       ${impostazioniCardHtml()}
     `;
 
@@ -1315,6 +1405,7 @@ async function loadProfilo(el) {
     initPersonalizza(content, p, () => loadProfilo(el));
     initPerformance(content);
     initStatistiche(content);
+    initAbbonamento(content, p, () => loadProfilo(el));
     initNotifiche(content);
     initSicurezza(content);
     content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {

@@ -3,6 +3,7 @@ import { api, ApiError, mediaUrl } from "../api.js";
 import { getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
+import { PIANI } from "../abbonamenti.js";
 
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -235,6 +236,18 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">SUDDIVISIONI</p>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px">Bozza — imposta le % mancanti quando hai deciso.</p>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <select id="sudd-mese" style="flex:2; ${SEL_STYLE}">
+          ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+        <input id="sudd-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
+      </div>
+      <div id="sudd-body" style="margin-top:12px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">APPELLO</p>
       <select id="appello-data" style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:15px"></select>
@@ -261,6 +274,7 @@ export function renderCoach(appEl) {
   initAnnuncio(el);
   initPiano(el);
   initSfida(el);
+  initSuddivisioni(el);
   initAppello(el);
   initRichieste(el);
 }
@@ -838,6 +852,87 @@ function initSfida(el) {
     }
   });
 
+  carica();
+}
+
+function initSuddivisioni(el) {
+  const meseSel = el.querySelector("#sudd-mese");
+  const annoInput = el.querySelector("#sudd-anno");
+  const body = el.querySelector("#sudd-body");
+  const eur = (n) => (Number.isInteger(n) ? `${n} €` : `${n.toFixed(2)} €`);
+
+  async function carica() {
+    body.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>`;
+    let d;
+    try {
+      d = await api.get(`/suddivisioni?anno=${annoInput.value}&mese=${meseSel.value}`);
+    } catch {
+      body.innerHTML = `<p class="error-text">Impossibile caricare</p>`;
+      return;
+    }
+
+    const righe = d.righe.length
+      ? d.righe
+          .map((r) => {
+            const quote =
+              r.quotaCoach != null
+                ? `<span style="color:var(--livello-1)">${eur(r.quotaCoach)}</span> / <span style="color:var(--mute)">${eur(r.quotaPalestra)}</span>`
+                : `<span style="color:var(--livello-5)">da definire</span>`;
+            return `
+              <div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--border)">
+                <span style="font-size:13px; min-width:0">${esc(r.nome)}
+                  <span class="mono" style="color:var(--mute); font-size:11px"> · ${r.nomePiano ?? r.piano} · ${eur(r.prezzo)}${r.stato === "pagato" ? " ✓" : ""}</span>
+                </span>
+                <span class="mono" style="font-size:12px; white-space:nowrap">${quote}</span>
+              </div>`;
+          })
+          .join("")
+      : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta con abbonamento questo mese.</p>`;
+
+    const t = d.totali;
+    const totali = `
+      <div style="margin-top:10px; padding-top:10px; border-top:2px solid var(--border); display:flex; flex-wrap:wrap; gap:12px">
+        <span class="mono" style="font-size:12px">A te: <strong style="color:var(--livello-1)">${eur(t.coach)}</strong></span>
+        <span class="mono" style="font-size:12px">Palestra: <strong>${eur(t.palestra)}</strong></span>
+        ${t.daDefinire ? `<span class="mono" style="font-size:12px; color:var(--livello-5)">Da definire: ${eur(t.daDefinire)}</span>` : ""}
+      </div>`;
+
+    const config = `
+      <div style="margin-top:14px; padding-top:10px; border-top:1px solid var(--border)">
+        <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">% CHE SPETTA A TE</p>
+        ${PIANI.map((pl) => {
+          const val = d.config[pl.key];
+          return `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px">
+              <span class="mono" style="font-size:12px; color:${pl.colore}">${pl.nome} <span style="color:var(--mute)">· ${pl.prezzo} €</span></span>
+              <span style="display:flex; align-items:center; gap:4px">
+                <input type="number" class="sudd-pct" data-piano="${pl.key}" min="0" max="100" value="${val ?? ""}" placeholder="—"
+                  style="width:64px; text-align:right; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 8px; color:var(--text); font-family:inherit" />
+                <span class="mono" style="color:var(--mute); font-size:12px">%</span>
+              </span>
+            </div>`;
+        }).join("")}
+      </div>`;
+
+    body.innerHTML = righe + totali + config;
+
+    body.querySelectorAll(".sudd-pct").forEach((inp) => {
+      inp.addEventListener("change", async () => {
+        const v = inp.value.trim();
+        if (v === "" || Number(v) < 0 || Number(v) > 100) return;
+        inp.disabled = true;
+        try {
+          await api.post("/suddivisioni/config", { piano: inp.dataset.piano, quotaCoachPct: Number(v) });
+          await carica();
+        } catch {
+          inp.disabled = false;
+        }
+      });
+    });
+  }
+
+  meseSel.addEventListener("change", carica);
+  annoInput.addEventListener("change", carica);
   carica();
 }
 

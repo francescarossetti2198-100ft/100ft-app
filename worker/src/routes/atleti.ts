@@ -7,6 +7,8 @@ import { parseRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
 import { statoBadgeMensili } from "../lib/badgeMensili";
 import { adessoRoma } from "../lib/oggi";
+import { pianoDelMese, pianoProssimo } from "../lib/abbonamenti";
+import { prezzoPiano, nomePiano } from "../lib/abbonamentiPiani";
 
 // Età in anni interi da una data YYYY-MM-DD (null se manca / non valida).
 function calcolaEta(dataNascita: string | null): number | null {
@@ -74,10 +76,12 @@ atleti.get("/", requireCoach, async (c) => {
           .bind(u.userId)
           .first<{ n: number }>(),
         db
-          .prepare(`SELECT stato FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
+          .prepare(`SELECT stato, piano FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
           .bind(u.userId, mese, anno)
-          .first<{ stato: string }>(),
+          .first<{ stato: string; piano: string | null }>(),
       ]);
+
+      const piano = pagamento?.piano ?? (await pianoDelMese(db, u.userId, anno, mese));
 
       return {
         userId: u.userId,
@@ -89,6 +93,8 @@ atleti.get("/", requireCoach, async (c) => {
         ultimoFeedback: ultimoFeedback ?? null,
         richiesteRecenti: richiesteRecenti.results,
         pagamentoMese: pagamento?.stato ?? "non_pagato",
+        piano,
+        nomePiano: nomePiano(piano),
       };
     })
   );
@@ -161,9 +167,9 @@ atleti.get("/:id", requireCoach, async (c) => {
         .bind(id)
         .all<{ categoria: string | null; testoLibero: string | null; data: string }>(),
       db
-        .prepare(`SELECT stato FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
+        .prepare(`SELECT stato, piano FROM pagamenti WHERE user_id = ? AND mese = ? AND anno = ?`)
         .bind(id, mese, anno)
-        .first<{ stato: string }>(),
+        .first<{ stato: string; piano: string | null }>(),
       db
         .prepare(
           `SELECT mese, anno, risposte, creato_il AS creatoIl FROM feedback_mensile
@@ -184,6 +190,9 @@ atleti.get("/:id", requireCoach, async (c) => {
         .all<{ esercizio: string; peso: number; data: string }>(),
       statoBadgeMensili(db, id),
     ]);
+
+  const pianoAtt = pagamento?.piano ?? (await pianoDelMese(db, id, anno, mese));
+  const pianoProx = await pianoProssimo(db, id);
 
   return c.json({
     userId: id,
@@ -215,6 +224,13 @@ atleti.get("/:id", requireCoach, async (c) => {
       sfideFatte: sfideFatte.results,
       richiesteRecenti: richiesteRecenti.results,
       pagamentoMese: pagamento?.stato ?? "non_pagato",
+      abbonamento: {
+        piano: pianoAtt,
+        nomePiano: nomePiano(pianoAtt),
+        prezzo: prezzoPiano(pianoAtt),
+        pianoProssimo: pianoProx,
+        nomePianoProssimo: nomePiano(pianoProx),
+      },
       trofei,
       badgeMensili,
       performance: performance.results,

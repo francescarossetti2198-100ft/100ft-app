@@ -19,6 +19,8 @@ import pagamenti from "./routes/pagamenti";
 import push from "./routes/push";
 import feedbackMensile from "./routes/feedback-mensile";
 import performance from "./routes/performance";
+import abbonamento from "./routes/abbonamento";
+import suddivisioni from "./routes/suddivisioni";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
@@ -69,6 +71,8 @@ app.route("/api/pagamenti", pagamenti);
 app.route("/api/push", push);
 app.route("/api/feedback-mensile", feedbackMensile);
 app.route("/api/performance", performance);
+app.route("/api/abbonamento", abbonamento);
+app.route("/api/suddivisioni", suddivisioni);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).

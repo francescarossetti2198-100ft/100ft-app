@@ -9,6 +9,7 @@ import { statoTrofei } from "../lib/trofei";
 import { verificaTraguardi } from "../lib/traguardi";
 import { statoBadgeMensili } from "../lib/badgeMensili";
 import { adessoRoma } from "../lib/oggi";
+import { pianoDelMese, pianoProssimo } from "../lib/abbonamenti";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -43,7 +44,21 @@ profilo.get("/me", requireAuth, async (c) => {
   const meseAbb = oraAbb.getUTCMonth() + 1;
   const annoAbb = oraAbb.getUTCFullYear();
 
-  const [profiloRow, datiPrivatiRow, anelli, sfideCompletate, presenzeTotali, milestones, sessioniSettimana, posizione, trofei, pagamento, badgeMensili] = await Promise.all([
+  const [
+    profiloRow,
+    datiPrivatiRow,
+    anelli,
+    sfideCompletate,
+    presenzeTotali,
+    milestones,
+    sessioniSettimana,
+    posizione,
+    trofei,
+    pagamento,
+    badgeMensili,
+    pianoAttuale,
+    pianoProssimoKey,
+  ] = await Promise.all([
     c.env.DB.prepare(
       `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, card_colore AS cardColore
        FROM athlete_profile WHERE user_id = ?`
@@ -86,6 +101,8 @@ profilo.get("/me", requireAuth, async (c) => {
       .bind(userId, meseAbb, annoAbb)
       .first<{ stato: string }>(),
     statoBadgeMensili(c.env.DB, userId),
+    pianoDelMese(c.env.DB, userId, annoAbb, meseAbb),
+    pianoProssimo(c.env.DB, userId),
   ]);
 
   return c.json({
@@ -114,6 +131,7 @@ profilo.get("/me", requireAuth, async (c) => {
     milestones: milestones.results,
     sessioniSettimana,
     abbonamentoAttivo: pagamento?.stato === "pagato",
+    abbonamento: { piano: pianoAttuale, pianoProssimo: pianoProssimoKey },
   });
 });
 
