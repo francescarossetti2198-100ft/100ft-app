@@ -9,7 +9,7 @@ import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { badgeMensiliHtml } from "../badge-mensili.js";
 import { initStatistiche } from "../statistiche.js";
-import { PIANI, pianoByKey } from "../abbonamenti.js";
+import { PIANI, pianoByKey, LEGENDA_GIORNI } from "../abbonamenti.js";
 
 // Palette fissa di brand per l'accento delle card del Profilo (i 6 colori livello + il
 // viola accent). Deve restare allineata a COLORI_CARD in worker/src/routes/profilo.ts.
@@ -734,6 +734,25 @@ function abbonamentoCardHtml(p) {
   const attuale = p.abbonamento?.piano ?? null;
   const prossimo = p.abbonamento?.pianoProssimo ?? null;
   const prossimoNome = prossimo ? pianoByKey(prossimo)?.nome ?? prossimo : null;
+  // Se ha già un piano, in vista si mostra solo quello: gli altri compaiono al tocco di
+  // "Cambia piano".
+  const collassa = !!attuale;
+
+  const pillHtml = (pl) => {
+    const on = pl.key === attuale;
+    const nascosta = collassa && !on;
+    return `
+      <button type="button" class="abb-pill" data-key="${pl.key}"${nascosta ? " hidden" : ""}
+        style="text-align:left; padding:10px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
+               border:1px solid ${on ? pl.colore : "var(--border)"};
+               background:${on ? `color-mix(in srgb, ${pl.colore} 12%, transparent)` : "var(--surface-2)"}; color:var(--text)">
+        <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${
+          on ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>` : ""
+        }
+        <span class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:2px">${pl.giorni}</span>
+      </button>`;
+  };
+
   return `
     <div class="card" style="margin-top:12px" id="abbonamento-card">
       <p class="sezione-label">Abbonamenti</p>
@@ -742,20 +761,10 @@ function abbonamentoCardHtml(p) {
       </p>
       ${prossimoNome ? `<p class="mono" style="color:var(--accent); font-size:12px; margin-top:6px">Dal mese prossimo: <strong>${prossimoNome}</strong></p>` : ""}
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px">
-        ${PIANI.map((pl) => {
-          const on = pl.key === attuale;
-          return `
-            <button type="button" class="abb-pill" data-key="${pl.key}"
-              style="text-align:left; padding:10px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
-                     border:1px solid ${on ? pl.colore : "var(--border)"};
-                     background:${on ? `color-mix(in srgb, ${pl.colore} 12%, transparent)` : "var(--surface-2)"}; color:var(--text)">
-              <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${
-                on ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>` : ""
-              }
-              <span class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:2px">${pl.giorni}</span>
-            </button>`;
-        }).join("")}
+        ${PIANI.map(pillHtml).join("")}
       </div>
+      ${collassa ? `<button type="button" class="link-btn" id="abb-cambia" style="margin-top:8px">Cambia piano ▾</button>` : ""}
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">${LEGENDA_GIORNI}</p>
     </div>`;
 }
 
@@ -763,6 +772,15 @@ function initAbbonamento(content, p, onSaved) {
   const card = content.querySelector("#abbonamento-card");
   if (!card) return;
   const attuale = p.abbonamento?.piano ?? null;
+
+  const cambia = card.querySelector("#abb-cambia");
+  if (cambia) {
+    cambia.addEventListener("click", () => {
+      card.querySelectorAll(".abb-pill[hidden]").forEach((b) => (b.hidden = false));
+      cambia.remove();
+    });
+  }
+
   card.querySelectorAll(".abb-pill").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const key = btn.dataset.key;

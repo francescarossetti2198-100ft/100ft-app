@@ -39,11 +39,16 @@ export const PIANI = [
   {
     key: "fitnessdream",
     nome: "FITNESSDREAM",
-    giorni: "Lun · Mer · Ven — per chi è già iscritto in palestra",
+    giorni:
+      "Lun · Mer · Ven — valido solo per chi ha un abbonamento attivo ai corsi della palestra FitnessDream",
     prezzo: 30,
     colore: "var(--sessione-extra)",
   },
 ];
+
+// Nota fissa in fondo alla card "Abbonamenti": cosa si fa nei vari giorni.
+export const LEGENDA_GIORNI =
+  "Lun · Mer · Ven: allenamento funzionale — Mar: core & stretching";
 
 export function pianoByKey(key) {
   return PIANI.find((p) => p.key === key) ?? null;
