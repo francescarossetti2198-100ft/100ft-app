@@ -383,17 +383,22 @@ async function loadSettimana(el) {
       const progresso = prossimo ? allenamentiFatti - attuale.allenamentiMin : range;
       const pctBarra = prossimo ? Math.max(0, Math.round((progresso / range) * 100)) : 100;
 
+      const allenText = prossimo
+        ? `${allenamentiFatti} fatti · ${prossimo.allenamentiMin - allenamentiFatti} al livello ${prossimo.numero}`
+        : `${allenamentiFatti} allenamenti · livello massimo`;
+
       livelloHtml = `
-        <div style="display:flex; align-items:center; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+        <div style="display:flex; gap:14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
           <img class="livello-img" src="/cards/card_final_${attuale.numero}.png" alt="Livello ${attuale.numero} — ${attuale.nome}"
                style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:zoom-in; background:#141414; padding:3px" />
-          <div style="flex:1; min-width:0">
-            <p class="mono" style="color:${attuale.colore}; font-size:11px">
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column; justify-content:space-between; padding:1px 0">
+            <p class="mono" style="color:${attuale.colore}; font-size:11px; margin:0">
               LIVELLO ${attuale.numero} · ${attuale.nome.toUpperCase()}
             </p>
-            <div style="background:var(--surface-2); border-radius:4px; height:4px; margin-top:6px; overflow:hidden">
+            <div style="background:var(--surface-2); background:color-mix(in srgb, ${attuale.colore} 20%, transparent); border-radius:4px; height:5px; overflow:hidden">
               <div style="background:${attuale.colore}; width:${pctBarra}%; height:100%"></div>
             </div>
+            <p class="mono" style="color:var(--mute); font-size:11px; margin:0">${allenText}</p>
           </div>
         </div>
       `;
