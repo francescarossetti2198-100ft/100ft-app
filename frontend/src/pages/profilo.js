@@ -784,6 +784,21 @@ function abbonamentoCardHtml(p) {
              <button type="button" class="link-btn" id="abb-chiudi" hidden style="margin-top:8px">Chiudi ▴</button>`
           : ""
       }
+      <details style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
+        <summary class="mono" style="cursor:pointer; color:var(--accent); font-size:12px; letter-spacing:1px; list-style:none">
+          Info e costi abbonamenti ▾
+        </summary>
+        <div style="margin-top:10px">
+          <a href="/abbonamenti-info.pdf" target="_blank" rel="noopener" style="display:block">
+            <img src="/abbonamenti-info.jpg" alt="100FT — Lezioni settimanali e abbonamenti"
+                 style="width:100%; border-radius:8px; border:1px solid var(--border); display:block; background:#fff" />
+          </a>
+          <a href="/abbonamenti-info.pdf" target="_blank" rel="noopener"
+             class="mono" style="display:inline-block; margin-top:8px; color:var(--accent); font-size:12px; text-decoration:none">
+            Apri a schermo intero ↗
+          </a>
+        </div>
+      </details>
     </div>`;
 }
 
