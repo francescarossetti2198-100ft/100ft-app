@@ -673,7 +673,7 @@ const REGOLAMENTO = [
   {
     titolo: "Classifica",
     corpo:
-      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle attività che fai (vedi «Sistema di punteggio»). La freccia indica se sei salito o sceso rispetto al periodo prima.",
+      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle attività che fai (vedi «Sistema di punteggio»). La freccia accanto ai punti segna il tuo ultimo sorpasso: verde ▲ quando superi qualcuno per punti, rossa ▼ quando ti superano, con quante posizioni hai guadagnato o perso rispetto a prima di quel sorpasso. Il confronto è con la tua posizione precedente, non con la settimana o il mese scorso, e la freccia resta finché la tua posizione non cambia di nuovo.",
   },
   {
     titolo: "Sistema di punteggio",

@@ -94,14 +94,15 @@ function avatarHtml(a) {
   return `<span style="width:22px; height:22px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--mute)">${nome[0].toUpperCase()}</span>`;
 }
 
-// Movimento rispetto al periodo precedente: freccia verde su se sale in classifica,
-// rossa giù se scende. Niente freccia se è fermo o non era ancora in classifica.
-// Va messa subito prima dei punti ("▲ 90 PT").
+// Ultimo spostamento in classifica (a ogni sorpasso di punti): freccia verde su se hai
+// guadagnato posizioni, rossa giù se le hai perse — rispetto alla posizione precedente,
+// non a un periodo passato. Resta finché la posizione non cambia di nuovo. Niente freccia
+// se sei fermo, a 0 punti o non hai ancora avuto un cambio. Va subito prima dei punti.
 function variazioneHtml(v) {
   if (v == null || v === 0) return "";
   const su = v > 0;
   const colore = su ? "var(--livello-1)" : "var(--livello-5)";
-  return `<span style="color:${colore}; margin-right:5px" title="${su ? "+" : ""}${v} posizioni">${su ? "▲" : "▼"}</span>`;
+  return `<span style="color:${colore}; margin-right:5px" title="${su ? "+" : ""}${v} posizioni dall'ultimo sorpasso">${su ? "▲" : "▼"}</span>`;
 }
 
 // TODO: classifica Season e Improvement (basata sul miglioramento personale, brief sezione 10).

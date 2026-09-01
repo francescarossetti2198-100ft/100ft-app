@@ -18,10 +18,12 @@ type Periodo = (typeof PERIODI)[number];
 // Classifiche multiple (brief, sezione 10) — Settimana/Mese/Totale per ora; Season e
 // Improvement (basata sul miglioramento personale, non sui punti totali) restano da fare.
 //
-// Ogni riga porta anche `variazione`: di quante posizioni l'atleta è salito (valore > 0,
-// freccia verde) o sceso (< 0, freccia rossa) rispetto al periodo PRECEDENTE comparabile
-// — settimana scorsa, mese scorso, o (per "totale") la classifica cumulativa com'era
-// all'inizio di questa settimana. `null` per chi non era ancora in classifica allora.
+// Ogni riga porta anche `variazione`: di quante posizioni l'atleta si è mosso all'ULTIMO
+// cambio di posizione (> 0 salito = freccia verde, < 0 sceso = freccia rossa). Il confronto
+// è con la posizione precedente registrata — che si aggiorna a ogni sorpasso di punti — non
+// con un periodo passato. La freccia resta finché la posizione non cambia di nuovo. `null`
+// per chi è a 0 punti o non ha ancora avuto un cambio. Le posizioni stanno in
+// `classifica_posizioni` e questo GET le aggiorna quando cambiano.
 sfide.get("/classifica", requireAuth, async (c) => {
   const richiesto = c.req.query("periodo");
   const periodo: Periodo = PERIODI.includes(richiesto as Periodo) ? (richiesto as Periodo) : "mese";
@@ -30,85 +32,89 @@ sfide.get("/classifica", requireAuth, async (c) => {
   const primoDelMese = (d: Date) =>
     `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
-  // Finestra corrente [minCorr, +∞) e finestra precedente [minPrec, maxPrec).
+  // Da quando contano i punti per questo periodo ("totale" = da sempre).
   let minCorr: string | null = null;
-  let minPrec: string | null = null;
-  let maxPrec: string | null = null;
   if (periodo === "settimana") {
-    const inizio = inizioSettimana(oggi);
-    minCorr = inizio.toISOString().slice(0, 10);
-    const inizioPrec = new Date(inizio);
-    inizioPrec.setUTCDate(inizioPrec.getUTCDate() - 7);
-    minPrec = inizioPrec.toISOString().slice(0, 10);
-    maxPrec = minCorr;
+    minCorr = inizioSettimana(oggi).toISOString().slice(0, 10);
   } else if (periodo === "mese") {
     minCorr = primoDelMese(oggi);
-    minPrec = primoDelMese(new Date(Date.UTC(oggi.getUTCFullYear(), oggi.getUTCMonth() - 1, 1)));
-    maxPrec = minCorr;
-  } else {
-    // totale: corrente = tutto, precedente = cumulativo fino all'inizio di questa settimana
-    maxPrec = inizioSettimana(oggi).toISOString().slice(0, 10);
   }
 
-  const classificaPer = async (min: string | null, max: string | null) => {
-    const condizioni: string[] = [];
-    const bind: string[] = [];
-    if (min) {
-      condizioni.push("x.data >= ?");
-      bind.push(min);
-    }
-    if (max) {
-      condizioni.push("x.data < ?");
-      bind.push(max);
-    }
-    const filtro = condizioni.length ? `AND ${condizioni.join(" AND ")}` : "";
-    const { results } = await c.env.DB.prepare(
-      `SELECT u.id AS userId, p.nome, p.nickname, p.foto_url AS fotoUrl,
-              COALESCE(SUM(x.xp_assegnati), 0) AS punti
-       FROM users u
-       JOIN athlete_profile p ON p.user_id = u.id
-       LEFT JOIN xp_log x ON x.user_id = u.id ${filtro}
-       GROUP BY u.id
-       ORDER BY punti DESC, p.nome ASC`
-    )
-      .bind(...bind)
-      .all<{ userId: number; nome: string; nickname: string | null; fotoUrl: string | null; punti: number }>();
-    return results;
-  };
+  const filtro = minCorr ? "AND x.data >= ?" : "";
+  const bindPunti = minCorr ? [minCorr] : [];
+  const { results: corrente } = await c.env.DB.prepare(
+    `SELECT u.id AS userId, p.nome, p.nickname, p.foto_url AS fotoUrl,
+            COALESCE(SUM(x.xp_assegnati), 0) AS punti
+     FROM users u
+     JOIN athlete_profile p ON p.user_id = u.id
+     LEFT JOIN xp_log x ON x.user_id = u.id ${filtro}
+     GROUP BY u.id
+     ORDER BY punti DESC, p.nome ASC`
+  )
+    .bind(...bindPunti)
+    .all<{ userId: number; nome: string; nickname: string | null; fotoUrl: string | null; punti: number }>();
 
   // Posizione "sportiva" (1, 2, 2, 4): a parità di punti stessa posizione.
-  const posizioni = (righe: { userId: number; punti: number }[]) => {
-    const mappa = new Map<number, number>();
+  const posizioni = new Map<number, number>();
+  {
     let puntiPrec: number | null = null;
     let posPrec = 0;
-    righe.forEach((r, i) => {
+    corrente.forEach((r, i) => {
       const pos = r.punti === puntiPrec ? posPrec : i + 1;
-      mappa.set(r.userId, pos);
+      posizioni.set(r.userId, pos);
       puntiPrec = r.punti;
       posPrec = pos;
     });
-    return mappa;
-  };
+  }
 
-  const [corrente, precedente] = await Promise.all([
-    classificaPer(minCorr, null),
-    classificaPer(minPrec, maxPrec),
-  ]);
+  // Posizioni registrate all'ultimo giro per questo periodo.
+  const { results: salvate } = await c.env.DB.prepare(
+    `SELECT user_id AS userId, posizione, posizione_prec AS posizionePrec
+     FROM classifica_posizioni WHERE periodo = ?`
+  )
+    .bind(periodo)
+    .all<{ userId: number; posizione: number; posizionePrec: number | null }>();
+  const salvatePer = new Map(salvate.map((s) => [s.userId, s]));
 
-  const posCorrente = posizioni(corrente);
-  const posPrecedente = posizioni(precedente);
-  const puntiPrecedente = new Map(precedente.map((r) => [r.userId, r.punti]));
+  const daAggiornare: { userId: number; posizione: number; posizionePrec: number | null }[] = [];
 
   const classifica = corrente.map((r) => {
-    // Freccia solo per chi ha davvero punti in questo periodo ed era già a punti in quello
-    // precedente — altrimenti (tutti a 0 a inizio settimana) la classifica è un mucchio di
-    // pari merito e le frecce diventano rumore.
-    const confrontabile = r.punti > 0 && (puntiPrecedente.get(r.userId) ?? 0) > 0;
-    const variazione = confrontabile
-      ? (posPrecedente.get(r.userId) ?? 0) - (posCorrente.get(r.userId) ?? 0)
-      : null;
-    return { ...r, posizione: posCorrente.get(r.userId) ?? 0, variazione };
+    const posCurr = posizioni.get(r.userId) ?? 0;
+    const salvata = salvatePer.get(r.userId);
+
+    let posizionePrec: number | null;
+    if (!salvata) {
+      // Prima volta in classifica: registra e basta, niente freccia.
+      daAggiornare.push({ userId: r.userId, posizione: posCurr, posizionePrec: null });
+      posizionePrec = null;
+    } else if (salvata.posizione !== posCurr) {
+      // Posizione cambiata (un sorpasso): la vecchia diventa la "precedente".
+      daAggiornare.push({ userId: r.userId, posizione: posCurr, posizionePrec: salvata.posizione });
+      posizionePrec = salvata.posizione;
+    } else {
+      // Ferma: la freccia resta quella dell'ultimo cambio.
+      posizionePrec = salvata.posizionePrec;
+    }
+
+    // Niente freccia a 0 punti (a inizio periodo sono tutti pari merito → sarebbe rumore).
+    const variazione = r.punti > 0 && posizionePrec != null ? posizionePrec - posCurr : null;
+    return { ...r, posizione: posCurr, variazione };
   });
+
+  if (daAggiornare.length) {
+    await c.env.DB.batch(
+      daAggiornare.map((d) =>
+        c.env.DB.prepare(
+          `INSERT INTO classifica_posizioni (periodo, user_id, posizione, posizione_prec, aggiornata_il)
+           VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT (periodo, user_id) DO UPDATE SET
+             posizione = excluded.posizione,
+             posizione_prec = excluded.posizione_prec,
+             aggiornata_il = excluded.aggiornata_il`
+        ).bind(periodo, d.userId, d.posizione, d.posizionePrec)
+      )
+    );
+  }
 
   return c.json({ classifica, periodo });
 });
