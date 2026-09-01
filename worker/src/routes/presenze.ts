@@ -30,6 +30,111 @@ async function giorniAllenamentoRecenti(db: D1Database, quante = 10, giorni = 28
   return out;
 }
 
+// Primo giorno di allenamento da oggi in avanti (oggi compreso) che non è chiuso.
+async function prossimoGiornoAllenamento(db: D1Database): Promise<string | null> {
+  const { results } = await db
+    .prepare(`SELECT DISTINCT giorno_settimana FROM sessioni_gruppo`)
+    .all<{ giorno_settimana: number }>();
+  const giorniConSessione = new Set(results.map((r) => r.giorno_settimana));
+  if (giorniConSessione.size === 0) return null;
+  const d = adessoRoma();
+  for (let i = 0; i < 14; i++) {
+    const iso = d.toISOString().slice(0, 10);
+    if (giorniConSessione.has(giornoSettimanaDi(iso))) {
+      const chiuso = await db.prepare(`SELECT 1 FROM giorni_chiusi WHERE data = ?`).bind(iso).first();
+      if (!chiuso) return iso;
+    }
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return null;
+}
+
+// Giorno di allenamento passato più recente per cui il coach non ha ancora chiuso l'appello.
+async function appelloDaChiudere(db: D1Database, oggiData: string): Promise<string | null> {
+  for (const g of await giorniAllenamentoRecenti(db, 10, 28)) {
+    if (g >= oggiData) continue;
+    const sess = await db
+      .prepare(`SELECT id FROM sessioni_gruppo WHERE giorno_settimana = ?`)
+      .bind(giornoSettimanaDi(g))
+      .first<{ id: number }>();
+    if (!sess) continue;
+    const fatto = await db
+      .prepare(`SELECT 1 FROM appello_conferme WHERE data = ? AND sessione_id = ?`)
+      .bind(g, sess.id)
+      .first();
+    if (!fatto) return g;
+  }
+  return null;
+}
+
+// ── COACH: cruscotto "Oggi" ───────────────────────────────────────────────────
+
+type ProssimaSessione = {
+  data: string | null;
+  oggi: boolean;
+  sessione: { oraInizio: string; oraFine: string } | null;
+  prenotati: string[];
+  nPrenotati: number;
+  richieste: { nome: string; categoria: string | null; testoLibero: string | null }[];
+  nota: string | null;
+  appelloDaChiudere: { data: string } | null;
+};
+
+// Tutto quello che serve alla coach per il prossimo allenamento, in una chiamata.
+presenze.get("/prossima", requireCoach, async (c) => {
+  const { data: oggiData } = oggi();
+  const appelloAperto = await appelloDaChiudere(c.env.DB, oggiData);
+  const vuoto: ProssimaSessione = {
+    data: null, oggi: false, sessione: null, prenotati: [], nPrenotati: 0,
+    richieste: [], nota: null, appelloDaChiudere: appelloAperto ? { data: appelloAperto } : null,
+  };
+
+  const data = await prossimoGiornoAllenamento(c.env.DB);
+  if (!data) return c.json(vuoto);
+
+  const sessione = await c.env.DB
+    .prepare(`SELECT id, ora_inizio AS oraInizio, ora_fine AS oraFine FROM sessioni_gruppo WHERE giorno_settimana = ?`)
+    .bind(giornoSettimanaDi(data))
+    .first<{ id: number; oraInizio: string; oraFine: string }>();
+  if (!sessione) return c.json(vuoto);
+
+  const prenotati = await c.env.DB.prepare(
+    `SELECT COALESCE(p.nickname, p.nome) AS nome
+     FROM presenze pr
+     JOIN athlete_profile p ON p.user_id = pr.user_id
+     WHERE pr.sessione_id = ? AND pr.data = ? AND pr.presenza_richiesta = 1
+     ORDER BY nome`
+  )
+    .bind(sessione.id, data)
+    .all<{ nome: string }>();
+
+  const nota = await c.env.DB.prepare(`SELECT testo FROM nota_coach WHERE data = ?`)
+    .bind(data)
+    .first<{ testo: string }>();
+
+  const richieste = await c.env.DB.prepare(
+    `SELECT COALESCE(p.nickname, p.nome) AS nome, r.categoria, r.testo_libero AS testoLibero
+     FROM richieste_preallenamento r
+     JOIN athlete_profile p ON p.user_id = r.user_id
+     WHERE r.sessione_id = ? AND r.data_sessione = ?
+     ORDER BY r.creata_il`
+  )
+    .bind(sessione.id, data)
+    .all<{ nome: string; categoria: string | null; testoLibero: string | null }>();
+
+  const payload: ProssimaSessione = {
+    data,
+    oggi: data === oggiData,
+    sessione: { oraInizio: sessione.oraInizio, oraFine: sessione.oraFine },
+    prenotati: prenotati.results.map((r) => r.nome),
+    nPrenotati: prenotati.results.length,
+    richieste: richieste.results,
+    nota: nota?.testo ?? null,
+    appelloDaChiudere: appelloAperto ? { data: appelloAperto } : null,
+  };
+  return c.json(payload);
+});
+
 // ── ATLETA ────────────────────────────────────────────────────────────────────
 
 // Presenza è solo per il giorno stesso, niente prenotazioni future (brief, sezione 3).

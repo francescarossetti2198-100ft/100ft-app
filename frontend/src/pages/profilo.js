@@ -1,5 +1,5 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { logout } from "../auth.js";
+import { logout, getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria } from "../push.js";
@@ -139,6 +139,11 @@ function obiettiviElenco(answers) {
 // TODO: dati pubblici vs privati, stato pagamento (brief, sezione 14) — servono la Coach
 // Dashboard e una decisione su come gestire i dati privati dell'atleta.
 export function renderProfilo(appEl) {
+  // La coach non ha più un tab Profilo: le sue impostazioni stanno nel menù ☰.
+  if (getUser()?.role === "coach") {
+    navigate("/coach/impostazioni");
+    return;
+  }
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
@@ -241,7 +246,7 @@ function abbonamentoCoachHtml(userId, abb) {
 // per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
 // invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
 // apre il selettore quando viene attivato dalla label.
-function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
+export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
   const media = fotoUrl
     ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
     : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute); vertical-align:middle">${iniziale}</span>`;
@@ -262,7 +267,7 @@ function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
   `;
 }
 
-function attachFotoUpload(container, onDone) {
+export function attachFotoUpload(container, onDone) {
   const input = container.querySelector("#foto-input");
   if (!input) return;
   input.addEventListener("change", async (e) => {
@@ -286,7 +291,12 @@ function attachFotoUpload(container, onDone) {
 // la sua scheda completa — anagrafica privata, obiettivi dal questionario, feedback e
 // sfide recenti, presenze, pagamento, reset password. La coach non si allena, quindi qui
 // niente livello/scala/achievements suoi.
-function renderProfiloCoach(content, p, onFotoCaricata) {
+// Elenco atleti + scheda del singolo. Usato dalla pagina coach "Atleti" (menù ☰).
+export function montaElencoAtleti(content) {
+  renderProfiloCoach(content, null, null, { soloElenco: true });
+}
+
+function renderProfiloCoach(content, p, onFotoCaricata, opts = {}) {
   let atletaAperto = null;
 
   function render() {
@@ -295,22 +305,28 @@ function renderProfiloCoach(content, p, onFotoCaricata) {
   }
 
   function renderLista() {
+    const testataCoach = opts.soloElenco
+      ? ""
+      : `
+        <div class="card" style="margin-bottom:12px">${fotoProfiloHtml(p?.fotoUrl, "C")}</div>
+        <div class="card" style="margin-bottom:12px">
+          <details class="blocco-mese" id="notifiche-card">
+            <summary>Notifiche push</summary>
+            <div class="blocco-corpo">
+              <p class="mono" style="color:var(--mute); font-size:12px; margin-bottom:8px">Ricevi la notifica per fare l'appello a fine allenamento.</p>
+              <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+            </div>
+          </details>
+        </div>
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">PROFILI ATLETI</p>`;
     content.innerHTML = `
-      <div class="card" style="margin-bottom:12px">${fotoProfiloHtml(p?.fotoUrl, "C")}</div>
-      <div class="card" style="margin-bottom:12px">
-        <details class="blocco-mese" id="notifiche-card">
-          <summary>Notifiche push</summary>
-          <div class="blocco-corpo">
-            <p class="mono" style="color:var(--mute); font-size:12px; margin-bottom:8px">Ricevi la notifica per fare l'appello a fine allenamento.</p>
-            <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
-          </div>
-        </details>
-      </div>
-      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">PROFILI ATLETI</p>
+      ${testataCoach}
       <div class="card" style="margin-top:10px" id="atleti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     `;
-    attachFotoUpload(content, onFotoCaricata ?? (() => {}));
-    initNotifiche(content); // vista coach: solo appello, niente promemoria acqua/merenda
+    if (!opts.soloElenco) {
+      attachFotoUpload(content, onFotoCaricata ?? (() => {}));
+      initNotifiche(content);
+    }
 
     const list = content.querySelector("#atleti-list");
     api
@@ -969,7 +985,7 @@ function initSicurezza(content) {
   });
 }
 
-async function initNotifiche(content, conPromemoria = false) {
+export async function initNotifiche(content, conPromemoria = false) {
   const box = content.querySelector("#notifiche-stato");
   const stato = await statoNotifiche().catch(() => "non-supportato");
 
@@ -1477,9 +1493,7 @@ async function loadProfilo(el) {
     const p = await api.get("/profilo/me");
 
     if (p.role === "coach") {
-      const h1 = el.querySelector("h1");
-      if (h1) h1.textContent = "Profili";
-      renderProfiloCoach(content, p, () => loadProfilo(el));
+      navigate("/coach/impostazioni");
       return;
     }
 

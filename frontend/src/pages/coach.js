@@ -1,32 +1,31 @@
-import { renderTabbar } from "../components/tabbar.js";
+// Libreria delle sezioni della dashboard coach. Ogni `init*` monta la sua UI dentro un `el`
+// passato; le pagine in pages/coach/*.js le compongono (una per rotta) dentro lo shell.
 import { api, ApiError, mediaUrl } from "../api.js";
-import { getUser } from "../auth.js";
-import { navigate } from "../router.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { PIANI } from "../abbonamenti.js";
 
-const MESI = [
+export const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
 // Stile condiviso dei <select> della dashboard.
-const SEL_STYLE =
+export const SEL_STYLE =
   "background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px";
 
 // Criteri per le sfide "traguardo": si completano da sole quando l'atleta li raggiunge.
-const CRITERI_TRAGUARDO = [
+export const CRITERI_TRAGUARDO = [
   { v: "profilo_completo", label: "ha completato profilo + «I tuoi dati»" },
   { v: "obiettivi_completi", label: "ha compilato gli obiettivi personali" },
   { v: "daily_drop", label: "ha fatto almeno un daily drop" },
   { v: "presenze", label: "raggiunge N presenze confermate" },
 ];
 
-const esc = (s) =>
+export const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 // Riga leggibile per una sfida nell'elenco della dashboard.
-function descriviSfida(s) {
+export function descriviSfida(s) {
   if (s.tipo === "foto") return "📸 Foto";
   if (s.tipo !== "traguardo") return "👋 Di gruppo";
   const c = s.criterio || "";
@@ -39,361 +38,98 @@ function descriviSfida(s) {
 }
 
 // Primo e ultimo giorno (YYYY-MM-DD) di un mese dato anno + mese 1-12.
-function estremiMese(anno, mese) {
+export function estremiMese(anno, mese) {
   return {
     inizio: `${anno}-${String(mese).padStart(2, "0")}-01`,
     fine: new Date(Date.UTC(anno, mese, 0)).toISOString().slice(0, 10),
   };
 }
 
-function oraCorrente() {
+export function oraCorrente() {
   const now = new Date();
   return { mese: now.getUTCMonth() + 1, anno: now.getUTCFullYear() };
 }
 
-function oggiIso() {
+export function oggiIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function renderCoach(appEl) {
-  // Pannello riservato al coach — un atleta che arriva qui via URL diretto torna in Home.
-  if (getUser()?.role !== "coach") {
-    navigate("/");
-    return;
-  }
-
-  const { mese, anno } = oraCorrente();
-
-  const el = document.createElement("div");
-  el.className = "screen";
-  el.innerHTML = `
-    <h1>Coach</h1>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">OGGI</p>
-      <p id="coach-oggi-body" style="margin-top:8px; font-size:14px; line-height:1.9">
-        <span class="mono" style="color:var(--mute)">Carico...</span>
-      </p>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">NOTA DEL GIORNO</p>
-      <input id="nota-data" type="date" value="${oggiIso()}"
-        style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
-               border-radius:8px; padding:10px; color:var(--text); font-family:inherit" />
-      <div id="nota-status" style="margin-top:8px"></div>
-      <textarea id="nota-testo" rows="3"
-        style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
-               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical"
-        placeholder="Messaggio breve per oggi..."></textarea>
-      <p class="error-text" id="nota-error" hidden style="margin-top:6px"></p>
-      <p class="success-text" id="nota-success" hidden style="margin-top:6px">Salvata ✓</p>
-      <button class="btn" id="nota-salva" style="width:100%; margin-top:10px">Salva nota</button>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">APPELLO</p>
-      <select id="appello-data" style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
-              border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:15px"></select>
-      <div id="appello-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-      <p class="error-text" id="appello-error" hidden></p>
-      <p class="success-text" id="appello-success" hidden>Appello confermato ✓</p>
-      <button class="btn" id="appello-salva" style="width:100%; margin-top:8px" hidden>Conferma appello</button>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">ALLENAMENTI · PRESENZE E FEEDBACK</p>
-      <select id="riepilogo-data" style="margin-top:10px; ${SEL_STYLE}; width:100%"></select>
-      <div id="riepilogo-body" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE PRE-ALLENAMENTO DI OGGI</p>
-      <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-      <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">DIARIO ALLENAMENTI</p>
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Per ogni allenamento: il focus del giorno e la scheda (PDF/Word). Puoi pubblicare ogni voce nel Feed.
-      </p>
-      <div style="display:flex; gap:8px; margin-top:10px">
-        <select id="diario-mese" style="flex:2; ${SEL_STYLE}">
-          ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
-        </select>
-        <input id="diario-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
-      </div>
-      <p class="mono" id="diario-focus-mese" style="color:var(--mute); font-size:12px; margin-top:8px; display:none"></p>
-      <div id="diario-calendario" style="margin-top:12px"></div>
-      <details class="blocco-mese" id="diario-dettaglio" style="margin-top:12px; border-top:0">
-        <summary><span id="diario-summary">Diario del mese</span></summary>
-        <div class="blocco-corpo">
-          <div id="diario-rows" style="display:flex; flex-direction:column; gap:12px"></div>
-        </div>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <details class="blocco-mese" style="border-top:0">
-      <summary>Contenuto del mese</summary>
-      <div class="blocco-corpo">
-      <div style="display:flex; gap:8px; margin-top:12px">
-        <select id="piano-mese" style="flex:2; background:var(--surface-2); border:1px solid var(--border);
-                border-radius:8px; padding:10px; color:var(--text); font-family:inherit">
-          ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
-        </select>
-        <input id="piano-anno" type="number" value="${anno}" style="flex:1; background:var(--surface-2);
-               border:1px solid var(--border); border-radius:8px; padding:10px; color:var(--text)" />
-      </div>
-
-      <div class="field" style="margin-top:14px">
-        <label>Focus del mese (tema)</label>
-        <input id="piano-focus" type="text" placeholder="es. MOVEMENT QUALITY & MOBILITY" />
-      </div>
-      <div class="field">
-        <label>Obiettivo</label>
-        <textarea id="piano-obiettivo" rows="2"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-      <div class="field">
-        <label>Perché questo mese <span class="mono" style="color:var(--mute); font-size:12px">— righe vuote = nuovo paragrafo</span></label>
-        <textarea id="piano-perche" rows="5"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-      <div class="field">
-        <label>Risultato atteso</label>
-        <textarea id="piano-risultato" rows="4"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-
-      <p class="sezione-label" style="margin-top:20px">Sane abitudini</p>
-      <div class="field" style="margin-top:12px">
-        <label>Focus</label>
-        <input id="piano-focus-nutri" type="text" placeholder="es. Regolarità e qualità alimentare" />
-      </div>
-      <div class="field">
-        <label>Linee guida <span class="mono" style="color:var(--mute); font-size:12px">— una per riga</span></label>
-        <textarea id="piano-linee" rows="6"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-      <div class="field">
-        <label>Obiettivo nutrizionale</label>
-        <textarea id="piano-obiettivo-nutri" rows="2"
-          style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px;
-                 padding:10px 12px; color:var(--text); font-family:inherit; font-size:15px; resize:vertical"></textarea>
-      </div>
-
-      <p class="sezione-label" style="margin-top:20px">Merende fit</p>
-      <p class="mono" id="merende-mese-nota" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Le merende finiscono nel mese selezionato in alto. La data "Per il giorno"
-        dice solo agli atleti in che giorno vale — NON sposta la merenda in un altro mese.
-      </p>
-      <div id="merende-calendario" style="margin-top:12px"></div>
-      <details class="blocco-mese" id="merende-dettaglio" style="margin-top:12px">
-        <summary><span id="merende-summary">Merende del mese</span></summary>
-        <div class="blocco-corpo">
-          <div id="merende-rows" style="display:flex; flex-direction:column; gap:10px"></div>
-          <button type="button" class="link-btn" id="merenda-aggiungi" style="margin-top:10px">+ aggiungi merenda</button>
-        </div>
-      </details>
-
-      <p class="error-text" id="piano-error" hidden style="margin-top:10px"></p>
-      <p class="success-text" id="piano-success" hidden style="margin-top:10px">Salvato ✓</p>
-      <button class="btn" id="piano-salva" style="width:100%; margin-top:14px">Salva contenuto del mese</button>
-      </div>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <details class="blocco-mese" style="border-top:0">
-      <summary>Sfide</summary>
-      <div class="blocco-corpo">
-
-      <div id="sfide-elenco" style="margin-top:10px">
-        <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>
-      </div>
-
-      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
-        <p class="mono" style="color:var(--mute); font-size:12px">NUOVA SFIDA</p>
-        <div class="field" style="margin-top:10px">
-          <label>Titolo</label>
-          <input id="sfida-titolo" type="text" />
-        </div>
-        <div class="field">
-          <label>Descrizione</label>
-          <input id="sfida-descrizione" type="text" />
-        </div>
-        <div class="field">
-          <label>Come si completa</label>
-          <select id="sfida-tipo" style="${SEL_STYLE}">
-            <option value="foto">Foto — l'atleta carica una foto</option>
-            <option value="traguardo">Automatica — si completa da sola</option>
-            <option value="presenza">Di gruppo — l'atleta conferma «fatto»</option>
-          </select>
-        </div>
-        <div class="field" id="sfida-criterio-wrap" style="display:none">
-          <label>Si completa quando l'atleta…</label>
-          <select id="sfida-criterio" style="${SEL_STYLE}">
-            ${CRITERI_TRAGUARDO.map((x) => `<option value="${x.v}">${x.label}</option>`).join("")}
-          </select>
-          <input id="sfida-criterio-n" type="number" min="1" max="99" value="6" hidden
-                 style="margin-top:8px; ${SEL_STYLE}" />
-        </div>
-        <div class="field">
-          <label>Mese della sfida</label>
-          <div style="display:flex; gap:8px">
-            <select id="sfida-mese" style="flex:2; ${SEL_STYLE}">
-              ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
-            </select>
-            <input id="sfida-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
-          </div>
-          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px">
-            La sfida dura tutto il mese, dal primo all'ultimo giorno.
-          </p>
-        </div>
-        <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin:4px 0 10px; cursor:pointer">
-          <input type="checkbox" id="sfida-flash" /> ⚡ Sfida lampo (badge dedicato, di pochi giorni)
-        </label>
-        <details id="sfida-date-precise" style="margin-bottom:10px">
-          <summary class="mono" style="cursor:pointer; color:var(--mute); font-size:12px">Date precise (per le sfide lampo)</summary>
-          <div style="display:flex; gap:10px; margin-top:8px">
-            <div class="field" style="flex:1">
-              <label>Inizio</label>
-              <input id="sfida-inizio" type="date" />
-            </div>
-            <div class="field" style="flex:1">
-              <label>Fine</label>
-              <input id="sfida-fine" type="date" />
-            </div>
-          </div>
-        </details>
-        <p class="mono" style="color:var(--mute); font-size:12px">Ogni sfida completata vale 10 punti.</p>
-        <p class="error-text" id="sfida-error" hidden></p>
-        <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
-        <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
-      </div>
-      </div>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <details class="blocco-mese" style="border-top:0">
-      <summary>Suddivisioni</summary>
-      <div class="blocco-corpo">
-      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px">Bozza — imposta le % mancanti quando hai deciso.</p>
-      <div style="display:flex; gap:8px; margin-top:10px">
-        <select id="sudd-mese" style="flex:2; ${SEL_STYLE}">
-          ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
-        </select>
-        <input id="sudd-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
-      </div>
-      <div id="sudd-body" style="margin-top:12px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
-      </div>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <details class="blocco-mese" style="border-top:0">
-      <summary>Giorni di chiusura</summary>
-      <div class="blocco-corpo">
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Festività o palestra chiusa: quella settimana gli anelli diventano 2/2 invece di 3/3.
-      </p>
-      <div style="display:flex; gap:8px; margin-top:10px; align-items:flex-end; flex-wrap:wrap">
-        <div class="field" style="flex:1; min-width:130px; margin:0">
-          <label>Giorno</label>
-          <input id="chiusura-data" type="date" style="${SEL_STYLE}" />
-        </div>
-        <div class="field" style="flex:2; min-width:130px; margin:0">
-          <label>Motivo (facoltativo)</label>
-          <input id="chiusura-motivo" type="text" placeholder="es. Ferragosto" style="${SEL_STYLE}" />
-        </div>
-        <button class="btn" id="chiusura-aggiungi" style="background:var(--surface-2); color:var(--text)">Aggiungi</button>
-      </div>
-      <p class="error-text" id="chiusura-error" hidden style="margin-top:6px"></p>
-      <div id="chiusura-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
-      </div>
-      </details>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <details class="blocco-mese" style="border-top:0">
-      <summary>Annuncio nel Feed</summary>
-      <div class="blocco-corpo">
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Compare nel Feed di tutti gli atleti come comunicazione della coach.</p>
-      <textarea id="annuncio-testo" rows="3"
-        style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
-               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical"
-        placeholder="Es. Sabato palestra chiusa, ci vediamo lunedì 💪"></textarea>
-      <p class="error-text" id="annuncio-error" hidden style="margin-top:6px"></p>
-      <p class="success-text" id="annuncio-success" hidden style="margin-top:6px">Pubblicato nel Feed ✓</p>
-      <button class="btn" id="annuncio-pub" style="width:100%; margin-top:10px">Pubblica nel Feed</button>
-      </div>
-      </details>
-    </div>
-
-    <p class="mono" style="color:var(--mute); font-size:11px; text-align:center; margin-top:20px; opacity:.7">
-      versione ${typeof __BUILD_STAMP__ !== "undefined" ? __BUILD_STAMP__ : "dev"}
-    </p>
-  `;
-  appEl.appendChild(el);
-  appEl.appendChild(renderTabbar());
-
-  initOggi(el);
-  initNota(el);
-  initAppello(el);
-  initRiepilogo(el);
-  initRichieste(el);
-  initDiario(el);
-  initPiano(el);
-  initSfida(el);
-  initSuddivisioni(el);
-  initChiusure(el);
-  initAnnuncio(el);
-}
-
-// Riepilogo "OGGI" in cima alla dashboard: chi viene, quante richieste, stato appello.
-function initOggi(el) {
+// Pagina "Oggi": il check delle info utili per il PROSSIMO allenamento.
+export function initOggi(el) {
   const box = el.querySelector("#coach-oggi-body");
+  box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>`;
 
-  Promise.allSettled([
-    api.get("/presenze/oggi"),
-    api.get("/richieste/oggi/coach"),
-    api.get("/presenze/riepilogo"),
-  ]).then(([pres, rich, rip]) => {
-    const parti = [];
+  const GIORNI = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+  const etichettaGiorno = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const g = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    return `${GIORNI[g]} ${d}/${m}`;
+  };
 
-    if (pres.status === "fulfilled" && pres.value.sessione) {
-      const roster = pres.value.roster || [];
-      const n = roster.filter((r) => r.presente).length;
-      parti.push(`<strong>${n}</strong>/${roster.length} vengono oggi`);
-    } else {
-      parti.push("Oggi niente allenamento");
-    }
+  api.get("/presenze/prossima")
+    .then((d) => {
+      if (!d.data) {
+        box.innerHTML = `
+          <p style="font-size:14px">Nessun allenamento in programma nei prossimi giorni.</p>
+          ${riepilogoAppello(d)}`;
+        return;
+      }
 
-    if (rich.status === "fulfilled") {
-      const n = (rich.value.richieste || []).length;
-      parti.push(`<strong>${n}</strong> richiest${n === 1 ? "a" : "e"} pre-allenamento`);
-    }
+      const quando = d.oggi ? "oggi" : etichettaGiorno(d.data);
+      const ora = d.sessione ? ` · ${d.sessione.oraInizio}–${d.sessione.oraFine}` : "";
 
-    if (rip.status === "fulfilled" && rip.value.sessione) {
-      const quando = rip.value.data === oggiIso() ? "oggi" : formatGiornoBreve(rip.value.data);
-      parti.push(`appello ${quando}: ${rip.value.appelloFatto ? "fatto ✓" : "<strong>da fare</strong>"}`);
-    }
+      const voce = (ok, testo, azione) => `
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border)">
+          <span style="font-size:15px; flex-shrink:0">${ok ? "✓" : "○"}</span>
+          <div style="flex:1; min-width:0">
+            <p style="font-size:14px">${testo}</p>
+            ${azione ? `<p class="mono" style="font-size:12px; margin-top:2px">${azione}</p>` : ""}
+          </div>
+        </div>`;
 
-    box.innerHTML = parti.join(`<span style="color:var(--mute)"> · </span>`);
-  });
+      const nomiPrenotati = d.prenotati.length
+        ? `<details style="margin-top:4px"><summary class="mono" style="font-size:12px; color:var(--mute); cursor:pointer">chi ha prenotato</summary>
+             <p style="font-size:13px; margin-top:4px">${d.prenotati.map(esc).join(" · ")}</p></details>`
+        : "";
+
+      const richiesteHtml = d.oggi && d.richieste.length
+        ? d.richieste
+            .map(
+              (r) => `<p style="font-size:13px; margin-top:2px"><strong>${esc(r.nome)}</strong>${
+                r.categoria ? ` · <span style="color:var(--accent)">${etichettaCategoria(r.categoria)}</span>` : ""
+              }${r.testoLibero ? ` · ${esc(r.testoLibero)}` : ""}</p>`
+            )
+            .join("")
+        : "";
+
+      box.innerHTML = `
+        <p class="mono" style="color:var(--mute); font-size:12px">Prossimo allenamento: <strong style="color:var(--text)">${quando}</strong>${ora}</p>
+        ${voce(!!d.nota, d.nota ? `Nota per ${quando}: <em>"${esc(d.nota)}"</em>` : `Nota per ${quando} — <strong>da scrivere</strong>`,
+          `<a href="#/coach/comunicazioni" class="link-btn" style="font-size:12px">Scrivi la nota →</a>`)}
+        ${voce(d.nPrenotati > 0, `<strong>${d.nPrenotati}</strong> ${d.nPrenotati === 1 ? "atleta ha" : "atleti hanno"} prenotato`, nomiPrenotati)}
+        ${d.oggi ? voce(d.richieste.length > 0, `<strong>${d.richieste.length}</strong> richieste pre-allenamento`, richiesteHtml) : ""}
+        ${riepilogoAppello(d)}`;
+    })
+    .catch((err) => {
+      box.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+    });
+
+  function riepilogoAppello(d) {
+    if (!d.appelloDaChiudere) return "";
+    return `
+      <div style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border)">
+        <span style="font-size:15px; flex-shrink:0; color:var(--livello-5)">!</span>
+        <div style="flex:1">
+          <p style="font-size:14px">Appello di <strong>${etichettaGiorno(d.appelloDaChiudere.data)}</strong> non ancora chiuso</p>
+          <p class="mono" style="font-size:12px; margin-top:2px"><a href="#/coach/presenze" class="link-btn" style="font-size:12px">Chiudi l'appello →</a></p>
+        </div>
+      </div>`;
+  }
 }
 
 // Diario allenamenti: per ogni giorno di allenamento del mese, il focus/pattern del giorno
 // + una scheda PDF/Word + foto opzionale. Ogni voce è pubblicabile nel Feed a scelta.
-function initDiario(el) {
+export function initDiario(el) {
   const meseSel = el.querySelector("#diario-mese");
   const annoInput = el.querySelector("#diario-anno");
   const focusMeseEl = el.querySelector("#diario-focus-mese");
@@ -682,7 +418,7 @@ function initDiario(el) {
 
 // Storico allenamenti per il coach: per ogni giorno, chi c'era (esito appello o prenotazione)
 // e il feedback post-allenamento lasciato dagli atleti. Sola lettura.
-function initRiepilogo(el) {
+export function initRiepilogo(el) {
   const sel = el.querySelector("#riepilogo-data");
   const body = el.querySelector("#riepilogo-body");
   const FACCE = ["", "😫", "😕", "😐", "🙂", "🔥"];
@@ -748,7 +484,7 @@ function initRiepilogo(el) {
 }
 
 // Giorni di chiusura / festività: tolti dal conteggio settimanale degli anelli.
-function initChiusure(el) {
+export function initChiusure(el) {
   const dataInput = el.querySelector("#chiusura-data");
   const motivoInput = el.querySelector("#chiusura-motivo");
   const errorEl = el.querySelector("#chiusura-error");
@@ -818,7 +554,7 @@ function initChiusure(el) {
   carica();
 }
 
-function formatGiornoBreve(iso) {
+export function formatGiornoBreve(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   const g = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=dom
   const nomi = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
@@ -827,7 +563,7 @@ function formatGiornoBreve(iso) {
 
 // Appello digitale: il coach conferma chi era davvero presente all'allenamento; solo così
 // scattano i 10 punti presenza. Modificabile anche per le date passate.
-function initAppello(el) {
+export function initAppello(el) {
   const sel = el.querySelector("#appello-data");
   const lista = el.querySelector("#appello-lista");
   const btn = el.querySelector("#appello-salva");
@@ -908,7 +644,7 @@ function initAppello(el) {
   carica();
 }
 
-function initNota(el) {
+export function initNota(el) {
   const dataInput = el.querySelector("#nota-data");
   const status = el.querySelector("#nota-status");
   const testo = el.querySelector("#nota-testo");
@@ -957,7 +693,7 @@ function initNota(el) {
   carica();
 }
 
-function initAnnuncio(el) {
+export function initAnnuncio(el) {
   const testo = el.querySelector("#annuncio-testo");
   const errorEl = el.querySelector("#annuncio-error");
   const successEl = el.querySelector("#annuncio-success");
@@ -984,7 +720,7 @@ function initAnnuncio(el) {
   });
 }
 
-function rigaMerenda(m = {}, onChange = () => {}) {
+export function rigaMerenda(m = {}, onChange = () => {}) {
   const row = document.createElement("div");
   row.className = "merenda-row";
   row.style.cssText = "border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px";
@@ -1059,7 +795,7 @@ function rigaMerenda(m = {}, onChange = () => {}) {
   return row;
 }
 
-function initPiano(el) {
+export function initPiano(el) {
   const meseSel = el.querySelector("#piano-mese");
   const annoInput = el.querySelector("#piano-anno");
   const campi = {
@@ -1245,7 +981,7 @@ function initPiano(el) {
   carica();
 }
 
-function initSfida(el) {
+export function initSfida(el) {
   const errorEl = el.querySelector("#sfida-error");
   const successEl = el.querySelector("#sfida-success");
   const tipoSel = el.querySelector("#sfida-tipo");
@@ -1420,7 +1156,7 @@ function initSfida(el) {
   carica();
 }
 
-function initSuddivisioni(el) {
+export function initSuddivisioni(el) {
   const meseSel = el.querySelector("#sudd-mese");
   const annoInput = el.querySelector("#sudd-anno");
   const body = el.querySelector("#sudd-body");
@@ -1530,7 +1266,7 @@ function initSuddivisioni(el) {
   carica();
 }
 
-function initRichieste(el) {
+export function initRichieste(el) {
   const list = el.querySelector("#richieste-list");
 
   async function carica() {

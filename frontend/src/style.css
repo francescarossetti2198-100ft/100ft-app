@@ -312,6 +312,106 @@ input {
   height: 18px;
 }
 
+/* ─── Dashboard coach: menù laterale ☰ (nessuna tabbar in basso) ─────────────── */
+.coach-screen {
+  padding-bottom: 28px;
+}
+.coach-hamburger {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 14px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3.5px;
+  cursor: pointer;
+  padding: 0;
+}
+.coach-hamburger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.coach-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.coach-drawer-backdrop.aperto {
+  opacity: 1;
+  pointer-events: auto;
+}
+.coach-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 61;
+  width: min(78vw, 300px);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: calc(env(safe-area-inset-top) + 20px) 0 24px;
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+}
+.coach-drawer.aperto {
+  transform: translateX(0);
+}
+.coach-drawer-titolo {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 0 20px 10px;
+}
+.coach-drawer-gruppo {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 16px 20px 4px;
+}
+.coach-drawer-voce {
+  display: block;
+  padding: 11px 20px;
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.coach-drawer-voce.sub {
+  padding-left: 30px;
+}
+.coach-drawer-voce.attiva {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-drawer,
+  .coach-drawer-backdrop {
+    transition: none;
+  }
+}
+
 nav.tabbar {
   position: fixed;
   bottom: calc(12px + env(safe-area-inset-bottom));

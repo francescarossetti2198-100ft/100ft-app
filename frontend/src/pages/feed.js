@@ -90,11 +90,12 @@ export function renderFeed(appEl) {
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
-  loadFeed(el);
+  montaFeed(el.querySelector("#feed-list"));
 }
 
-async function loadFeed(el) {
-  const list = el.querySelector("#feed-list");
+// Disegna la lista del Feed dentro `list` (un contenitore già nel DOM). Riusata dalla
+// pagina Feed dell'atleta e da quella della coach (dentro lo shell, senza tabbar).
+export async function montaFeed(list) {
   try {
     const { posts } = await api.get("/feed");
 
@@ -160,7 +161,7 @@ async function loadFeed(el) {
             api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji }),
             new Promise((r) => setTimeout(r, 420)),
           ]);
-          loadFeed(el);
+          montaFeed(list);
         } catch {
           // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
           btn.classList.remove("rz-animate");
