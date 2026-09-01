@@ -789,17 +789,48 @@ function abbonamentoCardHtml(p) {
           Info e costi abbonamenti ▾
         </summary>
         <div style="margin-top:10px">
-          <a href="/abbonamenti-info.pdf" target="_blank" rel="noopener" style="display:block">
+          <button type="button" id="abb-volantino"
+            style="display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:8px;
+                   background:#fff; cursor:zoom-in; overflow:hidden">
             <img src="/abbonamenti-info.jpg" alt="100FT — Lezioni settimanali e abbonamenti"
-                 style="width:100%; border-radius:8px; border:1px solid var(--border); display:block; background:#fff" />
-          </a>
-          <a href="/abbonamenti-info.pdf" target="_blank" rel="noopener"
-             class="mono" style="display:inline-block; margin-top:8px; color:var(--accent); font-size:12px; text-decoration:none">
-            Apri a schermo intero ↗
-          </a>
+                 style="width:100%; display:block" />
+          </button>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
+            Tocca l'immagine per ingrandirla ·
+            <a href="/abbonamenti-info.pdf" download style="color:var(--accent); text-decoration:none">scarica il PDF</a>
+          </p>
         </div>
       </details>
     </div>`;
+}
+
+// Volantino "Info e costi abbonamenti" a schermo intero, DENTRO l'app (niente tab nuova:
+// così si torna indietro con "✕ Chiudi" o Esc, senza uscire dalla PWA).
+function apriVolantinoAbbonamenti() {
+  const ov = document.createElement("div");
+  ov.style.cssText =
+    "position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; flex-direction:column";
+  ov.innerHTML = `
+    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:14px 16px; border-bottom:1px solid var(--border)">
+      <span class="mono" style="font-size:12px; letter-spacing:1px; color:var(--mute)">INFO E COSTI ABBONAMENTI</span>
+      <button type="button" class="btn" id="vol-chiudi"
+        style="width:auto; padding:6px 14px; background:var(--surface-2); color:var(--text)">✕ Chiudi</button>
+    </div>
+    <div style="flex:1; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff">
+      <img src="/abbonamenti-info.jpg" alt="100FT — Lezioni settimanali e abbonamenti"
+           style="display:block; width:100%; min-width:760px" />
+    </div>`;
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") chiudi();
+  };
+  ov.querySelector("#vol-chiudi").addEventListener("click", chiudi);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(ov);
 }
 
 function initAbbonamento(content, p, onSaved) {
@@ -807,6 +838,8 @@ function initAbbonamento(content, p, onSaved) {
   if (!card) return;
   const { attuale, prossimo, mostrato } = abbonamentoStato(p);
   const nomeDi = (k) => pianoByKey(k)?.nome ?? k;
+
+  card.querySelector("#abb-volantino")?.addEventListener("click", apriVolantinoAbbonamenti);
 
   const cambia = card.querySelector("#abb-cambia");
   const chiudi = card.querySelector("#abb-chiudi");
