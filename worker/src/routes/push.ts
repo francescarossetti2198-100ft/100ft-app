@@ -26,6 +26,39 @@ push.post("/", requireAuth, async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+// Promemoria push opzionali (per utente): "bevi acqua" (11:00 e 16:00) e "fai merenda"
+// (1h30 prima dell'allenamento). Il client manda sempre entrambi i valori.
+push.get("/preferenze", requireAuth, async (c) => {
+  const row = await c.env.DB.prepare(
+    `SELECT promemoria_acqua AS promemoriaAcqua, promemoria_merenda AS promemoriaMerenda
+     FROM notifiche_preferenze WHERE user_id = ?`
+  )
+    .bind(c.var.user.userId)
+    .first<{ promemoriaAcqua: number; promemoriaMerenda: number }>();
+  return c.json({
+    promemoriaAcqua: !!row?.promemoriaAcqua,
+    promemoriaMerenda: !!row?.promemoriaMerenda,
+  });
+});
+
+push.post("/preferenze", requireAuth, async (c) => {
+  const { promemoriaAcqua, promemoriaMerenda } = await c.req.json<{
+    promemoriaAcqua?: boolean;
+    promemoriaMerenda?: boolean;
+  }>();
+  await c.env.DB.prepare(
+    `INSERT INTO notifiche_preferenze (user_id, promemoria_acqua, promemoria_merenda)
+     VALUES (?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET
+       promemoria_acqua = excluded.promemoria_acqua,
+       promemoria_merenda = excluded.promemoria_merenda,
+       aggiornata_il = datetime('now')`
+  )
+    .bind(c.var.user.userId, promemoriaAcqua ? 1 : 0, promemoriaMerenda ? 1 : 0)
+    .run();
+  return c.json({ ok: true });
+});
+
 // Notifica di prova verso i propri dispositivi — per verificare che il permesso sia
 // concesso e il canale funzioni senza aspettare il Daily Drop o il promemoria del giorno.
 push.post("/test", requireAuth, async (c) => {

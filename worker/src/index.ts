@@ -28,6 +28,8 @@ import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
 import { inviaAppelloSeAttivo } from "./lib/appelloPush";
 import { inviaPromemoriaAbbonamentoSeAttivo } from "./lib/abbonamentoPush";
+import { inviaPromemoriaAcquaSeAttivo } from "./lib/promemoriaAcquaPush";
+import { inviaPromemoriaMerendaSeAttivo } from "./lib/promemoriaMerendaPush";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -101,5 +103,7 @@ export default {
     ctx.waitUntil(inviaFeedbackMensileSeAttivo(env));
     ctx.waitUntil(inviaAppelloSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaAbbonamentoSeAttivo(env));
+    ctx.waitUntil(inviaPromemoriaAcquaSeAttivo(env));
+    ctx.waitUntil(inviaPromemoriaMerendaSeAttivo(env));
   },
 };

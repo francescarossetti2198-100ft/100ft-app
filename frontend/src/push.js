@@ -45,6 +45,15 @@ export async function inviaNotificaDiProva() {
   return api.post("/push/test");
 }
 
+// Promemoria opzionali: "bevi acqua" e "fai merenda". { promemoriaAcqua, promemoriaMerenda }.
+export async function leggiPromemoria() {
+  return api.get("/push/preferenze");
+}
+
+export async function salvaPromemoria(prefs) {
+  return api.post("/push/preferenze", prefs);
+}
+
 export async function disattivaNotifiche() {
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();

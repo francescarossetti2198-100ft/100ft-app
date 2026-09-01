@@ -2,7 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
-import { statoNotifiche, attivaNotifiche, disattivaNotifiche } from "../push.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria } from "../push.js";
 import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
@@ -310,7 +310,7 @@ function renderProfiloCoach(content, p, onFotoCaricata) {
       <div class="card" style="margin-top:10px" id="atleti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     `;
     attachFotoUpload(content, onFotoCaricata ?? (() => {}));
-    initNotifiche(content);
+    initNotifiche(content); // vista coach: solo appello, niente promemoria acqua/merenda
 
     const list = content.querySelector("#atleti-list");
     api
@@ -666,6 +666,11 @@ const REGOLAMENTO = [
       "In Home prenoti la presenza il giorno dell'allenamento («CI SONO»). A fine sessione la coach fa l'appello e conferma chi c'era davvero: solo allora la presenza è valida e prendi i punti.",
   },
   {
+    titolo: "Quali allenamenti contano",
+    corpo:
+      "Per punti, livelli e sfide valgono solo gli allenamenti di funzionale del lunedì, mercoledì e venerdì. Il core & stretching del martedì e i corsi in palestra puoi farli, ma non danno punti e non contano per le sfide di presenza: nelle sfide sono aperte solo le lezioni di funzionale.",
+  },
+  {
     titolo: "Anelli di riepilogo",
     corpo:
       "In Home ci sono tre anelli: Allenamenti, Sfide e Feedback. Sono solo un riepilogo di quello che hai fatto nella settimana, non incidono sul livello.",
@@ -684,10 +689,16 @@ const REGOLAMENTO = [
         <li class="mono" style="font-size:13px">🏋️ Presenza confermata dalla coach — <strong>+10 punti</strong></li>
         <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>+10 punti</strong></li>
         <li class="mono" style="font-size:13px">🏅 Tutte le sfide del mese completate — <strong>+10 punti</strong></li>
-        <li class="mono" style="font-size:13px">💧 Daily Drop (la foto del momento) — <strong>+5 punti</strong></li>
+        <li class="mono" style="font-size:13px">💧 Daily Drop — <strong>+5 punti</strong></li>
         <li class="mono" style="font-size:13px">💬 Feedback dopo l'allenamento — <strong>+2 punti</strong></li>
         <li class="mono" style="font-size:13px">🗒️ Questionario del mese — <strong>+15 punti</strong></li>
-      </ul>`,
+      </ul>
+      <p style="font-size:13px; margin-top:12px">
+        <strong>💧 Daily Drop</strong> — ogni tanto, in un giorno di allenamento, a un'ora
+        a sorpresa arriva una notifica: lo scopo è ricordarti di bere. Fermati, bevi un
+        sorso d'acqua e condividi la foto del momento. Non capita tutti i giorni; se
+        rispondi prendi +5 punti.
+      </p>`,
   },
   {
     titolo: "Livelli",
@@ -958,7 +969,7 @@ function initSicurezza(content) {
   });
 }
 
-async function initNotifiche(content) {
+async function initNotifiche(content, conPromemoria = false) {
   const box = content.querySelector("#notifiche-stato");
   const stato = await statoNotifiche().catch(() => "non-supportato");
 
@@ -971,10 +982,24 @@ async function initNotifiche(content) {
     return;
   }
 
+  const promemoriaHtml =
+    conPromemoria && stato === "attive"
+      ? `<div id="promemoria-extra" style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:10px">
+           <p class="mono" style="color:var(--mute); font-size:12px">Promemoria facoltativi:</p>
+           <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
+             <input type="checkbox" id="pm-acqua" /> Ricordami di bere — 11:00 e 16:00
+           </label>
+           <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
+             <input type="checkbox" id="pm-merenda" /> Ricordami la merenda — 1 ora e mezza prima dell'allenamento
+           </label>
+         </div>`
+      : "";
+
   box.innerHTML =
     stato === "attive"
       ? `<p style="font-size:13px">Attive ✓</p>
-         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>`
+         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>
+         ${promemoriaHtml}`
       : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px">Attiva notifiche</button>`;
 
@@ -983,11 +1008,26 @@ async function initNotifiche(content) {
     try {
       if (stato === "attive") await disattivaNotifiche();
       else await attivaNotifiche();
-      initNotifiche(content);
+      initNotifiche(content, conPromemoria);
     } catch (err) {
       box.innerHTML = `<p class="error-text">${err.message}</p>`;
     }
   });
+
+  if (conPromemoria && stato === "attive") {
+    const acqua = content.querySelector("#pm-acqua");
+    const merenda = content.querySelector("#pm-merenda");
+    leggiPromemoria()
+      .then((p) => {
+        acqua.checked = !!p.promemoriaAcqua;
+        merenda.checked = !!p.promemoriaMerenda;
+      })
+      .catch(() => {});
+    const salva = () =>
+      salvaPromemoria({ promemoriaAcqua: acqua.checked, promemoriaMerenda: merenda.checked }).catch(() => {});
+    acqua.addEventListener("change", salva);
+    merenda.addEventListener("change", salva);
+  }
 }
 
 // ─── Card "I TUOI DATI" (anagrafica privata: data nascita, peso, altezza, note) ───
@@ -1503,7 +1543,7 @@ async function loadProfilo(el) {
     initPerformance(content);
     initStatistiche(content);
     initAbbonamento(content, p, () => loadProfilo(el));
-    initNotifiche(content);
+    initNotifiche(content, true);
     initSicurezza(content);
     content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {
       await logout();
