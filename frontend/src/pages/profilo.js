@@ -796,8 +796,7 @@ function abbonamentoCardHtml(p) {
                  style="width:100%; display:block" />
           </button>
           <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
-            Tocca l'immagine per ingrandirla ·
-            <a href="/abbonamenti-info.pdf" download style="color:var(--accent); text-decoration:none">scarica il PDF</a>
+            Tocca l'immagine per ingrandirla.
           </p>
         </div>
       </details>
