@@ -21,6 +21,31 @@ function dataNascitaValida(s: string): boolean {
   return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
 }
 
+// Personalizzazione dell'anello della foto profilo atleta (colore/stile/intensità).
+// Deve restare allineata a COLORI_FOTO/STILI_FOTO/INTENSITA_FOTO in frontend/src/foto-ring.js.
+const COLORI_FOTO = ["viola", "blu", "verde", "arancio", "rosso", "rosa", "giallo", "bianco"];
+const STILI_FOTO = ["solid", "gradient", "glow", "double", "dashed", "minimal"];
+const INTENSITA_FOTO = ["sottile", "medio", "forte"];
+
+// null = nessuna personalizzazione (bordo neutro di default). Altrimenti serve l'oggetto
+// completo {colore, stile, intensita}, tutti e tre validi.
+function fotoPersonalizzazioneValida(v: unknown): boolean {
+  if (v === null) return true;
+  if (typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return COLORI_FOTO.includes(String(o.colore)) && STILI_FOTO.includes(String(o.stile)) && INTENSITA_FOTO.includes(String(o.intensita));
+}
+
+function parseFotoPersonalizzazione(raw: string | null | undefined): { colore: string; stile: string; intensita: string } | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return fotoPersonalizzazioneValida(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 profilo.get("/me", requireAuth, async (c) => {
   const userId = c.var.user.userId;
 
@@ -60,11 +85,18 @@ profilo.get("/me", requireAuth, async (c) => {
     pianoProssimoKey,
   ] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, card_colore AS cardColore
+      `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, foto_personalizzazione AS fotoPersonalizzazione
        FROM athlete_profile WHERE user_id = ?`
     )
       .bind(userId)
-      .first<{ nome: string; cognome: string; nickname: string | null; fotoUrl: string | null; dataNascita: string | null; cardColore: string | null }>(),
+      .first<{
+        nome: string;
+        cognome: string;
+        nickname: string | null;
+        fotoUrl: string | null;
+        dataNascita: string | null;
+        fotoPersonalizzazione: string | null;
+      }>(),
     c.env.DB.prepare(
       `SELECT peso, altezza, note_infortuni AS noteInfortuni, personalizzazione
        FROM athlete_private WHERE user_id = ?`
@@ -110,7 +142,7 @@ profilo.get("/me", requireAuth, async (c) => {
     cognome: profiloRow?.cognome ?? null,
     nickname: profiloRow?.nickname ?? null,
     fotoUrl: profiloRow?.fotoUrl ?? null,
-    cardColore: profiloRow?.cardColore ?? null,
+    fotoPersonalizzazione: parseFotoPersonalizzazione(profiloRow?.fotoPersonalizzazione),
     // Dati privati (solo l'atleta stesso e la coach) — vedi anche GET /api/atleti/:id.
     dataNascita: profiloRow?.dataNascita ?? null,
     datiPrivati: {
@@ -178,7 +210,7 @@ profilo.post("/me", requireAuth, async (c) => {
     nickname?: string | null;
     nome?: string | null;
     cognome?: string | null;
-    cardColore?: string | null;
+    fotoPersonalizzazione?: unknown;
     dataNascita?: string | null;
     peso?: number | null;
     altezza?: number | null;
@@ -188,10 +220,6 @@ profilo.post("/me", requireAuth, async (c) => {
 
   const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
 
-  // Palette fissa di brand per l'accento delle card del Profilo (6 livelli + accent).
-  // Deve restare allineata a COLORI_CARD in frontend/src/pages/profilo.js.
-  const COLORI_CARD = ["#8b5cf6", "#8bc53f", "#2d7dd2", "#f4b740", "#ff7a29", "#e63946", "#a85cff"];
-
   // --- validazioni sui soli campi presenti ---
   if (has("nome") && (body.nome == null || String(body.nome).trim() === "" || String(body.nome).trim().length > 60)) {
     return c.json({ error: "Nome non valido (1–60 caratteri)" }, 400);
@@ -199,8 +227,8 @@ profilo.post("/me", requireAuth, async (c) => {
   if (has("cognome") && (body.cognome == null || String(body.cognome).trim() === "" || String(body.cognome).trim().length > 60)) {
     return c.json({ error: "Cognome non valido (1–60 caratteri)" }, 400);
   }
-  if (has("cardColore") && body.cardColore != null && !COLORI_CARD.includes(String(body.cardColore))) {
-    return c.json({ error: "Colore non valido" }, 400);
+  if (has("fotoPersonalizzazione") && !fotoPersonalizzazioneValida(body.fotoPersonalizzazione ?? null)) {
+    return c.json({ error: "Personalizzazione della foto non valida" }, 400);
   }
   if (has("dataNascita") && body.dataNascita != null && !dataNascitaValida(String(body.dataNascita))) {
     return c.json({ error: "Data di nascita non valida" }, 400);
@@ -218,10 +246,10 @@ profilo.post("/me", requireAuth, async (c) => {
     return c.json({ error: "Risposte non valide" }, 400);
   }
 
-  // --- athlete_profile: nickname, nome, cognome, colore card, data di nascita ---
-  if (has("nickname") || has("nome") || has("cognome") || has("cardColore") || has("dataNascita")) {
+  // --- athlete_profile: nickname, nome, cognome, personalizzazione foto, data di nascita ---
+  if (has("nickname") || has("nome") || has("cognome") || has("fotoPersonalizzazione") || has("dataNascita")) {
     // nickname: stringa vuota -> null (rimuove il nickname). nome/cognome: già
-    // validati non vuoti sopra. cardColore: null ammesso (torna al default tema).
+    // validati non vuoti sopra. fotoPersonalizzazione: null ammesso (torna al bordo neutro).
     const nickname = has("nickname") ? (String(body.nickname ?? "").trim() || null) : undefined;
     const nome = has("nome") ? String(body.nome).trim() : undefined;
     const cognome = has("cognome") ? String(body.cognome).trim() : undefined;
@@ -232,7 +260,7 @@ profilo.post("/me", requireAuth, async (c) => {
        SET nickname = CASE WHEN ? THEN ? ELSE nickname END,
            nome = COALESCE(?, nome),
            cognome = COALESCE(?, cognome),
-           card_colore = CASE WHEN ? THEN ? ELSE card_colore END,
+           foto_personalizzazione = CASE WHEN ? THEN ? ELSE foto_personalizzazione END,
            data_nascita = COALESCE(?, data_nascita)
        WHERE user_id = ?`
     )
@@ -241,8 +269,8 @@ profilo.post("/me", requireAuth, async (c) => {
         nickname ?? null,
         nome ?? null,
         cognome ?? null,
-        has("cardColore") ? 1 : 0,
-        has("cardColore") ? (body.cardColore ?? null) : null,
+        has("fotoPersonalizzazione") ? 1 : 0,
+        has("fotoPersonalizzazione") ? (body.fotoPersonalizzazione != null ? JSON.stringify(body.fotoPersonalizzazione) : null) : null,
         dataNascita ?? null,
         userId
       )

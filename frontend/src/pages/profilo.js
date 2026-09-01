@@ -10,10 +10,8 @@ import { etichettaCategoria } from "../richieste-categorie.js";
 import { badgeMensiliHtml } from "../badge-mensili.js";
 import { initStatistiche } from "../statistiche.js";
 import { PIANI, pianoByKey, LEGENDA_GIORNI } from "../abbonamenti.js";
-
-// Palette fissa di brand per l'accento delle card del Profilo (i 6 colori livello + il
-// viola accent). Deve restare allineata a COLORI_CARD in worker/src/routes/profilo.ts.
-const COLORI_CARD = ["#8b5cf6", "#8bc53f", "#2d7dd2", "#f4b740", "#ff7a29", "#e63946", "#a85cff"];
+import { COLORI_FOTO, STILI_FOTO, INTENSITA_FOTO, DEFAULT_FOTO_PERSONALIZZAZIONE, anelloWrapperStyle } from "../foto-ring.js";
+import { montaCampoVivo } from "../identita-campo.js";
 
 // Stessa scala fissa delle 5 faccine di feedback usata in Home (frontend/src/pages/home.js) —
 // mai sostituita, stesso ordine.
@@ -148,12 +146,6 @@ export function renderProfilo(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <style>
-      /* Colore scelto dall'atleta (--accent su #profilo-content): tinge in modo tenue
-         lo sfondo e il bordo di tutte le schede del profilo. */
-      #profilo-content.ha-colore .card {
-        background-color: color-mix(in srgb, var(--accent) 8%, var(--surface));
-        border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-      }
       /* Lineetta accento sotto il titolo della scheda "I tuoi dati" (il <summary> a
          tendina non ha la barretta di .sezione-label). */
       #profilo-content #dati-card > .blocco-mese > summary { position: relative; padding-bottom: 18px; }
@@ -246,18 +238,23 @@ function abbonamentoCoachHtml(userId, abb) {
 // per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
 // invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
 // apre il selettore quando viene attivato dalla label.
-export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true) {
+export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true, personalizzazione = null, dimensione = 84) {
+  const anello = anelloWrapperStyle(personalizzazione);
+  const bordoNeutro = anello ? "" : "border:2px solid var(--border);";
   const media = fotoUrl
-    ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid var(--border)" />`
-    : `<span style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:28px; color:var(--mute); vertical-align:middle">${iniziale}</span>`;
+    ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; object-fit:cover; display:block; ${bordoNeutro}" />`
+    : `<span style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:${Math.round(dimensione * 0.33)}px; color:var(--mute)">${iniziale}</span>`;
+  const mediaConAnello = anello
+    ? `<span style="display:inline-flex; border-radius:50%; vertical-align:middle; ${anello}">${media}</span>`
+    : media;
 
   // Fuori dalla modalità modifica: solo la foto, niente "Cambia foto" / input.
-  if (!modifica) return `<div style="text-align:center">${media}</div>`;
+  if (!modifica) return `<div style="text-align:center">${mediaConAnello}</div>`;
 
   return `
     <div style="text-align:center">
       <label for="foto-input" style="cursor:pointer; display:inline-block">
-        ${media}
+        ${mediaConAnello}
         <p class="mono link-btn" style="margin-top:6px; font-size:12px">${fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
       </label>
       <input id="foto-input" type="file" accept="image/*"
@@ -1064,14 +1061,31 @@ function datiPersonaliCardHtml(p) {
         <summary>I tuoi dati</summary>
         <div class="blocco-corpo">
           <div id="dati-vista">
+            ${riga("Nickname", p.nickname ? esc(p.nickname) : null)}
+            ${riga("Nome", p.nome ? esc(p.nome) : null)}
+            ${riga("Cognome", p.cognome ? esc(p.cognome) : null)}
             ${riga("Data di nascita", dn ? `${dn}${eta != null ? ` · ${eta} anni` : ""}` : null)}
             ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
             ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
             ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
-            <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">Visibili solo a te e alla coach</p>
+            <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">Nickname, nome e cognome sono visibili agli altri; il resto solo a te e alla coach</p>
             <button type="button" class="link-btn" id="dati-modifica" style="margin-top:8px">Modifica</button>
           </div>
           <form id="dati-form" hidden style="margin-top:12px">
+            <div class="field">
+              <label for="dati-nickname">Nickname</label>
+              <input id="dati-nickname" type="text" maxlength="40" value="${esc(p.nickname ?? "")}" />
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="field" style="flex:1">
+                <label for="dati-nome">Nome</label>
+                <input id="dati-nome" type="text" maxlength="60" value="${esc(p.nome ?? "")}" />
+              </div>
+              <div class="field" style="flex:1">
+                <label for="dati-cognome">Cognome</label>
+                <input id="dati-cognome" type="text" maxlength="60" value="${esc(p.cognome ?? "")}" />
+              </div>
+            </div>
             <div class="field">
               <label for="dati-data">Data di nascita</label>
               <input id="dati-data" type="date" value="${p.dataNascita ?? ""}" />
@@ -1121,9 +1135,19 @@ function initDatiPersonali(content, onSaved) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     errorEl.hidden = true;
+    const nome = card.querySelector("#dati-nome").value.trim();
+    const cognome = card.querySelector("#dati-cognome").value.trim();
+    if (!nome || !cognome) {
+      errorEl.textContent = "Nome e cognome non possono essere vuoti";
+      errorEl.hidden = false;
+      return;
+    }
     const pesoRaw = card.querySelector("#dati-peso").value.trim();
     const altezzaRaw = card.querySelector("#dati-altezza").value.trim();
     const payload = {
+      nickname: card.querySelector("#dati-nickname").value.trim() || null,
+      nome,
+      cognome,
       dataNascita: card.querySelector("#dati-data").value || null,
       peso: pesoRaw === "" ? null : Number(pesoRaw),
       altezza: altezzaRaw === "" ? null : Number(altezzaRaw),
@@ -1325,8 +1349,10 @@ function initPersonalizza(content, p, onSaved) {
   });
 }
 
-// ─── Prima card: identità (foto + nome + livello). Matita in alto a destra →
-// modalità modifica di foto, nickname, nome, cognome e colore delle card. ───
+// ─── Prima card: identità (foto + nome + livello). La foto è sempre toccabile per
+// cambiare immagine; la matita in alto a destra apre "PERSONALIZZA LA TUA FOTO"
+// (colore/stile/intensità dell'anello — vedi apriPersonalizzaFoto più sotto).
+// Nickname/nome/cognome si modificano dalla card "I tuoi dati". ───
 function identitaCardHtml(p) {
   const nomeCompleto = `${p.nome ?? ""} ${p.cognome ?? ""}`.trim();
   const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
@@ -1334,12 +1360,6 @@ function identitaCardHtml(p) {
   const livelloLinea = p.livello
     ? `<p class="mono" style="color:${p.livello.attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${p.livello.attuale.numero} — ${p.livello.attuale.nome}</p>`
     : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — fai i tuoi primi 3 allenamenti per sbloccarlo.</p>`;
-
-  const pastiglia = (hex, label, contenuto = "") => `
-    <button type="button" class="col-opt" data-colore="${hex}" aria-label="${label}"
-      style="width:28px; height:28px; border-radius:50%; background:${hex || "var(--surface-2)"};
-             display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--mute);
-             cursor:pointer; border:2px solid ${(p.cardColore ?? "") === hex ? "var(--text)" : "transparent"}">${contenuto}</button>`;
 
   const abbAttivo = !!p.abbonamentoAttivo;
 
@@ -1352,7 +1372,7 @@ function identitaCardHtml(p) {
                padding:4px 9px; border-radius:6px; white-space:nowrap; background:var(--surface-2); color:var(--text); border:1px solid var(--border)">
         ${abbAttivo ? "Abbonamento attivo" : "Abbonamento non attivo"}
       </span>
-      <button type="button" class="link-btn" id="identita-modifica" aria-label="Modifica profilo"
+      <button type="button" class="link-btn" id="identita-modifica" aria-label="Personalizza la tua foto"
         style="position:absolute; top:12px; right:12px; text-decoration:none; color:var(--text); line-height:0; padding:4px">
         <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1360,8 +1380,8 @@ function identitaCardHtml(p) {
         </svg>
       </button>
 
-      <div id="identita-vista">
-        ${fotoProfiloHtml(p.fotoUrl, iniziale, false)}
+      <div id="identita-vista" style="position:relative; z-index:1">
+        ${fotoProfiloHtml(p.fotoUrl, iniziale, true, p.fotoPersonalizzazione)}
         <p style="font-weight:700; font-size:20px; margin-top:10px; text-align:center">${esc(p.nickname || nomeCompleto || "Atleta")}</p>
         ${
           p.nickname && nomeCompleto
@@ -1370,34 +1390,6 @@ function identitaCardHtml(p) {
         }
         ${livelloLinea}
       </div>
-
-      <form id="identita-form" hidden style="margin-top:6px">
-        ${fotoProfiloHtml(p.fotoUrl, iniziale, true)}
-        <div class="field" style="margin-top:12px">
-          <label for="id-nickname">Nickname</label>
-          <input id="id-nickname" type="text" maxlength="40" value="${esc(p.nickname ?? "")}" />
-        </div>
-        <div style="display:flex; gap:10px">
-          <div class="field" style="flex:1">
-            <label for="id-nome">Nome</label>
-            <input id="id-nome" type="text" maxlength="60" value="${esc(p.nome ?? "")}" />
-          </div>
-          <div class="field" style="flex:1">
-            <label for="id-cognome">Cognome</label>
-            <input id="id-cognome" type="text" maxlength="60" value="${esc(p.cognome ?? "")}" />
-          </div>
-        </div>
-        <p style="font-size:13px; color:var(--mute); margin:0 0 6px">Colore delle card</p>
-        <div id="id-colori" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px">
-          ${COLORI_CARD.map((hex) => pastiglia(hex, hex)).join("")}
-          ${pastiglia("", "Predefinito", "✕")}
-        </div>
-        <p class="error-text" id="identita-error" hidden></p>
-        <div style="display:flex; gap:8px">
-          <button class="btn" type="submit" style="flex:1">Salva</button>
-          <button type="button" class="btn" id="identita-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
-        </div>
-      </form>
     </div>
   `;
 }
@@ -1405,33 +1397,12 @@ function identitaCardHtml(p) {
 function initIdentita(content, p, onSaved) {
   const card = content.querySelector("#identita-card");
   if (!card) return;
-  const vista = card.querySelector("#identita-vista");
-  const form = card.querySelector("#identita-form");
-  const modifica = card.querySelector("#identita-modifica");
-  const errorEl = card.querySelector("#identita-error");
-  let coloreScelto = p.cardColore ?? "";
 
-  const apri = (mostra) => {
-    form.hidden = !mostra;
-    vista.hidden = mostra;
-    modifica.hidden = mostra;
-    // annullando, ripristina l'anteprima colore allo stato salvato
-    if (!mostra) {
-      coloreScelto = p.cardColore ?? "";
-      applicaColore(coloreScelto);
-    }
-  };
-  const applicaColore = (hex) => {
-    if (hex) content.style.setProperty("--accent", hex);
-    else content.style.removeProperty("--accent");
-    content.classList.toggle("ha-colore", !!hex);
-    card.querySelectorAll(".col-opt").forEach((x) => {
-      x.style.borderColor = x.dataset.colore === hex ? "var(--text)" : "transparent";
-    });
-  };
+  montaCampoVivo(card);
 
-  modifica.addEventListener("click", () => apri(true));
-  card.querySelector("#identita-annulla").addEventListener("click", () => apri(false));
+  card.querySelector("#identita-modifica").addEventListener("click", () => {
+    apriPersonalizzaFoto(p, onSaved);
+  });
 
   // Luce stato abbonamento (in alto a sinistra): toccandola compare/sparisce il bannerino.
   const luce = card.querySelector(".abbonamento-luce");
@@ -1451,33 +1422,134 @@ function initIdentita(content, p, onSaved) {
       else document.removeEventListener("click", chiudiFuori);
     });
   }
+}
 
-  card.querySelectorAll(".col-opt").forEach((b) => {
+// ─── Modal "PERSONALIZZA LA TUA FOTO": preview live grande + scelta di colore, stile e
+// intensità dell'anello attorno alla foto profilo. Tocca solo l'anello — niente avatar,
+// niente cambio forma/tema. Se si esce senza salvare, la personalizzazione precedente
+// resta invariata (lo stato locale non viene mai scritto finché non si preme SALVA). ───
+function apriPersonalizzaFoto(p, onSaved) {
+  const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
+  let stato = { ...(p.fotoPersonalizzazione ?? DEFAULT_FOTO_PERSONALIZZAZIONE) };
+
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; flex-direction:column";
+  ov.innerHTML = `
+    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:14px 16px; border-bottom:1px solid var(--border)">
+      <span class="mono" style="font-size:12px; letter-spacing:1px; color:var(--mute)">PERSONALIZZA LA TUA FOTO</span>
+      <button type="button" class="btn" id="pf-chiudi"
+        style="width:auto; padding:6px 14px; background:var(--surface-2); color:var(--text)">✕</button>
+    </div>
+    <div style="flex:1; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; padding:24px 16px 100px">
+      <div id="pf-preview" style="display:flex; justify-content:center; padding:12px 0 28px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">COLORE</p>
+      <div id="pf-colori" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:26px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">STILE</p>
+      <div id="pf-stili" style="display:flex; flex-direction:column; gap:8px; margin-bottom:26px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">INTENSITÀ</p>
+      <div id="pf-intensita" style="display:flex; gap:8px"></div>
+      <p class="error-text" id="pf-error" hidden style="margin-top:14px"></p>
+    </div>
+    <div style="flex:0 0 auto; padding:14px 16px; border-top:1px solid var(--border); background:var(--bg)">
+      <button class="btn" type="button" id="pf-salva" style="width:100%">Salva</button>
+    </div>
+  `;
+  document.body.appendChild(ov);
+
+  const preview = ov.querySelector("#pf-preview");
+  const renderPreview = () => {
+    preview.innerHTML = fotoProfiloHtml(p.fotoUrl, iniziale, false, stato, 140);
+  };
+
+  const coloriBox = ov.querySelector("#pf-colori");
+  coloriBox.innerHTML = COLORI_FOTO.map(
+    (c) => `
+      <button type="button" class="pf-colore" data-colore="${c.key}" aria-label="${c.label}"
+        style="width:34px; height:34px; border-radius:50%; background:${c.hex}; cursor:pointer;
+               box-shadow:0 0 0 1px var(--border);
+               border:2px solid ${stato.colore === c.key ? "var(--text)" : "transparent"}"></button>`
+  ).join("");
+
+  const stiliBox = ov.querySelector("#pf-stili");
+  stiliBox.innerHTML = STILI_FOTO.map(
+    (s) => `
+      <button type="button" class="pf-stile" data-stile="${s.key}"
+        style="text-align:left; padding:12px 14px; border-radius:10px; cursor:pointer;
+               background:${stato.stile === s.key ? "var(--surface-2)" : "var(--surface)"};
+               border:1px solid ${stato.stile === s.key ? "var(--text)" : "var(--border)"}; color:var(--text)">
+        <span style="font-weight:600; font-size:14px">${s.label}</span>
+        <span class="mono" style="display:block; color:var(--mute); font-size:12px; margin-top:2px">${s.desc}</span>
+      </button>`
+  ).join("");
+
+  const intensitaBox = ov.querySelector("#pf-intensita");
+  intensitaBox.innerHTML = INTENSITA_FOTO.map(
+    (i) => `
+      <button type="button" class="pf-intensita" data-intensita="${i.key}"
+        style="flex:1; padding:10px 0; border-radius:8px; cursor:pointer; font-family:var(--font-mono); font-size:12px; letter-spacing:0.5px;
+               background:${stato.intensita === i.key ? "var(--surface-2)" : "var(--surface)"};
+               border:1px solid ${stato.intensita === i.key ? "var(--text)" : "var(--border)"}; color:var(--text)">${i.label.toUpperCase()}</button>`
+  ).join("");
+
+  const aggiorna = () => {
+    renderPreview();
+    coloriBox.querySelectorAll(".pf-colore").forEach((b) => {
+      b.style.borderColor = b.dataset.colore === stato.colore ? "var(--text)" : "transparent";
+    });
+    stiliBox.querySelectorAll(".pf-stile").forEach((b) => {
+      const on = b.dataset.stile === stato.stile;
+      b.style.background = on ? "var(--surface-2)" : "var(--surface)";
+      b.style.borderColor = on ? "var(--text)" : "var(--border)";
+    });
+    intensitaBox.querySelectorAll(".pf-intensita").forEach((b) => {
+      const on = b.dataset.intensita === stato.intensita;
+      b.style.background = on ? "var(--surface-2)" : "var(--surface)";
+      b.style.borderColor = on ? "var(--text)" : "var(--border)";
+    });
+  };
+  aggiorna();
+
+  coloriBox.querySelectorAll(".pf-colore").forEach((b) => {
     b.addEventListener("click", () => {
-      coloreScelto = b.dataset.colore;
-      applicaColore(coloreScelto); // anteprima immediata
+      stato.colore = b.dataset.colore;
+      aggiorna();
+    });
+  });
+  stiliBox.querySelectorAll(".pf-stile").forEach((b) => {
+    b.addEventListener("click", () => {
+      stato.stile = b.dataset.stile;
+      aggiorna();
+    });
+  });
+  intensitaBox.querySelectorAll(".pf-intensita").forEach((b) => {
+    b.addEventListener("click", () => {
+      stato.intensita = b.dataset.intensita;
+      aggiorna();
     });
   });
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") chiudi();
+  };
+  ov.querySelector("#pf-chiudi").addEventListener("click", chiudi);
+  document.addEventListener("keydown", onKey);
+
+  ov.querySelector("#pf-salva").addEventListener("click", async () => {
+    const errorEl = ov.querySelector("#pf-error");
     errorEl.hidden = true;
-    const nome = card.querySelector("#id-nome").value.trim();
-    const cognome = card.querySelector("#id-cognome").value.trim();
-    if (!nome || !cognome) {
-      errorEl.textContent = "Nome e cognome non possono essere vuoti";
-      errorEl.hidden = false;
-      return;
-    }
-    const btn = form.querySelector("button[type=submit]");
+    const btn = ov.querySelector("#pf-salva");
     btn.disabled = true;
     try {
-      await api.post("/profilo/me", {
-        nickname: card.querySelector("#id-nickname").value.trim() || null,
-        nome,
-        cognome,
-        cardColore: coloreScelto || null,
-      });
+      await api.post("/profilo/me", { fotoPersonalizzazione: stato });
+      chiudi();
       onSaved();
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
@@ -1538,13 +1610,6 @@ async function loadProfilo(el) {
       ${abbonamentoCardHtml(p)}
       ${impostazioniCardHtml()}
     `;
-
-    // Colore d'accento scelto dall'atleta: applicato come --accent sul wrapper, così
-    // barrette .sezione-label, link e bottoni prendono quel colore; la classe
-    // .ha-colore aggiunge la tinta tenue su sfondo/bordo di tutte le schede.
-    if (p.cardColore) content.style.setProperty("--accent", p.cardColore);
-    else content.style.removeProperty("--accent");
-    content.classList.toggle("ha-colore", !!p.cardColore);
 
     // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
     // (resta solo per la coach, che non ha la card Impostazioni).
