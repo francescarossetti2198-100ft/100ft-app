@@ -470,7 +470,7 @@ async function loadTimeline(el) {
       } else if (s.stato === "presente") {
         segno = "✓ ";
         stato = "PRESENTE";
-        statoColore = "var(--accent)";
+        statoColore = "var(--livello-1)"; // verde
       } else if (s.stato === "in_attesa") {
         segno = conclusa ? "◔ " : "● ";
         stato = conclusa ? "IN ATTESA" : "PRENOTATO";
@@ -478,12 +478,16 @@ async function loadTimeline(el) {
       } else if (s.stato === "assente" || (s.stato === "indeciso" && conclusa)) {
         segno = "✗ ";
         stato = "ASSENTE";
+        statoColore = "var(--livello-5)"; // rosso
       } else {
         segno = oggi ? "● " : "○ ";
         stato = oggi ? "CI SEI?" : "—";
       }
 
-      const dim = chiuso || futuro || (!oggi && s.stato !== "presente");
+      // I giorni passati con un esito (presente/assente) restano leggibili; si smorzano
+      // solo i futuri, i chiusi e i passati senza risposta.
+      const conEsito = s.stato === "presente" || stato === "ASSENTE";
+      const dim = chiuso || futuro || (!oggi && !conEsito);
       const cls = `giorno-tile${cliccabile ? " oggi" : ""}${live && !chiuso ? " live" : ""}${dim ? " dim" : ""}`;
 
       const corpo = `
