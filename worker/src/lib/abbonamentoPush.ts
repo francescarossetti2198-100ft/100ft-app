@@ -21,20 +21,24 @@ function oraRoma(): { data: string; giorno: number; oraMinuti: string } {
   };
 }
 
-// Promemoria "salda l'abbonamento del mese" — ogni giorno alle 18:00 (ora di Roma), dalla
-// seconda settimana del mese in poi (giorno >= 8), agli atleti che hanno scelto un piano ma
-// non hanno ancora il pagamento di questo mese segnato come "pagato" dal coach. Si ferma da
-// solo quando il pagamento viene segnato. Dedup una volta al giorno (abbonamento_notifiche).
+// Promemoria "salda l'abbonamento del mese" — una sola volta al mese, il SECONDO LUNEDÌ del
+// mese alle 18:00 (ora di Roma), agli atleti che hanno scelto un piano ma non hanno ancora
+// il pagamento di questo mese segnato come "pagato" dal coach. Si ferma da solo quando il
+// pagamento viene segnato. Dedup su `abbonamento_notifiche` (data del giorno di invio).
 export async function inviaPromemoriaAbbonamentoSeAttivo(env: Env): Promise<void> {
   const { data, giorno, oraMinuti } = oraRoma();
-  if (giorno < 8 || oraMinuti !== "18:00") return;
+  if (oraMinuti !== "18:00") return;
+
+  // Secondo lunedì del mese: è lunedì (getUTCDay() === 1) e cade tra il giorno 8 e il 14.
+  const dow = new Date(`${data}T00:00:00Z`).getUTCDay();
+  if (dow !== 1 || giorno < 8 || giorno > 14) return;
 
   const inserito = await env.DB.prepare(
     `INSERT OR IGNORE INTO abbonamento_notifiche (data) VALUES (?)`
   )
     .bind(data)
     .run();
-  if ((inserito.meta.changes ?? 0) === 0) return; // già inviato oggi
+  if ((inserito.meta.changes ?? 0) === 0) return; // già inviato
 
   const [anno, mese] = data.split("-").map(Number);
 
