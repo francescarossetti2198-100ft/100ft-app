@@ -35,32 +35,39 @@ async function giorniAllenamentoRecenti(db: D1Database, quante = 10, giorni = 28
 // Presenza è solo per il giorno stesso, niente prenotazioni future (brief, sezione 3).
 presenze.get("/oggi", requireAuth, async (c) => {
   const sessione = await sessioneOggi(c.env.DB);
-  if (!sessione) return c.json({ sessione: null, richiesta: false, confermata: false, inSala: [] });
+  if (!sessione) return c.json({ sessione: null, richiesta: false, confermata: false, roster: [] });
 
   const { data } = oggi();
-  const [mia, inSala] = await Promise.all([
+  const [mia, roster] = await Promise.all([
     c.env.DB.prepare(
       `SELECT presenza_richiesta AS richiesta, confermata FROM presenze WHERE user_id = ? AND sessione_id = ? AND data = ?`
     )
       .bind(c.var.user.userId, sessione.id, data)
       .first<{ richiesta: number; confermata: number }>(),
-    // "In sala oggi": chi ha prenotato la presenza (prima ancora dell'appello del coach).
+    // Roster della sessione di oggi: chi ha messo "presente" e chi no (lo vedono tutti gli
+    // atleti, come già erano visibili le presenze "in sala").
     c.env.DB.prepare(
-      `SELECT p.nome, p.nickname
-       FROM presenze pr
-       JOIN athlete_profile p ON p.user_id = pr.user_id
-       WHERE pr.sessione_id = ? AND pr.data = ? AND pr.presenza_richiesta = 1
-       ORDER BY p.nome`
+      `SELECT p.nome, p.nickname,
+              COALESCE(pr.presenza_richiesta, 0) AS richiesta,
+              COALESCE(pr.confermata, 0) AS confermata
+       FROM users u
+       JOIN athlete_profile p ON p.user_id = u.id
+       LEFT JOIN presenze pr ON pr.user_id = u.id AND pr.sessione_id = ? AND pr.data = ?
+       WHERE u.role = 'atleta' AND u.status = 'attivo'
+       ORDER BY p.nome, p.cognome`
     )
       .bind(sessione.id, data)
-      .all<{ nome: string; nickname: string | null }>(),
+      .all<{ nome: string; nickname: string | null; richiesta: number; confermata: number }>(),
   ]);
 
   return c.json({
     sessione,
     richiesta: !!mia?.richiesta,
     confermata: !!mia?.confermata,
-    inSala: inSala.results,
+    roster: roster.results.map((r) => ({
+      nome: r.nickname || r.nome,
+      presente: !!r.confermata || !!r.richiesta,
+    })),
   });
 });
 
@@ -138,6 +145,73 @@ presenze.get("/appello", requireCoach, async (c) => {
     })),
     confermato: !!conferma,
     giorniRecenti,
+  });
+});
+
+// Riepilogo per il coach: per un giorno di allenamento, chi c'era e il feedback che ha
+// lasciato. Sola lettura (l'appello si fa dall'endpoint /appello).
+presenze.get("/riepilogo", requireCoach, async (c) => {
+  const giorniRecenti = await giorniAllenamentoRecenti(c.env.DB, 20);
+  const richiesta = c.req.query("data");
+  const data = richiesta || giorniRecenti[0] || oggi().data;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return c.json({ error: "Data non valida" }, 400);
+
+  const sessione = await c.env.DB
+    .prepare(`SELECT id, ora_inizio AS oraInizio, ora_fine AS oraFine FROM sessioni_gruppo WHERE giorno_settimana = ?`)
+    .bind(giornoSettimanaDi(data))
+    .first<{ id: number; oraInizio: string; oraFine: string }>();
+
+  if (!sessione) return c.json({ data, sessione: null, atleti: [], appelloFatto: false, giorniRecenti });
+
+  const [atleti, conferma] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT p.nome, p.cognome, p.nickname,
+              COALESCE(pr.presenza_richiesta, 0) AS richiesta,
+              COALESCE(pr.confermata, 0) AS confermata,
+              f.faccina, f.difficolta, f.nota
+       FROM users u
+       JOIN athlete_profile p ON p.user_id = u.id
+       LEFT JOIN presenze pr ON pr.user_id = u.id AND pr.sessione_id = ? AND pr.data = ?
+       LEFT JOIN feedback_allenamento f ON f.user_id = u.id AND f.sessione_id = ? AND f.data = ?
+       WHERE u.role = 'atleta' AND u.status = 'attivo'
+       ORDER BY p.nome, p.cognome`
+    )
+      .bind(sessione.id, data, sessione.id, data)
+      .all<{
+        nome: string;
+        cognome: string | null;
+        nickname: string | null;
+        richiesta: number;
+        confermata: number;
+        faccina: number | null;
+        difficolta: string | null;
+        nota: string | null;
+      }>(),
+    c.env.DB.prepare(`SELECT 1 FROM appello_conferme WHERE data = ? AND sessione_id = ?`)
+      .bind(data, sessione.id)
+      .first(),
+  ]);
+
+  const appelloFatto = !!conferma;
+
+  return c.json({
+    data,
+    sessione: { id: sessione.id, oraInizio: sessione.oraInizio, oraFine: sessione.oraFine },
+    appelloFatto,
+    giorniRecenti,
+    atleti: atleti.results.map((a) => {
+      let stato: "presente" | "assente" | "prenotato" | "indeciso";
+      if (a.confermata) stato = "presente";
+      else if (appelloFatto) stato = "assente";
+      else if (a.richiesta) stato = "prenotato";
+      else stato = "indeciso";
+      return {
+        nome: [a.nome, a.cognome].filter(Boolean).join(" ") || a.nickname || a.nome,
+        stato,
+        feedback:
+          a.faccina != null ? { faccina: a.faccina, difficolta: a.difficolta, nota: a.nota } : null,
+      };
+    }),
   });
 });
 

@@ -96,6 +96,7 @@ export function renderHome(appEl) {
       #allenamento-oggi-card > .ao-sezione:empty { display: none; }
       #allenamento-oggi-card #ao-coach { margin-top: 12px; }
       #allenamento-oggi-card #ao-richieste { margin-top: 16px; }
+      #allenamento-oggi-card #ao-presenze { margin-top: 14px; }
       #allenamento-oggi-card #ao-feedback {
         margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
       }
@@ -134,6 +135,7 @@ export function renderHome(appEl) {
       </div>
       <div class="ao-sezione" id="ao-coach"></div>
       <div class="ao-sezione" id="ao-richieste"></div>
+      <div class="ao-sezione" id="ao-presenze"></div>
       <div class="ao-sezione" id="ao-feedback"></div>
     </div>
   `;
@@ -219,10 +221,10 @@ async function loadFeedbackMese(el) {
 async function loadAllenamentoOggi(el) {
   // "Prima dell'allenamento" (richieste: parte alta / bassa / ecc.) nascosta per ora —
   // riattivare rimettendo `loadRichieste(el)` qui e `"#ao-richieste"` nella lista sotto.
-  await Promise.all([loadCoach(el), loadFeedback(el)]);
+  await Promise.all([loadCoach(el), loadPresenzeOggi(el), loadFeedback(el)]);
   const card = el.querySelector("#allenamento-oggi-card");
   if (!card) return;
-  const vuoto = ["#ao-coach", "#ao-feedback"].every(
+  const vuoto = ["#ao-coach", "#ao-presenze", "#ao-feedback"].every(
     (sel) => !card.querySelector(sel)?.innerHTML.trim()
   );
   const box = card.querySelector("#ao-empty");
@@ -521,6 +523,7 @@ async function loadTimeline(el) {
         await api.post("/presenze/conferma", { presente });
         loadSettimana(el);
         loadTimeline(el);
+        loadPresenzeOggi(el);
         loadFeedback(el);
       } catch {
         btn.disabled = false;
@@ -538,6 +541,50 @@ async function loadCoach(el) {
   try {
     const { testo } = await api.get("/nota-coach");
     box.innerHTML = testo ? `<p style="font-style:italic">"${esc(testo)}"</p>` : "";
+  } catch {
+    box.innerHTML = "";
+  }
+}
+
+// Menu a tendina "Chi viene oggi": chi ha messo presente e chi no per l'allenamento di
+// oggi. Visibile a tutti gli atleti (si vedono comunque in sala).
+async function loadPresenzeOggi(el) {
+  const box = el.querySelector("#ao-presenze");
+  try {
+    const { sessione, roster } = await api.get("/presenze/oggi");
+    if (!sessione || !roster?.length) {
+      box.innerHTML = "";
+      return;
+    }
+    const presenti = roster.filter((r) => r.presente);
+    const assenti = roster.filter((r) => !r.presente);
+    const elenco = (arr, colore) =>
+      arr.length
+        ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px">
+             ${arr
+               .map(
+                 (r) =>
+                   `<span class="mono" style="font-size:12px; background:var(--surface-2); border-radius:999px; padding:4px 10px">
+                      <span style="color:${colore}">●</span> ${esc(r.nome)}
+                    </span>`
+               )
+               .join("")}
+           </div>`
+        : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">—</p>`;
+
+    box.innerHTML = `
+      <details>
+        <summary class="mono" style="cursor:pointer; color:var(--mute); font-size:12px; letter-spacing:1px">
+          CHI VIENE OGGI · ${presenti.length}/${roster.length}
+        </summary>
+        <div style="margin-top:8px">
+          <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">HANNO MESSO PRESENTE</p>
+          ${elenco(presenti, "var(--livello-1)")}
+          <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:10px">NON HANNO ANCORA CONFERMATO</p>
+          ${elenco(assenti, "var(--mute)")}
+        </div>
+      </details>
+    `;
   } catch {
     box.innerHTML = "";
   }

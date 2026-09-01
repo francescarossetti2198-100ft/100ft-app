@@ -259,6 +259,12 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">ALLENAMENTI · PRESENZE E FEEDBACK</p>
+      <select id="riepilogo-data" style="margin-top:10px; ${SEL_STYLE}; width:100%"></select>
+      <div id="riepilogo-body" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">GIORNI DI CHIUSURA</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
         Festività o palestra chiusa: quella settimana gli anelli diventano 2/2 invece di 3/3.
@@ -297,8 +303,76 @@ export function renderCoach(appEl) {
   initSfida(el);
   initSuddivisioni(el);
   initAppello(el);
+  initRiepilogo(el);
   initChiusure(el);
   initRichieste(el);
+}
+
+// Storico allenamenti per il coach: per ogni giorno, chi c'era (esito appello o prenotazione)
+// e il feedback post-allenamento lasciato dagli atleti. Sola lettura.
+function initRiepilogo(el) {
+  const sel = el.querySelector("#riepilogo-data");
+  const body = el.querySelector("#riepilogo-body");
+  const FACCE = ["", "😫", "😕", "😐", "🙂", "🔥"];
+  const STATO = {
+    presente: { txt: "✓ presente", col: "var(--livello-1)" },
+    assente: { txt: "✗ assente", col: "var(--livello-5)" },
+    prenotato: { txt: "● prenotato", col: "var(--accent)" },
+    indeciso: { txt: "— nessuna risposta", col: "var(--mute)" },
+  };
+
+  async function carica() {
+    body.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>`;
+    let d;
+    try {
+      d = await api.get(`/presenze/riepilogo${sel.value ? `?data=${sel.value}` : ""}`);
+    } catch {
+      body.innerHTML = `<p class="error-text">Impossibile caricare</p>`;
+      return;
+    }
+
+    if (!sel.dataset.pop && d.giorniRecenti?.length) {
+      sel.innerHTML = d.giorniRecenti
+        .map((g) => `<option value="${g}">${g === oggiIso() ? "Oggi" : formatGiornoBreve(g)}</option>`)
+        .join("");
+      sel.value = d.data;
+      sel.dataset.pop = "1";
+    }
+
+    if (!d.sessione) {
+      body.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun allenamento in questa data.</p>`;
+      return;
+    }
+
+    const presenti = d.atleti.filter((a) => a.stato === "presente" || a.stato === "prenotato").length;
+    const conFeedback = d.atleti.filter((a) => a.feedback).length;
+
+    body.innerHTML = `
+      <p class="mono" style="color:var(--mute); font-size:12px">
+        ${presenti} present${presenti === 1 ? "e" : "i"} · ${conFeedback} feedback${d.appelloFatto ? " · appello fatto" : " · appello non ancora fatto"}
+      </p>
+      ${d.atleti
+        .map((a) => {
+          const s = STATO[a.stato] ?? STATO.indeciso;
+          const fb = a.feedback
+            ? `<p class="mono" style="font-size:12px; margin-top:3px">
+                 ${FACCE[a.feedback.faccina] ?? ""} <span style="color:var(--mute)">${a.feedback.difficolta ?? ""}</span>${a.feedback.nota ? ` — ${esc(a.feedback.nota)}` : ""}
+               </p>`
+            : "";
+          return `
+            <div style="padding:8px 0; border-top:1px solid var(--border)">
+              <p style="font-size:14px">${esc(a.nome)}
+                <span class="mono" style="font-size:11px; color:${s.col}"> · ${s.txt}</span>
+              </p>
+              ${fb}
+            </div>`;
+        })
+        .join("")}
+    `;
+  }
+
+  sel.addEventListener("change", carica);
+  carica();
 }
 
 // Giorni di chiusura / festività: tolti dal conteggio settimanale degli anelli.
