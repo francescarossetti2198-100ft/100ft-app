@@ -11,7 +11,7 @@ export function renderCoachImpostazioni(appEl) {
 
       <div class="card" style="margin-top:16px">
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:0">NOTIFICHE PUSH</p>
-        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Ricevi la notifica per fare l'appello a fine allenamento.</p>
+        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Notifica per fare l'appello a fine allenamento. Sotto puoi anche attivare i promemoria per bere e per la merenda.</p>
         <div id="notifiche-stato" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
       </div>
 
@@ -26,7 +26,7 @@ export function renderCoachImpostazioni(appEl) {
     try { p = await api.get("/profilo/me"); } catch { /* mostra comunque il placeholder */ }
     el.querySelector("#imp-foto").innerHTML = fotoProfiloHtml(p.fotoUrl, "C");
     attachFotoUpload(el, () => renderCoachImpostazioni(appEl));
-    initNotifiche(el);
+    initNotifiche(el, true); // anche la coach può attivare i promemoria bere / merenda
 
     el.querySelector("#imp-esci").addEventListener("click", async () => {
       await logout();

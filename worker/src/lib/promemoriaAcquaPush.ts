@@ -18,8 +18,8 @@ function oraRoma(): { data: string; oraMinuti: string } {
 
 const ORARI = ["11:00", "16:00"];
 
-// Promemoria "bevi un po' d'acqua" — due volte al giorno, solo agli atleti che l'hanno
-// attivato dal profilo (notifiche_preferenze.promemoria_acqua). Dedup per orario.
+// Promemoria "bevi un po' d'acqua" — due volte al giorno, a chi l'ha attivato dal profilo
+// (atleti o coach: notifiche_preferenze.promemoria_acqua). Dedup per orario.
 export async function inviaPromemoriaAcquaSeAttivo(env: Env): Promise<void> {
   const { data, oraMinuti } = oraRoma();
   if (!ORARI.includes(oraMinuti)) return;
@@ -35,7 +35,7 @@ export async function inviaPromemoriaAcquaSeAttivo(env: Env): Promise<void> {
      FROM push_subscriptions ps
      JOIN users u ON u.id = ps.user_id
      JOIN notifiche_preferenze np ON np.user_id = ps.user_id
-     WHERE u.role = 'atleta' AND u.status = 'attivo' AND np.promemoria_acqua = 1`
+     WHERE u.status = 'attivo' AND np.promemoria_acqua = 1`
   ).all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
 
   await Promise.all(

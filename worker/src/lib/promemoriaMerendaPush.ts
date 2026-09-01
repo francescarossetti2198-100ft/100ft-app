@@ -21,8 +21,8 @@ function oraRoma(): { data: string; oraMinuti: string; giornoSettimana: number }
 }
 
 // Promemoria "fai merenda" — 1 ora e mezza prima dell'inizio dell'allenamento, solo nei
-// giorni di allenamento (palestra aperta) e solo agli atleti che l'hanno attivato dal
-// profilo (notifiche_preferenze.promemoria_merenda). Dedup per giorno.
+// giorni di allenamento (palestra aperta) e a chi l'ha attivato dal profilo (atleti o
+// coach: notifiche_preferenze.promemoria_merenda). Dedup per giorno.
 export async function inviaPromemoriaMerendaSeAttivo(env: Env): Promise<void> {
   const { data, oraMinuti, giornoSettimana } = oraRoma();
 
@@ -51,7 +51,7 @@ export async function inviaPromemoriaMerendaSeAttivo(env: Env): Promise<void> {
      FROM push_subscriptions ps
      JOIN users u ON u.id = ps.user_id
      JOIN notifiche_preferenze np ON np.user_id = ps.user_id
-     WHERE u.role = 'atleta' AND u.status = 'attivo' AND np.promemoria_merenda = 1`
+     WHERE u.status = 'attivo' AND np.promemoria_merenda = 1`
   ).all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
 
   await Promise.all(
