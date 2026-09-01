@@ -70,6 +70,13 @@ export function renderCoach(appEl) {
     <h1>Coach</h1>
 
     <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">OGGI</p>
+      <p id="coach-oggi-body" style="margin-top:8px; font-size:14px; line-height:1.9">
+        <span class="mono" style="color:var(--mute)">Carico...</span>
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <p class="mono" style="color:var(--mute); font-size:12px">NOTA DEL GIORNO</p>
       <input id="nota-data" type="date" value="${oggiIso()}"
         style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
@@ -85,20 +92,52 @@ export function renderCoach(appEl) {
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">ANNUNCIO NEL FEED</p>
-      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
-        Compare nel Feed di tutti gli atleti come comunicazione della coach.</p>
-      <textarea id="annuncio-testo" rows="3"
-        style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
-               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical"
-        placeholder="Es. Sabato palestra chiusa, ci vediamo lunedì 💪"></textarea>
-      <p class="error-text" id="annuncio-error" hidden style="margin-top:6px"></p>
-      <p class="success-text" id="annuncio-success" hidden style="margin-top:6px">Pubblicato nel Feed ✓</p>
-      <button class="btn" id="annuncio-pub" style="width:100%; margin-top:10px">Pubblica nel Feed</button>
+      <p class="mono" style="color:var(--mute); font-size:12px">APPELLO</p>
+      <select id="appello-data" style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
+              border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:15px"></select>
+      <div id="appello-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+      <p class="error-text" id="appello-error" hidden></p>
+      <p class="success-text" id="appello-success" hidden>Appello confermato ✓</p>
+      <button class="btn" id="appello-salva" style="width:100%; margin-top:8px" hidden>Conferma appello</button>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="sezione-label">Contenuto del mese</p>
+      <p class="mono" style="color:var(--mute); font-size:12px">ALLENAMENTI · PRESENZE E FEEDBACK</p>
+      <select id="riepilogo-data" style="margin-top:10px; ${SEL_STYLE}; width:100%"></select>
+      <div id="riepilogo-body" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE PRE-ALLENAMENTO DI OGGI</p>
+      <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+      <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <p class="mono" style="color:var(--mute); font-size:12px">DIARIO ALLENAMENTI</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
+        Per ogni allenamento: il focus del giorno e la scheda (PDF/Word). Puoi pubblicare ogni voce nel Feed.
+      </p>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <select id="diario-mese" style="flex:2; ${SEL_STYLE}">
+          ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+        <input id="diario-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
+      </div>
+      <p class="mono" id="diario-focus-mese" style="color:var(--mute); font-size:12px; margin-top:8px; display:none"></p>
+      <div id="diario-calendario" style="margin-top:12px"></div>
+      <details class="blocco-mese" id="diario-dettaglio" style="margin-top:12px; border-top:0">
+        <summary><span id="diario-summary">Diario del mese</span></summary>
+        <div class="blocco-corpo">
+          <div id="diario-rows" style="display:flex; flex-direction:column; gap:12px"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <details class="blocco-mese" style="border-top:0">
+      <summary>Contenuto del mese</summary>
+      <div class="blocco-corpo">
       <div style="display:flex; gap:8px; margin-top:12px">
         <select id="piano-mese" style="flex:2; background:var(--surface-2); border:1px solid var(--border);
                 border-radius:8px; padding:10px; color:var(--text); font-family:inherit">
@@ -166,10 +205,14 @@ export function renderCoach(appEl) {
       <p class="error-text" id="piano-error" hidden style="margin-top:10px"></p>
       <p class="success-text" id="piano-success" hidden style="margin-top:10px">Salvato ✓</p>
       <button class="btn" id="piano-salva" style="width:100%; margin-top:14px">Salva contenuto del mese</button>
+      </div>
+      </details>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">SFIDE</p>
+      <details class="blocco-mese" style="border-top:0">
+      <summary>Sfide</summary>
+      <div class="blocco-corpo">
 
       <div id="sfide-elenco" style="margin-top:10px">
         <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>
@@ -234,10 +277,14 @@ export function renderCoach(appEl) {
         <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
         <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
       </div>
+      </div>
+      </details>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">SUDDIVISIONI</p>
+      <details class="blocco-mese" style="border-top:0">
+      <summary>Suddivisioni</summary>
+      <div class="blocco-corpo">
       <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px">Bozza — imposta le % mancanti quando hai deciso.</p>
       <div style="display:flex; gap:8px; margin-top:10px">
         <select id="sudd-mese" style="flex:2; ${SEL_STYLE}">
@@ -246,26 +293,14 @@ export function renderCoach(appEl) {
         <input id="sudd-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
       </div>
       <div id="sudd-body" style="margin-top:12px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+      </div>
+      </details>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">APPELLO</p>
-      <select id="appello-data" style="margin-top:10px; background:var(--surface-2); border:1px solid var(--border);
-              border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:15px"></select>
-      <div id="appello-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-      <p class="error-text" id="appello-error" hidden></p>
-      <p class="success-text" id="appello-success" hidden>Appello confermato ✓</p>
-      <button class="btn" id="appello-salva" style="width:100%; margin-top:8px" hidden>Conferma appello</button>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">ALLENAMENTI · PRESENZE E FEEDBACK</p>
-      <select id="riepilogo-data" style="margin-top:10px; ${SEL_STYLE}; width:100%"></select>
-      <div id="riepilogo-body" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
-    </div>
-
-    <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">GIORNI DI CHIUSURA</p>
+      <details class="blocco-mese" style="border-top:0">
+      <summary>Giorni di chiusura</summary>
+      <div class="blocco-corpo">
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
         Festività o palestra chiusa: quella settimana gli anelli diventano 2/2 invece di 3/3.
       </p>
@@ -282,12 +317,25 @@ export function renderCoach(appEl) {
       </div>
       <p class="error-text" id="chiusura-error" hidden style="margin-top:6px"></p>
       <div id="chiusura-lista" style="margin-top:10px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+      </div>
+      </details>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE PRE-ALLENAMENTO DI OGGI</p>
-      <div id="richieste-list" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-      <button type="button" class="link-btn" id="richieste-refresh" style="margin-top:10px">Aggiorna</button>
+      <details class="blocco-mese" style="border-top:0">
+      <summary>Annuncio nel Feed</summary>
+      <div class="blocco-corpo">
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">
+        Compare nel Feed di tutti gli atleti come comunicazione della coach.</p>
+      <textarea id="annuncio-testo" rows="3"
+        style="width:100%; margin-top:8px; background:var(--surface-2); border:1px solid var(--border);
+               border-radius:8px; padding:10px; color:var(--text); font-family:inherit; font-size:14px; resize:vertical"
+        placeholder="Es. Sabato palestra chiusa, ci vediamo lunedì 💪"></textarea>
+      <p class="error-text" id="annuncio-error" hidden style="margin-top:6px"></p>
+      <p class="success-text" id="annuncio-success" hidden style="margin-top:6px">Pubblicato nel Feed ✓</p>
+      <button class="btn" id="annuncio-pub" style="width:100%; margin-top:10px">Pubblica nel Feed</button>
+      </div>
+      </details>
     </div>
 
     <p class="mono" style="color:var(--mute); font-size:11px; text-align:center; margin-top:20px; opacity:.7">
@@ -297,15 +345,339 @@ export function renderCoach(appEl) {
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
+  initOggi(el);
   initNota(el);
-  initAnnuncio(el);
+  initAppello(el);
+  initRiepilogo(el);
+  initRichieste(el);
+  initDiario(el);
   initPiano(el);
   initSfida(el);
   initSuddivisioni(el);
-  initAppello(el);
-  initRiepilogo(el);
   initChiusure(el);
-  initRichieste(el);
+  initAnnuncio(el);
+}
+
+// Riepilogo "OGGI" in cima alla dashboard: chi viene, quante richieste, stato appello.
+function initOggi(el) {
+  const box = el.querySelector("#coach-oggi-body");
+
+  Promise.allSettled([
+    api.get("/presenze/oggi"),
+    api.get("/richieste/oggi/coach"),
+    api.get("/presenze/riepilogo"),
+  ]).then(([pres, rich, rip]) => {
+    const parti = [];
+
+    if (pres.status === "fulfilled" && pres.value.sessione) {
+      const roster = pres.value.roster || [];
+      const n = roster.filter((r) => r.presente).length;
+      parti.push(`<strong>${n}</strong>/${roster.length} vengono oggi`);
+    } else {
+      parti.push("Oggi niente allenamento");
+    }
+
+    if (rich.status === "fulfilled") {
+      const n = (rich.value.richieste || []).length;
+      parti.push(`<strong>${n}</strong> richiest${n === 1 ? "a" : "e"} pre-allenamento`);
+    }
+
+    if (rip.status === "fulfilled" && rip.value.sessione) {
+      const quando = rip.value.data === oggiIso() ? "oggi" : formatGiornoBreve(rip.value.data);
+      parti.push(`appello ${quando}: ${rip.value.appelloFatto ? "fatto ✓" : "<strong>da fare</strong>"}`);
+    }
+
+    box.innerHTML = parti.join(`<span style="color:var(--mute)"> · </span>`);
+  });
+}
+
+// Diario allenamenti: per ogni giorno di allenamento del mese, il focus/pattern del giorno
+// + una scheda PDF/Word + foto opzionale. Ogni voce è pubblicabile nel Feed a scelta.
+function initDiario(el) {
+  const meseSel = el.querySelector("#diario-mese");
+  const annoInput = el.querySelector("#diario-anno");
+  const focusMeseEl = el.querySelector("#diario-focus-mese");
+  const calWrap = el.querySelector("#diario-calendario");
+  const dettaglio = el.querySelector("#diario-dettaglio");
+  const summary = el.querySelector("#diario-summary");
+  const rowsWrap = el.querySelector("#diario-rows");
+
+  const NOMI_G = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+  const NOMI_G_UP = ["DOM", "LUN", "MAR", "MER", "GIO", "VEN", "SAB"];
+  const inputStile =
+    "background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text); font:inherit";
+
+  let giorni = [];
+
+  const dowDi = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  };
+  const rigaFor = (data) => rowsWrap.querySelector(`.diario-row[data-data="${data}"]`);
+
+  function disegnaCalendario() {
+    let conFocus = 0;
+    calWrap.innerHTML = `
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:6px">
+        ${giorni
+          .map((g) => {
+            const ha = !!(g.focus && g.focus.trim());
+            if (ha) conFocus++;
+            const dow = dowDi(g.data);
+            const gg = Number(g.data.slice(8, 10));
+            return `
+              <button type="button" class="diario-cal-cell" data-data="${g.data}"
+                style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; font-size:12px;
+                       border:1px solid ${ha ? "var(--livello-1)" : "var(--border)"}; border-radius:8px; cursor:pointer;
+                       background:${ha ? "color-mix(in srgb, var(--livello-1) 12%, transparent)" : "var(--surface-2)"};
+                       color:var(--text); font-family:inherit">
+                <span>${NOMI_G[dow]} ${gg}${g.fileUrl ? " 📎" : ""}</span>
+                <span style="width:8px; height:8px; border-radius:50%; background:${ha ? "var(--livello-1)" : "var(--mute)"}"></span>
+              </button>`;
+          })
+          .join("")}
+      </div>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
+        Pallino verde = focus scritto · 📎 = scheda allegata. Tocca un giorno per aprirlo.
+      </p>`;
+
+    summary.textContent = `Diario del mese — ${conFocus} su ${giorni.length} giorni con focus`;
+
+    calWrap.querySelectorAll(".diario-cal-cell").forEach((cell) => {
+      cell.addEventListener("click", () => {
+        const row = rigaFor(cell.dataset.data);
+        if (!row) return;
+        dettaglio.open = true;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.style.outline = "2px solid var(--accent)";
+        row.style.transition = "outline-color .3s";
+        setTimeout(() => { row.style.outline = "2px solid transparent"; }, 1200);
+      });
+    });
+  }
+
+  function rigaDiario(g) {
+    const row = document.createElement("div");
+    row.className = "diario-row";
+    row.dataset.data = g.data;
+    row.style.cssText =
+      "border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px";
+    const dow = dowDi(g.data);
+    const [y, m, d] = g.data.split("-").map(Number);
+
+    row.innerHTML = `
+      <p class="mono" style="font-size:12px">${NOMI_G_UP[dow]} ${d}/${m}</p>
+      <textarea class="diario-focus" rows="2" placeholder="Focus / pattern del giorno — una riga per punto (es. hinge + tirata orizzontale)"
+        style="${inputStile}; resize:vertical">${esc(g.focus || "")}</textarea>
+      <textarea class="diario-nota" rows="2" placeholder="Nota (opzionale)"
+        style="${inputStile}; resize:vertical">${esc(g.nota || "")}</textarea>
+
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+        <label class="link-btn" style="cursor:pointer">
+          <span class="diario-file-testo">${g.fileNome ? "Cambia scheda" : "Allega scheda (PDF/Word)"}</span>
+          <input class="diario-file-input" type="file" accept=".pdf,.doc,.docx" hidden />
+        </label>
+        <a class="diario-file-link mono" target="_blank" rel="noopener"
+           style="font-size:12px; ${g.fileUrl ? "" : "display:none"}"${g.fileUrl ? ` href="${mediaUrl(g.fileUrl)}"` : ""}>📎 ${esc(g.fileNome || "")}</a>
+        <button type="button" class="link-btn diario-file-rimuovi" style="color:var(--livello-5); ${g.fileUrl ? "" : "display:none"}">Rimuovi</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+        <label class="link-btn" style="cursor:pointer">
+          <span class="diario-foto-testo">${g.fotoUrl ? "Cambia foto" : "Aggiungi foto"}</span>
+          <input class="diario-foto-input" type="file" accept="image/*" hidden />
+        </label>
+        <button type="button" class="link-btn diario-foto-rimuovi" style="color:var(--livello-5); ${g.fotoUrl ? "" : "display:none"}">Rimuovi foto</button>
+      </div>
+      <img class="diario-foto-preview" alt="" style="max-width:100%; max-height:180px; border-radius:8px; object-fit:contain;
+        align-self:flex-start; border:1px solid var(--border); display:${g.fotoUrl ? "block" : "none"}"${g.fotoUrl ? ` src="${mediaUrl(g.fotoUrl)}"` : ""} />
+
+      <p class="error-text diario-error" hidden style="font-size:12px"></p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+        <button type="button" class="btn diario-salva" style="flex:1; min-width:120px">Salva giorno</button>
+        <button type="button" class="link-btn diario-pubblica">${g.pubblicatoFeed ? "Pubblicato ✓ · ripubblica" : "Pubblica nel feed"}</button>
+      </div>
+      <div class="diario-pub-pannello" hidden style="border-top:1px solid var(--border); padding-top:8px; flex-direction:column; gap:6px">
+        <p class="mono" style="font-size:12px; color:var(--mute)">Cosa pubblicare nel Feed:</p>
+        <label style="font-size:13px; display:flex; gap:8px; align-items:center"><input type="checkbox" class="pub-focus" checked /> Focus del giorno</label>
+        <label style="font-size:13px; display:flex; gap:8px; align-items:center"><input type="checkbox" class="pub-nota" /> Nota</label>
+        <label style="font-size:13px; display:flex; gap:8px; align-items:center"><input type="checkbox" class="pub-file" /> Scheda (file scaricabile)</label>
+        <label style="font-size:13px; display:flex; gap:8px; align-items:center"><input type="checkbox" class="pub-foto" /> Foto</label>
+        <button type="button" class="btn diario-pub-conferma" style="margin-top:4px">Pubblica</button>
+      </div>
+    `;
+
+    const focusEl = row.querySelector(".diario-focus");
+    const notaEl = row.querySelector(".diario-nota");
+    const errEl = row.querySelector(".diario-error");
+    const fileInput = row.querySelector(".diario-file-input");
+    const fileTesto = row.querySelector(".diario-file-testo");
+    const fileLink = row.querySelector(".diario-file-link");
+    const fileRimuovi = row.querySelector(".diario-file-rimuovi");
+    const fotoInput = row.querySelector(".diario-foto-input");
+    const fotoTesto = row.querySelector(".diario-foto-testo");
+    const fotoRimuovi = row.querySelector(".diario-foto-rimuovi");
+    const fotoPreview = row.querySelector(".diario-foto-preview");
+    const salvaBtn = row.querySelector(".diario-salva");
+    const pubblicaBtn = row.querySelector(".diario-pubblica");
+    const pannello = row.querySelector(".diario-pub-pannello");
+    const pubConferma = row.querySelector(".diario-pub-conferma");
+
+    const mostraErrore = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
+
+    salvaBtn.addEventListener("click", async () => {
+      errEl.hidden = true;
+      salvaBtn.disabled = true;
+      const prima = salvaBtn.textContent;
+      try {
+        const r = await api.post("/diario", { data: g.data, focus: focusEl.value, nota: notaEl.value });
+        g.focus = r.focus;
+        g.nota = r.nota;
+        disegnaCalendario();
+        salvaBtn.textContent = "Salvato ✓";
+        setTimeout(() => { salvaBtn.textContent = prima; }, 1500);
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Errore imprevisto");
+      } finally {
+        salvaBtn.disabled = false;
+      }
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      errEl.hidden = true;
+      try {
+        const fd = new FormData();
+        fd.append("data", g.data);
+        fd.append("file", file);
+        const r = await api.postForm("/diario/file", fd);
+        g.fileUrl = r.fileUrl;
+        g.fileNome = r.fileNome;
+        fileLink.href = mediaUrl(r.fileUrl);
+        fileLink.textContent = `📎 ${r.fileNome}`;
+        fileLink.style.display = "";
+        fileRimuovi.style.display = "";
+        fileTesto.textContent = "Cambia scheda";
+        disegnaCalendario();
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Upload non riuscito");
+      } finally {
+        fileInput.value = "";
+      }
+    });
+
+    fileRimuovi.addEventListener("click", async () => {
+      try {
+        await api.del(`/diario/${g.data}/file`);
+        g.fileUrl = null;
+        g.fileNome = null;
+        fileLink.style.display = "none";
+        fileRimuovi.style.display = "none";
+        fileTesto.textContent = "Allega scheda (PDF/Word)";
+        disegnaCalendario();
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Errore imprevisto");
+      }
+    });
+
+    fotoInput.addEventListener("change", async () => {
+      const file = fotoInput.files[0];
+      if (!file) return;
+      errEl.hidden = true;
+      try {
+        const fd = new FormData();
+        fd.append("data", g.data);
+        fd.append("foto", file);
+        const r = await api.postForm("/diario/foto", fd);
+        g.fotoUrl = r.fotoUrl;
+        fotoPreview.src = mediaUrl(r.fotoUrl);
+        fotoPreview.style.display = "block";
+        fotoRimuovi.style.display = "";
+        fotoTesto.textContent = "Cambia foto";
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Upload non riuscito");
+      } finally {
+        fotoInput.value = "";
+      }
+    });
+
+    fotoRimuovi.addEventListener("click", async () => {
+      try {
+        await api.del(`/diario/${g.data}/foto`);
+        g.fotoUrl = null;
+        fotoPreview.removeAttribute("src");
+        fotoPreview.style.display = "none";
+        fotoRimuovi.style.display = "none";
+        fotoTesto.textContent = "Aggiungi foto";
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Errore imprevisto");
+      }
+    });
+
+    pubblicaBtn.addEventListener("click", () => {
+      const aperto = pannello.hidden;
+      pannello.hidden = !aperto;
+      pannello.style.display = aperto ? "flex" : "none";
+      if (aperto) {
+        const setBox = (cls, ok) => {
+          const c = pannello.querySelector(cls);
+          c.disabled = !ok;
+          if (!ok) c.checked = false;
+          c.closest("label").style.opacity = ok ? "1" : ".5";
+        };
+        setBox(".pub-focus", !!(g.focus && g.focus.trim()));
+        setBox(".pub-nota", !!(g.nota && g.nota.trim()));
+        setBox(".pub-file", !!g.fileUrl);
+        setBox(".pub-foto", !!g.fotoUrl);
+      }
+    });
+
+    pubConferma.addEventListener("click", async () => {
+      errEl.hidden = true;
+      pubConferma.disabled = true;
+      try {
+        await api.post(`/diario/${g.data}/pubblica`, {
+          includiFocus: pannello.querySelector(".pub-focus").checked,
+          includiNota: pannello.querySelector(".pub-nota").checked,
+          includiFile: pannello.querySelector(".pub-file").checked,
+          includiFoto: pannello.querySelector(".pub-foto").checked,
+        });
+        g.pubblicatoFeed = true;
+        pubblicaBtn.textContent = "Pubblicato ✓ · ripubblica";
+        pannello.hidden = true;
+        pannello.style.display = "none";
+      } catch (err) {
+        mostraErrore(err instanceof ApiError ? err.message : "Errore imprevisto");
+      } finally {
+        pubConferma.disabled = false;
+      }
+    });
+
+    return row;
+  }
+
+  async function carica() {
+    calWrap.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>`;
+    rowsWrap.innerHTML = "";
+    let d;
+    try {
+      d = await api.get(`/diario?anno=${annoInput.value}&mese=${meseSel.value}`);
+    } catch {
+      calWrap.innerHTML = `<p class="error-text">Impossibile caricare</p>`;
+      return;
+    }
+    giorni = d.giorni || [];
+    focusMeseEl.textContent = d.focusMese ? `Focus del mese: ${d.focusMese}` : "";
+    focusMeseEl.style.display = d.focusMese ? "block" : "none";
+
+    for (const g of giorni) rowsWrap.appendChild(rigaDiario(g));
+    disegnaCalendario();
+  }
+
+  meseSel.addEventListener("change", carica);
+  annoInput.addEventListener("change", carica);
+  carica();
 }
 
 // Storico allenamenti per il coach: per ogni giorno, chi c'era (esito appello o prenotazione)

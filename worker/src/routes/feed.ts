@@ -9,7 +9,9 @@ const feed = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 feed.get("/", requireAuth, async (c) => {
   const { results: posts } = await c.env.DB.prepare(
-    `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl, p.data, a.nome, a.nickname
+    `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
+            p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
+            p.data, a.nome, a.nickname
      FROM post_feed p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
      ORDER BY p.data DESC
@@ -19,6 +21,8 @@ feed.get("/", requireAuth, async (c) => {
     tipo: string;
     testo: string;
     contenutoUrl: string | null;
+    allegatoUrl: string | null;
+    allegatoNome: string | null;
     data: string;
     nome: string | null;
     nickname: string | null;

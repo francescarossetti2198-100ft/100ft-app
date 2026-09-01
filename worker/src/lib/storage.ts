@@ -8,6 +8,35 @@ export async function salvaFoto(bucket: R2Bucket, prefisso: string, file: File):
   return `/api/foto/${chiave}`;
 }
 
+// Documenti (PDF / Word) allegati al diario allenamenti. Serviti dalla stessa rotta
+// GET /api/foto/:prefisso/:file — con Content-Disposition così il download conserva il nome.
+const ESTENSIONI_DOC: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+export async function salvaFile(
+  bucket: R2Bucket,
+  prefisso: string,
+  file: File
+): Promise<{ url: string; nome: string }> {
+  const nome = file.name || "documento";
+  const estensione = nome.split(".").pop()?.toLowerCase() ?? "";
+  if (!ESTENSIONI_DOC[estensione]) {
+    throw new Error("Sono ammessi solo file PDF o Word (.pdf, .doc, .docx)");
+  }
+  const chiave = `${prefisso}/${crypto.randomUUID()}.${estensione}`;
+  const nomeSicuro = nome.replace(/[\r\n"]/g, "_");
+  await bucket.put(chiave, await file.arrayBuffer(), {
+    httpMetadata: {
+      contentType: file.type || ESTENSIONI_DOC[estensione],
+      contentDisposition: `inline; filename="${nomeSicuro}"`,
+    },
+  });
+  return { url: `/api/foto/${chiave}`, nome };
+}
+
 // Cancella dal bucket la foto puntata da un path `/api/foto/<chiave>` (best-effort: se
 // fallisce, la vecchia foto resta orfana ma non è un errore per l'utente). Usata quando
 // l'atleta sostituisce la foto profilo, per non accumulare file inutilizzati su R2.

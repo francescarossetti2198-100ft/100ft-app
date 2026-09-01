@@ -10,9 +10,15 @@ foto.get("/:prefisso/:file", requireAuth, async (c) => {
   const oggetto = await c.env.FOTO_SFIDE.get(chiave);
   if (!oggetto) return c.notFound();
 
-  return new Response(oggetto.body, {
-    headers: { "Content-Type": oggetto.httpMetadata?.contentType ?? "image/jpeg" },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": oggetto.httpMetadata?.contentType ?? "image/jpeg",
+  };
+  // Documenti (diario allenamenti): Content-Disposition col nome originale → il download
+  // salva "scheda-lunedi.pdf" invece dell'UUID interno.
+  if (oggetto.httpMetadata?.contentDisposition) {
+    headers["Content-Disposition"] = oggetto.httpMetadata.contentDisposition;
+  }
+  return new Response(oggetto.body, { headers });
 });
 
 export default foto;

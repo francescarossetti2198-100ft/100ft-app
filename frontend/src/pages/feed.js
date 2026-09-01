@@ -10,7 +10,11 @@ const TIPO_INFO = {
   sfida: { icona: "🏆", azione: "ha completato una sfida" },
   badge: { icona: "🏅", azione: "ha conquistato il badge di" },
   annuncio_coach: { icona: "📣", azione: "" },
+  allenamento: { icona: "🏋️", azione: "" },
 };
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 const EMOJI = ["👍", "🔥", "💪", "🎉"];
 
@@ -102,7 +106,8 @@ async function loadFeed(el) {
     list.innerHTML = posts
       .map((p) => {
         const info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
-        const autore = p.tipo === "annuncio_coach" ? "Coach" : p.nickname || p.nome || "Atleta";
+        const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento";
+        const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
 
         const reazioniHtml = EMOJI.map((e) => {
           const r = p.reazioni.find((x) => x.emoji === e);
@@ -123,8 +128,14 @@ async function loadFeed(el) {
               ${info.icona} <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>
               <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
             </p>
-            <p style="margin-top:8px">${p.testo}</p>
+            <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
+            ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
+                 class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+                        background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                        padding:8px 12px; color:var(--text); font-size:13px; text-decoration:none">
+                 ⬇ ${esc(p.allegatoNome) || "Scarica la scheda"}
+               </a>` : ""}
             <div style="display:flex; gap:6px; margin-top:10px; align-items:center">
               ${reazioniHtml}
               <a href="${linkWhatsApp(p.testo, autore, info.azione)}" target="_blank" rel="noopener"
