@@ -10,7 +10,7 @@ const TIPO_INFO = {
   daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
   sfida: { icona: "🏆", azione: "ha completato una sfida" },
   badge: { icona: "🏅", azione: "ha conquistato il badge di" },
-  annuncio_coach: { icona: "📣", azione: "" },
+  annuncio_coach: { icona: "📣", azione: "annuncio" },
   allenamento: { icona: "🏋️", azione: "" },
 };
 
@@ -137,9 +137,9 @@ export async function montaFeed(list) {
               ${avatarBlock}
               <p style="font-size:14px; flex:1; min-width:0">
                 <strong>${autore}</strong>
-                ${info.icona} <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>
-                <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
+                ${info.icona}${info.azione ? ` <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>` : ""}
               </p>
+              <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; margin-top:2px">${tempoFa(p.data)}</span>
             </div>
             <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
