@@ -21,6 +21,21 @@ function fasciaAllenamento(giornoSettimana: number): { inizio: number; fine: num
   return null;
 }
 
+// Orari del promemoria "bevi un po' d'acqua" (lib/promemoriaAcquaPush.ts, ORARI) — il Daily
+// Drop non deve mai scattare vicino a questi orari, altrimenti arrivano due notifiche
+// "bevi acqua" quasi insieme. ⚠️ Tenere allineato a quel file.
+const ORARI_ACQUA_MIN = [11 * 60, 16 * 60];
+const MARGINE_ACQUA_MIN = 20;
+
+// Tutte le fasce da evitare per un dato giorno, in ordine — la sessione di allenamento più
+// le due finestre attorno ai promemoria acqua.
+function fasceEscluse(giornoSettimana: number): { inizio: number; fine: number }[] {
+  const escluse = ORARI_ACQUA_MIN.map((m) => ({ inizio: m - MARGINE_ACQUA_MIN, fine: m + MARGINE_ACQUA_MIN }));
+  const fascia = fasciaAllenamento(giornoSettimana);
+  if (fascia) escluse.push(fascia);
+  return escluse.sort((a, b) => a.inizio - b.inizio);
+}
+
 function seedDaData(data: string): number {
   let h = 0;
   for (let i = 0; i < data.length; i++) h = (Math.imul(h, 31) + data.charCodeAt(i)) >>> 0;
@@ -50,10 +65,15 @@ export function orarioDailyDrop(data: string, giornoSettimana: number): number |
   const random = creaGeneratore(seedDaData(data));
   if (random() >= PROBABILITA_GIORNO) return null;
 
-  const disponibili = FINE_GIORNO_MIN - INIZIO_GIORNO_MIN - (fascia.fine - fascia.inizio);
+  const escluse = fasceEscluse(giornoSettimana);
+  const minutiEsclusi = escluse.reduce((tot, f) => tot + (f.fine - f.inizio), 0);
+  const disponibili = FINE_GIORNO_MIN - INIZIO_GIORNO_MIN - minutiEsclusi;
   const offset = Math.floor(random() * disponibili);
+
   let minuti = INIZIO_GIORNO_MIN + offset;
-  if (minuti >= fascia.inizio) minuti += fascia.fine - fascia.inizio; // salta la fascia di allenamento
+  for (const f of escluse) {
+    if (minuti >= f.inizio) minuti += f.fine - f.inizio; // salta questa fascia (allenamento o promemoria acqua)
+  }
 
   return minuti;
 }

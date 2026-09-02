@@ -146,6 +146,12 @@ export function renderProfilo(appEl) {
   el.className = "screen";
   el.innerHTML = `
     <style>
+      /* Colore scelto per l'anello della foto: tinge in modo tenue anche lo sfondo e il
+         bordo di tutte le schede del profilo (--accent è impostato in loadProfilo). */
+      #profilo-content.ha-colore .card {
+        background-color: color-mix(in srgb, var(--accent) 8%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+      }
       /* Lineetta accento sotto il titolo della scheda "I tuoi dati" (il <summary> a
          tendina non ha la barretta di .sezione-label). */
       #profilo-content #dati-card > .blocco-mese > summary { position: relative; padding-bottom: 18px; }
@@ -251,11 +257,13 @@ export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true, personalizza
   // Fuori dalla modalità modifica: solo la foto, niente "Cambia foto" / input.
   if (!modifica) return `<div style="text-align:center">${mediaConAnello}</div>`;
 
+  // Una volta scelta una foto, si cambia toccando la foto stessa — niente più didascalia
+  // "Cambia foto" a fare da doppione. Resta solo "Aggiungi una foto" quando non c'è ancora.
   return `
     <div style="text-align:center">
       <label for="foto-input" style="cursor:pointer; display:inline-block">
         ${mediaConAnello}
-        <p class="mono link-btn" style="margin-top:6px; font-size:12px">${fotoUrl ? "Cambia foto" : "Aggiungi una foto"}</p>
+        ${fotoUrl ? "" : `<p class="mono link-btn" style="margin-top:6px; font-size:12px">Aggiungi una foto</p>`}
       </label>
       <input id="foto-input" type="file" accept="image/*"
              style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden" />
@@ -1610,6 +1618,13 @@ async function loadProfilo(el) {
       ${abbonamentoCardHtml(p)}
       ${impostazioniCardHtml()}
     `;
+
+    // Il colore scelto per l'anello della foto è anche il colore d'identità di tutto il
+    // profilo (barrette, link, bottoni, tinta tenue delle card) — non solo dell'anello.
+    const coloreScelto = COLORI_FOTO.find((c) => c.key === p.fotoPersonalizzazione?.colore)?.hex;
+    if (coloreScelto) content.style.setProperty("--accent", coloreScelto);
+    else content.style.removeProperty("--accent");
+    content.classList.toggle("ha-colore", !!coloreScelto);
 
     // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
     // (resta solo per la coach, che non ha la card Impostazioni).

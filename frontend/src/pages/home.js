@@ -561,7 +561,6 @@ async function loadPresenzeOggi(el) {
       return;
     }
     const presenti = roster.filter((r) => r.presente);
-    const assenti = roster.filter((r) => !r.presente);
     const elenco = (arr, colore) =>
       arr.length
         ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px">
@@ -584,8 +583,6 @@ async function loadPresenzeOggi(el) {
         <div style="margin-top:8px">
           <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">HANNO MESSO PRESENTE</p>
           ${elenco(presenti, "var(--livello-1)")}
-          <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:10px">NON HANNO ANCORA CONFERMATO</p>
-          ${elenco(assenti, "var(--mute)")}
         </div>
       </details>
     `;
