@@ -16,13 +16,6 @@ export const PIANI = [
     colore: "var(--livello-2)",
   },
   {
-    key: "duo",
-    nome: "DUO",
-    giorni: "Mar + 1 giorno a scelta tra Lun/Mer/Ven",
-    prezzo: 35,
-    colore: "var(--livello-3)",
-  },
-  {
     key: "solo",
     nome: "SOLO",
     giorni: "1 giorno a settimana a scelta",

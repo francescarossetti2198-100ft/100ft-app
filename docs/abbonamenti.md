@@ -22,7 +22,6 @@ dall'app 100FT (che resta su Lun/Mer/Ven): contano solo ai fini dell'abbonamento
 |---|---|---|
 | **FULL** | Lun · Mar · Mer · Ven (tutti i giorni) | **60 €/mese** |
 | **TRIO** | Lun · Mer · Ven — il classico, 3 volte a settimana | **50 €/mese** |
-| **DUO** | Mar + 1 giorno a scelta tra Lun/Mer/Ven | **35 €/mese** |
 | **SOLO** | 1 giorno a settimana a scelta | **25 €/mese** |
 | **MIX** | 1 allenamento funzionale + Mar + 1 corso fitness in palestra a scelta | **50 €/mese** |
 | **FITNESSDREAM** | Lun · Mer · Ven — riservato a chi ha già un abbonamento attivo ai corsi della palestra FitnessDream | **30 €/mese** |
