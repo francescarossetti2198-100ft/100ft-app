@@ -15,6 +15,11 @@ const FINE_GIORNO_MIN = 22 * 60; // 22:00
 // più precise; andrebbe reso configurabile dal coach quando esisterà la Coach Dashboard.
 const PROBABILITA_GIORNO = 0.35;
 
+// Quanto resta valida la possibilità di rispondere, da quando scatta l'orario (= da quando
+// parte la notifica push, vedi lib/dailyDropPush.ts): una finestra breve e stretta, non
+// tutto il giorno — dopo questi minuti la possibilità di rispondere sparisce.
+export const FINESTRA_RISPOSTA_MIN = 5;
+
 function fasciaAllenamento(giornoSettimana: number): { inizio: number; fine: number } | null {
   if (giornoSettimana === 1 || giornoSettimana === 3) return { inizio: 19 * 60 + 30, fine: 20 * 60 + 30 }; // lun/mer 19:30-20:30
   if (giornoSettimana === 5) return { inizio: 19 * 60, fine: 20 * 60 }; // ven 19:00-20:00
@@ -80,4 +85,21 @@ export function orarioDailyDrop(data: string, giornoSettimana: number): number |
 
 export function minutiOra(now: Date = adessoRoma()): number {
   return now.getUTCHours() * 60 + now.getUTCMinutes();
+}
+
+// Stato del Daily Drop di oggi in un colpo solo: previsto (giorno + "tocca" oggi), attivo
+// (dentro la finestra di FINESTRA_RISPOSTA_MIN minuti da quando è scattato) o scaduto
+// (finestra chiusa, non si può più rispondere). Non rivela mai l'orario esatto prima che
+// scatti — l'endpoint dice solo previsto/attivo/scaduto, mai il minuto esatto.
+export function statoDailyDrop(
+  data: string,
+  giornoSettimana: number,
+  ora: number = minutiOra()
+): { previsto: boolean; attivo: boolean; scaduto: boolean } {
+  const orarioScatto = orarioDailyDrop(data, giornoSettimana);
+  if (orarioScatto === null) return { previsto: false, attivo: false, scaduto: false };
+
+  const attivo = ora >= orarioScatto && ora < orarioScatto + FINESTRA_RISPOSTA_MIN;
+  const scaduto = ora >= orarioScatto + FINESTRA_RISPOSTA_MIN;
+  return { previsto: true, attivo, scaduto };
 }

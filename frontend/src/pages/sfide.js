@@ -173,7 +173,7 @@ export function renderSfide(appEl) {
 async function loadDailyDrop(el) {
   const card = el.querySelector("#daily-drop-card");
   try {
-    const { previsto, attivo, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
+    const { previsto, attivo, scaduto, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
 
     // Occasionale in occasione dei giorni di allenamento — quando non è previsto, niente card.
     if (!previsto) {
@@ -186,6 +186,17 @@ async function loadDailyDrop(el) {
         <p class="kicker">💧 DAILY DROP</p>
         <p style="margin-top:6px">Hai già risposto oggi ✓</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
+      `;
+      return;
+    }
+
+    // Finestra di risposta chiusa (sono passati i minuti previsti dalla notifica): niente
+    // più modulo, la possibilità di rispondere è finita per oggi.
+    if (scaduto) {
+      card.innerHTML = `
+        <p class="kicker">💧 DAILY DROP</p>
+        <p class="mono" style="color:var(--mute); margin-top:6px">Il momento per oggi è passato ⏱</p>
+        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno risposto in tempo</p>
       `;
       return;
     }
