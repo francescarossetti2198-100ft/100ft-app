@@ -5,7 +5,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 import { currentQuery, navigate } from "../router.js";
-import { fotoProfiloHtml } from "./profilo.js";
+import { fotoProfiloHtml, formatDataNascita } from "./profilo.js";
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -42,6 +42,10 @@ async function caricaAtleta(el) {
     const livelloLinea = p.livello
       ? `<p class="mono" style="color:${p.livello.attuale.colore}; font-size:13px; margin-top:6px; text-align:center">Livello ${p.livello.attuale.numero} — ${p.livello.attuale.nome}</p>`
       : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora.</p>`;
+    const iscrizione = formatDataNascita(p.dataIscrizione);
+    const iscrizioneLinea = iscrizione
+      ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px; text-align:center">Iscritto dal ${iscrizione}</p>`
+      : "";
 
     content.innerHTML = `
       <div class="card" style="padding:28px 16px">
@@ -53,6 +57,7 @@ async function caricaAtleta(el) {
             : ""
         }
         ${livelloLinea}
+        ${iscrizioneLinea}
       </div>
     `;
   } catch (err) {

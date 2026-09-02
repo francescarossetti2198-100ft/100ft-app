@@ -113,6 +113,7 @@ atleti.get("/:id", requireCoach, async (c) => {
   const anagraficaRow = await db
     .prepare(
       `SELECT p.nome, p.cognome, p.nickname, p.foto_url AS fotoUrl, p.data_nascita AS dataNascita,
+              p.data_iscrizione AS dataIscrizione,
               a.peso, a.altezza, a.note_infortuni AS noteInfortuni, a.personalizzazione
        FROM users u
        JOIN athlete_profile p ON p.user_id = u.id
@@ -126,6 +127,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       nickname: string | null;
       fotoUrl: string | null;
       dataNascita: string | null;
+      dataIscrizione: string | null;
       peso: number | null;
       altezza: number | null;
       noteInfortuni: string | null;
@@ -204,6 +206,7 @@ atleti.get("/:id", requireCoach, async (c) => {
       fotoUrl: anagraficaRow.fotoUrl,
       dataNascita: anagraficaRow.dataNascita,
       eta: calcolaEta(anagraficaRow.dataNascita),
+      dataIscrizione: anagraficaRow.dataIscrizione,
     },
     datiPrivati: {
       peso: anagraficaRow.peso ?? null,
@@ -239,6 +242,34 @@ atleti.get("/:id", requireCoach, async (c) => {
   });
 });
 
+// YYYY-MM-DD, formato valido (nessun vincolo passato/futuro: è la data reale
+// dell'iscrizione in palestra, che la coach conosce meglio di qualunque calcolo).
+function dataValida(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  return !Number.isNaN(new Date(`${s}T00:00:00Z`).getTime());
+}
+
+// La coach imposta la data di iscrizione in palestra dell'atleta (scheda PROFILI) — resta
+// visibile sia sul profilo dell'atleta sia agli altri atleti (scheda pubblica, sotto).
+atleti.post("/:id/iscrizione", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "ID atleta non valido" }, 400);
+
+  const { dataIscrizione } = await c.req.json<{ dataIscrizione?: string | null }>();
+  if (dataIscrizione != null && !dataValida(String(dataIscrizione))) {
+    return c.json({ error: "Data non valida" }, 400);
+  }
+
+  const esistente = await c.env.DB.prepare(`SELECT 1 FROM athlete_profile WHERE user_id = ?`).bind(id).first();
+  if (!esistente) return c.json({ error: "Atleta non trovato" }, 404);
+
+  await c.env.DB.prepare(`UPDATE athlete_profile SET data_iscrizione = ? WHERE user_id = ?`)
+    .bind(dataIscrizione || null, id)
+    .run();
+
+  return c.json({ ok: true });
+});
+
 // Scheda pubblica di un atleta — quello che un compagno vede toccando la sua foto (nel
 // Feed, in classifica, ecc.): foto, nickname, nome/cognome e livello. Niente dati privati
 // (età, peso, note, feedback, sfide, pagamento) — quelli restano solo per la coach, vedi
@@ -248,13 +279,21 @@ atleti.get("/:id/pubblico", requireAuth, async (c) => {
   if (!Number.isInteger(id)) return c.json({ error: "ID atleta non valido" }, 400);
 
   const row = await c.env.DB.prepare(
-    `SELECT p.nome, p.cognome, p.nickname, p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione
+    `SELECT p.nome, p.cognome, p.nickname, p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione,
+            p.data_iscrizione AS dataIscrizione
      FROM users u
      JOIN athlete_profile p ON p.user_id = u.id
      WHERE u.id = ? AND u.role = 'atleta' AND u.status = 'attivo'`
   )
     .bind(id)
-    .first<{ nome: string; cognome: string; nickname: string | null; fotoUrl: string | null; fotoPersonalizzazione: string | null }>();
+    .first<{
+      nome: string;
+      cognome: string;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+      dataIscrizione: string | null;
+    }>();
 
   if (!row) return c.json({ error: "Atleta non trovato" }, 404);
 
@@ -269,6 +308,7 @@ atleti.get("/:id/pubblico", requireAuth, async (c) => {
     nickname: row.nickname,
     fotoUrl: row.fotoUrl,
     fotoPersonalizzazione: parseFotoPersonalizzazione(row.fotoPersonalizzazione),
+    dataIscrizione: row.dataIscrizione,
     livello: calcolaLivello(presenzeTotali?.n ?? 0),
   });
 });

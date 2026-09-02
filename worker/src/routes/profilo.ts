@@ -62,7 +62,8 @@ profilo.get("/me", requireAuth, async (c) => {
     pianoProssimoKey,
   ] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita, foto_personalizzazione AS fotoPersonalizzazione
+      `SELECT nome, cognome, nickname, foto_url AS fotoUrl, data_nascita AS dataNascita,
+              data_iscrizione AS dataIscrizione, foto_personalizzazione AS fotoPersonalizzazione
        FROM athlete_profile WHERE user_id = ?`
     )
       .bind(userId)
@@ -72,6 +73,7 @@ profilo.get("/me", requireAuth, async (c) => {
         nickname: string | null;
         fotoUrl: string | null;
         dataNascita: string | null;
+        dataIscrizione: string | null;
         fotoPersonalizzazione: string | null;
       }>(),
     c.env.DB.prepare(
@@ -122,6 +124,7 @@ profilo.get("/me", requireAuth, async (c) => {
     fotoPersonalizzazione: parseFotoPersonalizzazione(profiloRow?.fotoPersonalizzazione),
     // Dati privati (solo l'atleta stesso e la coach) — vedi anche GET /api/atleti/:id.
     dataNascita: profiloRow?.dataNascita ?? null,
+    dataIscrizione: profiloRow?.dataIscrizione ?? null,
     datiPrivati: {
       peso: datiPrivatiRow?.peso ?? null,
       altezza: datiPrivatiRow?.altezza ?? null,

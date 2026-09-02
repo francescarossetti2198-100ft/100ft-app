@@ -35,7 +35,7 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }
 
-function formatDataNascita(iso) {
+export function formatDataNascita(iso) {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d || m > 12) return null;
@@ -518,6 +518,7 @@ function schedaAtletaHtml(d) {
       <p class="mono" style="color:var(--mute); font-size:12px">ANAGRAFICA</p>
       <div style="margin-top:6px">
         ${riga("Data di nascita", dn ? `${dn}${a.eta != null ? ` · ${a.eta} anni` : ""}` : null)}
+        ${riga("Iscritto dal", formatDataNascita(a.dataIscrizione))}
         ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
         ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
         ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
@@ -574,6 +575,18 @@ function schedaAtletaHtml(d) {
     <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">GESTIONE</p>
       <div style="margin-top:10px">
+        <label class="mono" style="display:block; color:var(--mute); font-size:11px; letter-spacing:1px; margin-bottom:6px" for="iscrizione-data-${d.userId}">
+          DATA DI ISCRIZIONE
+        </label>
+        <div style="display:flex; gap:8px">
+          <input type="date" id="iscrizione-data-${d.userId}" class="iscrizione-data" data-user-id="${d.userId}" value="${a.dataIscrizione ?? ""}"
+            style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-family:inherit; font-size:14px" />
+          <button type="button" class="btn iscrizione-salva" data-user-id="${d.userId}" style="width:auto; padding:8px 16px">Salva</button>
+        </div>
+        <p class="error-text iscrizione-error" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px"></p>
+        <p class="success-text iscrizione-ok" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px">Salvata ✓</p>
+      </div>
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
         <button type="button" class="link-btn reset-password-btn" data-user-id="${d.userId}" data-nome="${esc(nome).replace(/"/g, "&quot;")}"
           style="text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
           RESET PASSWORD
@@ -619,6 +632,27 @@ function initSchedaAzioni(scheda) {
         // silenzioso
       }
       sel.disabled = false;
+    });
+  });
+
+  scheda.querySelectorAll(".iscrizione-salva").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = Number(btn.dataset.userId);
+      const input = scheda.querySelector(`.iscrizione-data[data-user-id="${userId}"]`);
+      const errorEl = scheda.querySelector(`.iscrizione-error[data-user-id="${userId}"]`);
+      const okEl = scheda.querySelector(`.iscrizione-ok[data-user-id="${userId}"]`);
+      errorEl.hidden = true;
+      okEl.hidden = true;
+      btn.disabled = true;
+      try {
+        await api.post(`/atleti/${userId}/iscrizione`, { dataIscrizione: input.value || null });
+        okEl.hidden = false;
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
     });
   });
 
@@ -1370,6 +1404,10 @@ function identitaCardHtml(p) {
     : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — fai i tuoi primi 3 allenamenti per sbloccarlo.</p>`;
 
   const abbAttivo = !!p.abbonamentoAttivo;
+  const iscrizione = formatDataNascita(p.dataIscrizione);
+  const iscrizioneLinea = iscrizione
+    ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px; text-align:center">Iscritto dal ${iscrizione}</p>`
+    : "";
 
   return `
     <div class="card" id="identita-card" style="position:relative">
@@ -1397,6 +1435,7 @@ function identitaCardHtml(p) {
             : ""
         }
         ${livelloLinea}
+        ${iscrizioneLinea}
       </div>
     </div>
   `;
