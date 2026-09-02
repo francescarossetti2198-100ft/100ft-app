@@ -19,7 +19,7 @@ export const PIANI = [
     key: "solo",
     nome: "SOLO",
     giorni: "1 giorno a settimana a scelta",
-    prezzo: 25,
+    prezzo: 30,
     colore: "var(--livello-1)",
   },
   {

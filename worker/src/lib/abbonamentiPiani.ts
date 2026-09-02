@@ -5,7 +5,7 @@ export type PianoKey = "full" | "trio" | "solo" | "mix" | "fitnessdream";
 export const PIANI: { key: PianoKey; nome: string; prezzo: number }[] = [
   { key: "full", nome: "FULL", prezzo: 60 },
   { key: "trio", nome: "TRIO", prezzo: 50 },
-  { key: "solo", nome: "SOLO", prezzo: 25 },
+  { key: "solo", nome: "SOLO", prezzo: 30 },
   { key: "mix", nome: "MIX", prezzo: 50 },
   { key: "fitnessdream", nome: "FITNESSDREAM", prezzo: 30 },
 ];
