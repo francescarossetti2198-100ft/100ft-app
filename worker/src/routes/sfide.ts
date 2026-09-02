@@ -48,6 +48,7 @@ sfide.get("/classifica", requireAuth, async (c) => {
      FROM users u
      JOIN athlete_profile p ON p.user_id = u.id
      LEFT JOIN xp_log x ON x.user_id = u.id ${filtro}
+     WHERE u.role = 'atleta' AND u.status = 'attivo'
      GROUP BY u.id
      ORDER BY punti DESC, p.nome ASC`
   )
