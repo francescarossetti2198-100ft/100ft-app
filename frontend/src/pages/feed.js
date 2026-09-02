@@ -133,13 +133,13 @@ export async function montaFeed(list) {
 
         return `
           <div class="card" style="margin-bottom:12px">
-            <div style="display:flex; align-items:flex-start; gap:10px">
+            <div style="display:flex; align-items:center; gap:10px">
               ${avatarBlock}
-              <p style="font-size:14px; flex:1; min-width:0">
+              <p style="font-size:14px; flex:1; min-width:0; margin:0; line-height:1.35">
                 <strong>${autore}</strong>
                 ${info.icona}${info.azione ? ` <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>` : ""}
               </p>
-              <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; margin-top:2px">${tempoFa(p.data)}</span>
+              <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; align-self:flex-start">${tempoFa(p.data)}</span>
             </div>
             <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
