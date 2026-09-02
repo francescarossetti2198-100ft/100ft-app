@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
-import { oggi, sessioneOggi, adessoRoma } from "../lib/oggi";
+import { oggi, sessioneOggi, adessoRoma, INIZIO_STAGIONE } from "../lib/oggi";
 import { assegnaMilestone } from "../lib/milestones";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 
@@ -14,7 +14,8 @@ function giornoSettimanaDi(data: string): number {
   return ((new Date(`${data}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
 }
 
-// Ultime N date (dalla più recente) che hanno avuto un allenamento, entro `giorni` giorni fa.
+// Ultime N date (dalla più recente) che hanno avuto un allenamento, entro `giorni` giorni fa
+// e non prima dell'inizio della stagione (i giorni di test precedenti al lancio non contano).
 async function giorniAllenamentoRecenti(db: D1Database, quante = 10, giorni = 28): Promise<string[]> {
   const { results } = await db
     .prepare(`SELECT DISTINCT giorno_settimana FROM sessioni_gruppo`)
@@ -24,6 +25,7 @@ async function giorniAllenamentoRecenti(db: D1Database, quante = 10, giorni = 28
   const d = adessoRoma();
   for (let i = 0; i < giorni && out.length < quante; i++) {
     const iso = d.toISOString().slice(0, 10);
+    if (iso < INIZIO_STAGIONE) break;
     if (giorniConSessione.has(giornoSettimanaDi(iso))) out.push(iso);
     d.setUTCDate(d.getUTCDate() - 1);
   }

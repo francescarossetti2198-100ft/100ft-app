@@ -39,6 +39,10 @@ export function mesePrecedente(now: Date = new Date()): { mese: number; anno: nu
 // ci si allena, quindi il feedback mensile su quei mesi non va né chiesto né raccolto.
 export const PRIMO_MESE_STAGIONE = "2026-09";
 
+// Primo giorno di allenamento vero della stagione (lancio dell'app, 2026-09-02): i giorni
+// di test precedenti (agosto) non devono più comparire nei selettori data del coach.
+export const INIZIO_STAGIONE = "2026-09-02";
+
 export function meseFeedbackValido(mese: number, anno: number): boolean {
   const ym = `${anno}-${String(mese).padStart(2, "0")}`;
   return ym >= PRIMO_MESE_STAGIONE && mese !== 8; // agosto è sempre fuori stagione
