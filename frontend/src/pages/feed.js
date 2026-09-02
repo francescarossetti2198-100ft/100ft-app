@@ -1,5 +1,6 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
+import { fotoProfiloHtml } from "./profilo.js";
 
 const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
@@ -110,6 +111,14 @@ export async function montaFeed(list) {
         const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento";
         const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
 
+        // Cerchio della foto prima del nome: per gli atleti apre la loro scheda pubblica
+        // (/atleta?id=...), per i post della coach (userId assente) resta solo visivo.
+        const iniziale = (autore[0] || "?").toUpperCase();
+        const avatarHtml = fotoProfiloHtml(p.fotoUrl, iniziale, false, p.fotoPersonalizzazione, 34);
+        const avatarBlock = p.userId
+          ? `<a href="#/atleta?id=${p.userId}" style="flex:0 0 auto; line-height:0">${avatarHtml}</a>`
+          : `<span style="flex:0 0 auto; line-height:0">${avatarHtml}</span>`;
+
         const reazioniHtml = EMOJI.map((e) => {
           const r = p.reazioni.find((x) => x.emoji === e);
           const attiva = r?.mia;
@@ -124,11 +133,14 @@ export async function montaFeed(list) {
 
         return `
           <div class="card" style="margin-bottom:12px">
-            <p style="font-size:14px">
-              <strong>${autore}</strong>
-              ${info.icona} <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>
-              <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
-            </p>
+            <div style="display:flex; align-items:flex-start; gap:10px">
+              ${avatarBlock}
+              <p style="font-size:14px; flex:1; min-width:0">
+                <strong>${autore}</strong>
+                ${info.icona} <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>
+                <span class="mono" style="color:var(--mute); font-size:12px; float:right">${tempoFa(p.data)}</span>
+              </p>
+            </div>
             <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"

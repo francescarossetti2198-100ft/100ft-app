@@ -11,6 +11,7 @@ import { renderProgramma } from "./pages/programma.js";
 import { renderSfide } from "./pages/sfide.js";
 import { renderFeed } from "./pages/feed.js";
 import { renderProfilo } from "./pages/profilo.js";
+import { renderAtletaPubblico } from "./pages/atleta.js";
 import { renderCoachOggi } from "./pages/coach/oggi.js";
 import { renderCoachDiario } from "./pages/coach/diario.js";
 import { renderCoachPresenze } from "./pages/coach/presenze.js";
@@ -38,6 +39,7 @@ registerRoute("/programma", { render: perCoach("/coach")(renderProgramma) });
 registerRoute("/sfide", { render: perCoach("/coach/sfide")(renderSfide) });
 registerRoute("/feed", { render: perCoach("/coach/feed")(renderFeed) });
 registerRoute("/profilo", { render: renderProfilo });
+registerRoute("/atleta", { render: renderAtletaPubblico });
 
 registerRoute("/coach", { render: renderCoachOggi });
 registerRoute("/coach/diario", { render: renderCoachDiario });

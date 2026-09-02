@@ -10,6 +10,7 @@ import { verificaTraguardi } from "../lib/traguardi";
 import { statoBadgeMensili } from "../lib/badgeMensili";
 import { adessoRoma } from "../lib/oggi";
 import { pianoDelMese, pianoProssimo } from "../lib/abbonamenti";
+import { fotoPersonalizzazioneValida, parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 
 type Variables = { user: SessionUser };
 const profilo = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -21,30 +22,6 @@ function dataNascitaValida(s: string): boolean {
   return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
 }
 
-// Personalizzazione dell'anello della foto profilo atleta (colore/stile/intensità).
-// Deve restare allineata a COLORI_FOTO/STILI_FOTO/INTENSITA_FOTO in frontend/src/foto-ring.js.
-const COLORI_FOTO = ["viola", "blu", "verde", "arancio", "rosso", "rosa", "giallo", "bianco"];
-const STILI_FOTO = ["solid", "gradient", "glow", "double", "dashed", "minimal"];
-const INTENSITA_FOTO = ["sottile", "medio", "forte"];
-
-// null = nessuna personalizzazione (bordo neutro di default). Altrimenti serve l'oggetto
-// completo {colore, stile, intensita}, tutti e tre validi.
-function fotoPersonalizzazioneValida(v: unknown): boolean {
-  if (v === null) return true;
-  if (typeof v !== "object") return false;
-  const o = v as Record<string, unknown>;
-  return COLORI_FOTO.includes(String(o.colore)) && STILI_FOTO.includes(String(o.stile)) && INTENSITA_FOTO.includes(String(o.intensita));
-}
-
-function parseFotoPersonalizzazione(raw: string | null | undefined): { colore: string; stile: string; intensita: string } | null {
-  if (!raw) return null;
-  try {
-    const v = JSON.parse(raw);
-    return fotoPersonalizzazioneValida(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
 
 profilo.get("/me", requireAuth, async (c) => {
   const userId = c.var.user.userId;

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
+import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 
 const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉"];
 
@@ -11,7 +12,8 @@ feed.get("/", requireAuth, async (c) => {
   const { results: posts } = await c.env.DB.prepare(
     `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
             p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
-            p.data, a.nome, a.nickname
+            p.data, p.user_id AS userId, a.nome, a.nickname,
+            a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
      FROM post_feed p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
      ORDER BY p.data DESC
@@ -24,8 +26,11 @@ feed.get("/", requireAuth, async (c) => {
     allegatoUrl: string | null;
     allegatoNome: string | null;
     data: string;
+    userId: number | null;
     nome: string | null;
     nickname: string | null;
+    fotoUrl: string | null;
+    fotoPersonalizzazione: string | null;
   }>();
 
   const { results: reazioni } = await c.env.DB.prepare(
@@ -46,7 +51,11 @@ feed.get("/", requireAuth, async (c) => {
   }
 
   return c.json({
-    posts: posts.map((p) => ({ ...p, reazioni: reazioniPerPost.get(p.id) ?? [] })),
+    posts: posts.map((p) => ({
+      ...p,
+      fotoPersonalizzazione: parseFotoPersonalizzazione(p.fotoPersonalizzazione),
+      reazioni: reazioniPerPost.get(p.id) ?? [],
+    })),
   });
 });
 

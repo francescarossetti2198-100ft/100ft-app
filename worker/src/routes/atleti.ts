@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
-import { requireCoach } from "../middleware/auth";
+import { requireAuth, requireCoach } from "../middleware/auth";
 import { calcolaLivello } from "../lib/livelli";
+import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
@@ -235,6 +236,40 @@ atleti.get("/:id", requireCoach, async (c) => {
       badgeMensili,
       performance: performance.results,
     },
+  });
+});
+
+// Scheda pubblica di un atleta — quello che un compagno vede toccando la sua foto (nel
+// Feed, in classifica, ecc.): foto, nickname, nome/cognome e livello. Niente dati privati
+// (età, peso, note, feedback, sfide, pagamento) — quelli restano solo per la coach, vedi
+// GET /:id sopra. Aperta a chiunque sia loggato (atleta o coach), non solo alla coach.
+atleti.get("/:id/pubblico", requireAuth, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "ID atleta non valido" }, 400);
+
+  const row = await c.env.DB.prepare(
+    `SELECT p.nome, p.cognome, p.nickname, p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione
+     FROM users u
+     JOIN athlete_profile p ON p.user_id = u.id
+     WHERE u.id = ? AND u.role = 'atleta' AND u.status = 'attivo'`
+  )
+    .bind(id)
+    .first<{ nome: string; cognome: string; nickname: string | null; fotoUrl: string | null; fotoPersonalizzazione: string | null }>();
+
+  if (!row) return c.json({ error: "Atleta non trovato" }, 404);
+
+  const presenzeTotali = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
+    .bind(id)
+    .first<{ n: number }>();
+
+  return c.json({
+    userId: id,
+    nome: row.nome,
+    cognome: row.cognome,
+    nickname: row.nickname,
+    fotoUrl: row.fotoUrl,
+    fotoPersonalizzazione: parseFotoPersonalizzazione(row.fotoPersonalizzazione),
+    livello: calcolaLivello(presenzeTotali?.n ?? 0),
   });
 });
 
