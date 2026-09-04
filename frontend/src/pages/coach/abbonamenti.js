@@ -1,6 +1,7 @@
 import { renderPaginaCoach } from "../../components/coach-shell.js";
 import { initSuddivisioni, MESI, SEL_STYLE, oraCorrente, esc } from "../coach.js";
 import { api, ApiError } from "../../api.js";
+import { PIANI } from "../../abbonamenti.js";
 
 // Spunta veloce di chi ha pagato l'abbonamento del mese — tutti su una schermata, come
 // l'appello. Nessun bisogno di entrare nel profilo di ognuno.
@@ -31,11 +32,19 @@ function initPagamenti(el) {
         const nome = a.nickname || `${a.nome} ${a.cognome}`.trim();
         const pagato = a.pagamentoMese === "pagato";
         const col = pagato ? "var(--livello-1)" : "var(--livello-5)";
+        const opzioni =
+          `<option value="">— abbonamento —</option>` +
+          PIANI.map(
+            (pl) => `<option value="${pl.key}" ${a.piano === pl.key ? "selected" : ""}>${pl.nome}</option>`
+          ).join("");
         return `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid var(--border)">
             <span style="min-width:0">
               <span style="font-size:14px; font-weight:600">${esc(nome)}</span>
-              <span class="mono" style="color:var(--mute); font-size:11px; display:block; margin-top:2px">${esc(a.nomePiano || a.piano || "nessun piano")}</span>
+              <select class="pag-piano" data-user-id="${a.userId}"
+                style="display:block; margin-top:4px; ${SEL_STYLE}; font-size:11px; padding:4px 6px; ${a.piano ? "" : "color:var(--livello-5)"}">
+                ${opzioni}
+              </select>
             </span>
             <button type="button" class="pag-toggle" data-user-id="${a.userId}" data-stato="${a.pagamentoMese}"
               style="flex-shrink:0; padding:8px 12px; border-radius:999px; cursor:pointer; white-space:nowrap;
@@ -46,6 +55,22 @@ function initPagamenti(el) {
           </div>`;
       })
       .join("");
+
+    box.querySelectorAll(".pag-piano").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        const piano = sel.value;
+        if (!piano) return; // "— abbonamento —": nessuna azione
+        sel.disabled = true;
+        try {
+          await api.post("/pagamenti", { userId: Number(sel.dataset.userId), piano });
+          sel.style.color = "";
+        } catch (err) {
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+        } finally {
+          sel.disabled = false;
+        }
+      });
+    });
 
     box.querySelectorAll(".pag-toggle").forEach((btn) => {
       btn.addEventListener("click", async () => {

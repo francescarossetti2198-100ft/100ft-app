@@ -38,11 +38,30 @@ suddivisioni.get("/", requireCoach, async (c) => {
   let coach = 0;
   let palestra = 0;
   let daDefinire = 0;
+  let senzaPiano = 0; // hanno pagato ma non hanno un abbonamento assegnato
 
   for (const a of atleti) {
     const pag = pagMap.get(a.userId);
     const piano = pag?.piano ?? (await pianoDelMese(c.env.DB, a.userId, anno, mese));
-    if (!piano) continue; // atleta senza abbonamento scelto: non compare
+    if (!piano) {
+      // Nessun abbonamento scelto. Se ha comunque pagato, mostralo lo stesso (senza importi:
+      // senza piano non c'è un prezzo) così la coach sa che deve assegnargli l'abbonamento.
+      if (pag?.stato === "pagato") {
+        senzaPiano++;
+        righe.push({
+          userId: a.userId,
+          nome: a.nome,
+          piano: null,
+          nomePiano: "Da assegnare",
+          prezzo: null,
+          stato: "pagato",
+          pagato: true,
+          quotaCoach: null,
+          quotaPalestra: null,
+        });
+      }
+      continue;
+    }
 
     const prezzo = prezzoPiano(piano) ?? 0;
     const pct = cfgMap.get(piano);
@@ -78,7 +97,7 @@ suddivisioni.get("/", requireCoach, async (c) => {
     mese,
     righe,
     config: Object.fromEntries(PIANI.map((p) => [p.key, cfgMap.get(p.key) ?? null])),
-    totali: { coach, palestra, daDefinire },
+    totali: { coach, palestra, daDefinire, senzaPiano },
   });
 });
 

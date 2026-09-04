@@ -1185,10 +1185,12 @@ export function initSuddivisioni(el) {
         d.righe
           .map((r) => {
             const celleQuote =
-              r.quotaCoach != null
-                ? `<span class="mono" style="font-size:12px; text-align:right; color:var(--livello-1)">${eur(r.quotaCoach)}</span>
-                   <span class="mono" style="font-size:12px; text-align:right; color:var(--mute)">${eur(r.quotaPalestra)}</span>`
-                : `<span class="mono" style="font-size:11px; text-align:right; color:var(--livello-5); grid-column:2 / 4">% da definire</span>`;
+              r.piano == null
+                ? `<span class="mono" style="font-size:11px; text-align:right; color:var(--livello-5); grid-column:2 / 4">abbonamento da assegnare</span>`
+                : r.quotaCoach != null
+                  ? `<span class="mono" style="font-size:12px; text-align:right; color:var(--livello-1)">${eur(r.quotaCoach)}</span>
+                     <span class="mono" style="font-size:12px; text-align:right; color:var(--mute)">${eur(r.quotaPalestra)}</span>`
+                  : `<span class="mono" style="font-size:11px; text-align:right; color:var(--livello-5); grid-column:2 / 4">% da definire</span>`;
             return `
               <div style="display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:baseline; padding:7px 0; border-top:1px solid var(--border); opacity:${r.pagato ? 1 : 0.5}">
                 <span style="font-size:13px; min-width:0">${esc(r.nome)}
@@ -1208,6 +1210,7 @@ export function initSuddivisioni(el) {
         ${t.daDefinire ? `<div style="display:flex; justify-content:space-between; font-size:13px; margin-top:4px; color:var(--livello-5)"><span>Da definire</span><strong>${eur(t.daDefinire)}</strong></div>` : ""}
       </div>
       <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">I totali contano solo chi ha pagato.</p>
+      ${t.senzaPiano ? `<p class="mono" style="color:var(--livello-5); font-size:11px; margin-top:4px">${t.senzaPiano} ${t.senzaPiano === 1 ? "ha pagato ma non ha" : "hanno pagato ma non hanno"} un abbonamento assegnato — impostalo dalla scheda dell'atleta o nella spunta pagamenti.</p>` : ""}
       <button type="button" class="btn" id="sudd-pdf" style="width:100%; margin-top:10px; background:var(--surface-2); color:var(--text)">Scarica PDF</button>`;
 
     const config = `

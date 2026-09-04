@@ -288,10 +288,10 @@ async function loadClassifica(el, periodo) {
                   .map(
                     (a, i) => `
                       <div style="display:flex; align-items:center; justify-content:space-between">
-                        <span style="display:flex; align-items:center; gap:8px">
-                          ${a.posizione ?? i + 1}. ${avatarHtml(a)} ${a.nickname || a.nome}
-                        </span>
-                        <strong>${variazioneHtml(a.variazione)}${a.punti} PT</strong>
+                        <a href="#/atleta?id=${a.userId}" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--text); min-width:0">
+                          ${a.posizione ?? i + 1}. ${avatarHtml(a)} <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${a.nickname || a.nome}</span>
+                        </a>
+                        <strong style="flex:0 0 auto">${variazioneHtml(a.variazione)}${a.punti} PT</strong>
                       </div>
                     `
                   )

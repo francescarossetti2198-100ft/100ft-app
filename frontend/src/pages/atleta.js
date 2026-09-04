@@ -4,8 +4,10 @@
 // i post che ha pubblicato nel Feed. Sola lettura, niente dati privati.
 // Raggiunta con /atleta?id=<userId> (vedi frontend/src/router.js `currentQuery`).
 import { renderTabbar } from "../components/tabbar.js";
+import { renderPaginaCoach } from "../components/coach-shell.js";
 import { api, ApiError } from "../api.js";
 import { currentQuery, navigate } from "../router.js";
+import { getUser } from "../auth.js";
 import { fotoProfiloHtml, formatDataNascita } from "./profilo.js";
 import { badgeMensiliHtml } from "../badge-mensili.js";
 import { montaFeed } from "./feed.js";
@@ -14,21 +16,30 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 
 export function renderAtletaPubblico(appEl) {
+  const montaContenuto = (el) => {
+    el.innerHTML = `
+      <button type="button" class="link-btn" id="atleta-indietro" style="margin-bottom:16px">‹ Indietro</button>
+      <div id="atleta-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+    `;
+    el.querySelector("#atleta-indietro").addEventListener("click", () => {
+      if (window.history.length > 1) window.history.back();
+      else navigate("/feed");
+    });
+    caricaAtleta(el);
+  };
+
+  // La coach arriva qui dalla classifica / dal Feed della dashboard: le teniamo il menù ☰
+  // invece della tabbar da atleta.
+  if (getUser()?.role === "coach") {
+    renderPaginaCoach(appEl, { titolo: "Scheda atleta" }, montaContenuto);
+    return;
+  }
+
   const el = document.createElement("div");
   el.className = "screen";
-  el.innerHTML = `
-    <button type="button" class="link-btn" id="atleta-indietro" style="margin-bottom:16px">‹ Indietro</button>
-    <div id="atleta-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
-  `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
-
-  el.querySelector("#atleta-indietro").addEventListener("click", () => {
-    if (window.history.length > 1) window.history.back();
-    else navigate("/feed");
-  });
-
-  caricaAtleta(el);
+  montaContenuto(el);
 }
 
 async function caricaAtleta(el) {
