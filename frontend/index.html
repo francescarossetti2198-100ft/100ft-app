@@ -5,6 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0A0A" />
     <title>100FT — Functional Training</title>
+    <!-- Anteprima quando il link viene condiviso (WhatsApp, ecc.): il crawler non esegue JS,
+         legge questi tag statici. Il link porta comunque al Feed dell'app. -->
+    <meta name="description" content="Guarda cosa è successo oggi nel gruppo 100FT — sfide, livelli, allenamenti." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="100FT" />
+    <meta property="og:title" content="100FT — Feed" />
+    <meta property="og:description" content="Guarda cosa è successo oggi nel gruppo 100FT — sfide, livelli, allenamenti." />
+    <meta property="og:url" content="https://app.100-ft.com/#/feed" />
+    <meta property="og:image" content="https://app.100-ft.com/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+    <!-- Normalizza l'hostname con il punto finale ("app.100-ft.com." → "app.100-ft.com").
+         È un FQDN valido che i browser accettano, ma conta come origin diversa: da lì
+         ogni chiamata a api.100-ft.com fallisce il controllo CORS e l'app mostra
+         "Errore imprevisto". Redirect prima di qualsiasi altra cosa. -->
+    <script>
+      (function () {
+        if (location.hostname.endsWith(".")) {
+          location.replace(
+            location.protocol + "//" +
+              location.hostname.replace(/\.+$/, "") +
+              (location.port ? ":" + location.port : "") +
+              location.pathname + location.search + location.hash
+          );
+        }
+      })();
+    </script>
+    <!-- Applica il tema salvato (o quello di sistema) prima del primo paint, per non
+         mostrare un lampo del tema sbagliato al caricamento. Logica completa in src/theme.js. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("100ft-theme");
+          if (t !== "light" && t !== "dark") {
+            // Modalità "auto": buio dal crepuscolo all'alba (19:00–7:00), altrimenti
+            // chiaro — ma se il sistema preferisce lo scuro lo rispettiamo. Vedi src/theme.js.
+            var h = new Date().getHours();
+            var buio = h >= 19 || h < 7;
+            var sistemaScuro =
+              window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            t = buio || sistemaScuro ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = t;
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.content = t === "light" ? "#ffffff" : "#0A0A0A";
+        } catch (e) {}
+      })();
+    </script>
+    <!-- Icona "Aggiungi a Home" su iPhone: Safari usa questa, non le icons del manifest. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- Favicon nel tab del browser, chiara/scura secondo le preferenze di sistema — l'icona
+         salvata in Home su iPhone resta invece fissa (limite della piattaforma, non nostro). -->
+    <link rel="icon" href="/icons/favicon-dark.png" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/icons/favicon-light.png" media="(prefers-color-scheme: light)" />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"

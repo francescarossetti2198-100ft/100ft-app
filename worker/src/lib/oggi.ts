@@ -1,0 +1,67 @@
+// Tutto il calcolo di date/orari "adesso" nel Worker passa da qui e usa il fuso di ROMA
+// (Europe/Rome, con ora legale gestita da Intl). `adessoRoma()` restituisce un Date i cui
+// campi UTC (getUTCHours, getUTCDate, toISOString...) contengono l'ora di Roma: così il
+// resto del codice può continuare a usare i metodi `getUTC*` senza cambiare logica.
+// NB: è un Date "spostato", non va confrontato con `Date.now()` o con istanti reali —
+// solo con altri valori nello stesso frame (es. `${data}T${ora}:00Z` di orari salvati,
+// che sono già ora di Roma).
+export function adessoRoma(now: Date = new Date()): Date {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const g = (t: string) => Number(p.find((x) => x.type === t)?.value ?? "0");
+  return new Date(Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")));
+}
+
+export function oggi(): { data: string; giornoSettimana: number } {
+  const now = adessoRoma();
+  const data = now.toISOString().slice(0, 10);
+  const giornoSettimana = ((now.getUTCDay() + 6) % 7) + 1; // 1=lunedì ... 7=domenica
+  return { data, giornoSettimana };
+}
+
+// Mese di calendario precedente a "adesso" (il mese appena concluso) — usato dal
+// questionario mensile.
+export function mesePrecedente(now: Date = new Date()): { mese: number; anno: number } {
+  const r = adessoRoma(now);
+  const m = r.getUTCMonth(); // 0-11 = mese corrente; m (1-12) = mese precedente
+  return m === 0 ? { mese: 12, anno: r.getUTCFullYear() - 1 } : { mese: m, anno: r.getUTCFullYear() };
+}
+
+// La stagione 100FT parte a settembre 2026. Ad agosto (e nei mesi precedenti l'avvio) non
+// ci si allena, quindi il feedback mensile su quei mesi non va né chiesto né raccolto.
+export const PRIMO_MESE_STAGIONE = "2026-09";
+
+// Primo giorno di allenamento vero della stagione (lancio dell'app, 2026-09-02): i giorni
+// di test precedenti (agosto) non devono più comparire nei selettori data del coach.
+export const INIZIO_STAGIONE = "2026-09-02";
+
+export function meseFeedbackValido(mese: number, anno: number): boolean {
+  const ym = `${anno}-${String(mese).padStart(2, "0")}`;
+  return ym >= PRIMO_MESE_STAGIONE && mese !== 8; // agosto è sempre fuori stagione
+}
+
+export type SessioneOggi = { id: number; ora_inizio: string; ora_fine: string; tipo_sessione: string };
+
+// Festività / palestra chiusa: quella data non ha allenamento anche se cade su lun/mer/ven.
+export async function giornoChiuso(db: D1Database, data: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT 1 FROM giorni_chiusi WHERE data = ?`).bind(data).first();
+  return !!row;
+}
+
+export async function sessioneOggi(db: D1Database): Promise<SessioneOggi | null> {
+  const { data, giornoSettimana } = oggi();
+  if (await giornoChiuso(db, data)) return null; // oggi la palestra è chiusa
+  const sessione = await db
+    .prepare(`SELECT id, ora_inizio, ora_fine, tipo_sessione FROM sessioni_gruppo WHERE giorno_settimana = ?`)
+    .bind(giornoSettimana)
+    .first<SessioneOggi>();
+  return sessione ?? null;
+}

@@ -1,17 +1,193 @@
 import { renderTabbar } from "../components/tabbar.js";
-import { logout } from "../auth.js";
+import { logout, getUser } from "../auth.js";
 import { navigate } from "../router.js";
+import { api, ApiError, mediaUrl } from "../api.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria } from "../push.js";
+import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
+import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
+import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
+import { etichettaCategoria } from "../richieste-categorie.js";
+import { badgeMensiliHtml } from "../badge-mensili.js";
+import { initStatistiche } from "../statistiche.js";
+import { PIANI, pianoByKey, LEGENDA_GIORNI } from "../abbonamenti.js";
+import { COLORI_FOTO, STILI_FOTO, INTENSITA_FOTO, DEFAULT_FOTO_PERSONALIZZAZIONE, anelloWrapperStyle } from "../foto-ring.js";
+import { montaCampoVivo } from "../identita-campo.js";
 
-// TODO: stats, carosello carte-livello, dati pubblici vs privati, stato pagamento
-// (brief, sezione 8.6).
+// Stessa scala fissa delle 5 faccine di feedback usata in Home (frontend/src/pages/home.js) —
+// mai sostituita, stesso ordine.
+const FACCINA_EMOJI = { 1: "😫", 2: "😕", 3: "😐", 4: "🙂", 5: "🔥" };
+
+const DIFFICOLTA_LABEL = {
+  facile: "Facile",
+  giusto: "Giusto",
+  impegnativo: "Impegnativo",
+  tostissimo: "Tostissimo",
+};
+
+const MESI = [
+  "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+  "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+];
+
+// Testo libero scritto dall'atleta (note infortuni, nota feedback, ecc.): va inserito
+// nell'HTML come testo, non come markup.
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+export function formatDataNascita(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d || m > 12) return null;
+  return `${d} ${MESI[m - 1]} ${y}`;
+}
+
+// "12 set" da un timestamp SQLite "YYYY-MM-DD HH:MM:SS".
+function formatDataBreve(s) {
+  const m = String(s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${Number(m[3])} ${MESI[Number(m[2]) - 1]}` : "";
+}
+
+function calcolaEta(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const n = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(n.getTime())) return null;
+  const o = new Date();
+  let e = o.getFullYear() - n.getFullYear();
+  const mm = o.getMonth() - n.getMonth();
+  if (mm < 0 || (mm === 0 && o.getDate() < n.getDate())) e--;
+  return e >= 0 && e < 150 ? e : null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// "Obiettivi personali" — questionario a risposta guidata (mai testo libero).
+//
+// Per cambiare le domande basta riscrivere QUESTO array — salvataggio, riassunto e
+// rendering non cambiano. Ogni voce: { id, testo, tipo: "singola" | "multipla", max?,
+// opzioni: [{ v, label, emoji, esclusiva? }] }. L'emoji è il puntino d'elenco con cui la
+// risposta compare nella card. `esclusiva: true` = opzione che azzera le altre.
+// Risposte salvate: { [id]: "v" }  (singola)  |  { [id]: ["v1","v2"] }  (multipla).
+// ────────────────────────────────────────────────────────────────────────────
+const PERSONALIZZAZIONE_DOMANDE = [
+  {
+    id: "obiettivi",
+    testo: "Quali sono i tuoi obiettivi?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "forza", label: "Aumentare la massa muscolare", emoji: "💪" },
+      { v: "tonificare", label: "Tonificare il corpo", emoji: "🔥" },
+      { v: "resistenza", label: "Migliorare la resistenza", emoji: "🏃" },
+      { v: "mobilita", label: "Migliorare mobilità e movimento", emoji: "🧘" },
+      { v: "forma", label: "Sentirmi più in forma", emoji: "⚡" },
+      { v: "peso", label: "Perdere peso", emoji: "⚖️" },
+    ],
+  },
+  {
+    id: "migliorare",
+    testo: "Cosa vuoi migliorare?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "forza", label: "Forza", emoji: "🏋️" },
+      { v: "resistenza", label: "Resistenza", emoji: "🫁" },
+      { v: "mobilita", label: "Mobilità", emoji: "🤸" },
+      { v: "equilibrio", label: "Equilibrio", emoji: "⚖️" },
+      { v: "coordinazione", label: "Coordinazione", emoji: "🎯" },
+      { v: "core", label: "Core", emoji: "🔩" },
+      { v: "gambe", label: "Gambe e glutei", emoji: "🦵" },
+      { v: "upper", label: "Parte superiore del corpo", emoji: "💪" },
+    ],
+  },
+  {
+    id: "motivazione",
+    testo: "Cosa ti motiva a iniziare questo percorso?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "meglio", label: "Sentirmi meglio", emoji: "😊" },
+      { v: "cambiamenti", label: "Vedere dei cambiamenti", emoji: "🔎" },
+      { v: "energia", label: "Avere più energia", emoji: "⚡" },
+      { v: "forte", label: "Diventare più forte", emoji: "🏋️" },
+      { v: "forma", label: "Migliorare la forma fisica", emoji: "✨" },
+      { v: "cura", label: "Prendermi più cura di me", emoji: "💗" },
+      { v: "abitudine", label: "Creare una buona abitudine", emoji: "🔁" },
+    ],
+  },
+  {
+    id: "altri_sport",
+    testo: "Fai altro sport oltre a 100FT?",
+    tipo: "multipla",
+    opzioni: [
+      { v: "corsa", label: "Corsa / running", emoji: "🏃" },
+      { v: "yoga", label: "Yoga / pilates", emoji: "🧘" },
+      { v: "squadra", label: "Sport di squadra", emoji: "⚽" },
+      { v: "camminate", label: "Camminata / trekking", emoji: "🥾" },
+      { v: "ciclismo", label: "Ciclismo", emoji: "🚴" },
+      { v: "individuali", label: "Sport individuali (tennis, padel, ecc.)", emoji: "🎾" },
+      { v: "altro", label: "Altro", emoji: "➕" },
+      { v: "nessuno", label: "No, solo 100FT", emoji: "💯", esclusiva: true },
+    ],
+  },
+];
+
+// Gli obiettivi selezionati come elenco { emoji, label } — una riga per opzione scelta
+// (card "Obiettivi personali" sul profilo e sezione OBIETTIVI della scheda coach).
+function obiettiviElenco(answers) {
+  return elencoRisposte(PERSONALIZZAZIONE_DOMANDE, answers);
+}
+
+// TODO: dati pubblici vs privati, stato pagamento (brief, sezione 14) — servono la Coach
+// Dashboard e una decisione su come gestire i dati privati dell'atleta.
 export function renderProfilo(appEl) {
+  // La coach non ha più un tab Profilo: le sue impostazioni stanno nel menù ☰.
+  if (getUser()?.role === "coach") {
+    navigate("/coach/impostazioni");
+    return;
+  }
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
+    <style>
+      /* Colore scelto per l'anello della foto: tinge in modo tenue anche lo sfondo e il
+         bordo di tutte le schede del profilo (--accent è impostato in loadProfilo). */
+      #profilo-content.ha-colore .card {
+        background-color: color-mix(in srgb, var(--accent) 8%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+      }
+      /* Lineetta accento sotto il titolo della scheda "I tuoi dati" (il <summary> a
+         tendina non ha la barretta di .sezione-label). */
+      #profilo-content #dati-card > .blocco-mese > summary { position: relative; padding-bottom: 18px; }
+      #profilo-content #dati-card > .blocco-mese > summary::before {
+        content: ""; position: absolute; left: 0; bottom: 7px;
+        width: 26px; height: 3px; border-radius: 2px; background: var(--accent);
+      }
+      /* Luce stato abbonamento (card identità): rossa = non attivo, verde = attivo,
+         entrambe lampeggiano. Il <button> è un'area di tocco ampia e trasparente
+         (l'area minima consigliata su mobile); il pallino visibile è lo ::before,
+         centrato. z-index alto perché #identita-vista (z-index:1) la copre. */
+      #profilo-content .abbonamento-luce {
+        z-index: 4;
+        display: flex; align-items: center; justify-content: center;
+        background: none; box-shadow: none;
+      }
+      #profilo-content .abbonamento-luce::before {
+        content: ""; width: 13px; height: 13px; border-radius: 50%;
+        background: #ef4444; box-shadow: 0 0 7px #ef4444;
+        animation: abb-pulse 1.3s ease-in-out infinite;
+      }
+      #profilo-content .abbonamento-luce.attivo::before {
+        background: #22c55e; box-shadow: 0 0 7px #22c55e;
+      }
+      @keyframes abb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+      @media (prefers-reduced-motion: reduce) {
+        #profilo-content .abbonamento-luce::before { animation: none; }
+      }
+      /* Sotto-sezioni della Performance ("Parte bassa" / "Upper body"): ognuna a tendina,
+         titolo più grande delle altre etichette a tendina del profilo. */
+      #profilo-content .perf-cat > summary { font-size: 15px; padding: 13px 0; }
+      #profilo-content .perf-cat:first-of-type { border-top: none; }
+      #profilo-content .perf-cat > .blocco-corpo { padding-bottom: 4px; }
+    </style>
     <h1>Profilo</h1>
-    <div class="card">
-      <p class="mono" style="color:var(--mute)">Stats, carte-livello e pagamenti arrivano qui.</p>
-    </div>
+    <div id="profilo-content"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     <button class="btn" id="logout-btn" style="margin-top:20px">Esci</button>
   `;
   appEl.appendChild(el);
@@ -21,4 +197,1507 @@ export function renderProfilo(appEl) {
     await logout();
     navigate("/login");
   });
+
+  loadProfilo(el);
+}
+
+function giorniFa(dataIso) {
+  const giorni = Math.round((Date.now() - new Date(`${dataIso}T00:00:00Z`).getTime()) / 86400000);
+  if (giorni === 0) return "oggi";
+  if (giorni === 1) return "ieri";
+  return `${giorni}gg fa`;
+}
+
+// Interruttore pagamento del mese corrente — grande e tappabile, in cima alla scheda
+// atleta: per la coach segnare "pagato / non pagato" è l'azione più frequente e va fatta
+// al volo appena apre il profilo.
+function pagamentoBadgeHtml(userId, stato) {
+  const pagato = stato === "pagato";
+  const colore = pagato ? "var(--livello-1)" : "var(--livello-5)";
+  return `
+    <button type="button" class="pagamento-toggle" data-user-id="${userId}" data-stato="${stato}"
+      style="margin-top:12px; width:100%; padding:11px 14px; border-radius:10px; cursor:pointer;
+             border:1px solid ${colore}; background:color-mix(in srgb, ${colore} 14%, transparent);
+             color:${colore}; font-family:var(--font-mono); font-size:13px; font-weight:700; letter-spacing:1px">
+      <span class="pagamento-label">${pagato ? "✓ ABBONAMENTO PAGATO" : "ABBONAMENTO DA PAGARE"}</span>
+    </button>
+    <p class="mono" style="color:var(--mute); font-size:11px; margin-top:4px; text-align:center">
+      Mese corrente · tocca per cambiare
+    </p>
+  `;
+}
+
+// Riga abbonamento nella scheda coach: piano + prezzo (lo vede solo la coach) e un
+// <select> per correggere il piano fatturato questo mese.
+function abbonamentoCoachHtml(userId, abb) {
+  const pl = abb?.piano ? pianoByKey(abb.piano) : null;
+  const colore = pl?.colore ?? "var(--mute)";
+  return `
+    <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border)">
+      <p class="mono" style="font-size:12px">
+        <span style="color:var(--mute)">ABBONAMENTO</span>
+        <span style="color:${colore}; font-weight:700; letter-spacing:1px"> ${abb?.nomePiano ?? "—"}</span>
+        ${abb?.prezzo != null ? `<span> · ${abb.prezzo} €</span>` : ""}
+        ${abb?.nomePianoProssimo ? `<span style="color:var(--mute)"> → ${abb.nomePianoProssimo} dal mese prossimo</span>` : ""}
+      </p>
+      <label class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:6px">Piano fatturato questo mese</label>
+      <select class="abb-piano-coach" data-user-id="${userId}"
+        style="margin-top:4px; width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-family:inherit; font-size:14px">
+        ${PIANI.map((x) => `<option value="${x.key}"${x.key === abb?.piano ? " selected" : ""}>${x.nome} · ${x.prezzo} €</option>`).join("")}
+      </select>
+    </div>`;
+}
+
+// Blocco foto profilo — usato sia dall'atleta sia dalla coach (il backend accetta la foto
+// per entrambi, e compare in classifica accanto al nome). L'input è nascosto visivamente
+// invece che con l'attributo `hidden`: su iOS Safari un file input con `hidden` a volte non
+// apre il selettore quando viene attivato dalla label.
+export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true, personalizzazione = null, dimensione = 84) {
+  const anello = anelloWrapperStyle(personalizzazione);
+  const bordoNeutro = anello ? "" : "border:2px solid var(--border);";
+  const segnaposto = (display) =>
+    `<span style="display:${display}; width:${dimensione}px; height:${dimensione}px; border-radius:50%; background:var(--surface-2); align-items:center; justify-content:center; font-size:${Math.round(dimensione * 0.33)}px; color:var(--mute)">${iniziale}</span>`;
+  const media = fotoUrl
+    ? // Se il file non c'è più su R2 (foto orfana) l'<img> fallisce: mostra il segnaposto.
+      `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+         style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; object-fit:cover; display:block; ${bordoNeutro}" />${segnaposto("none")}`
+    : segnaposto("flex");
+  const mediaConAnello = anello
+    ? `<span style="display:inline-flex; border-radius:50%; vertical-align:middle; ${anello}">${media}</span>`
+    : media;
+
+  // Fuori dalla modalità modifica: solo la foto, sempre centrata. `display:flex` e non
+  // `text-align:center` perché senza anello la foto è un <img display:block> (che
+  // ignorerebbe text-align e resterebbe a sinistra).
+  if (!modifica) return `<div style="display:flex; justify-content:center">${mediaConAnello}</div>`;
+
+  // Una volta scelta una foto, si cambia toccando la foto stessa — niente più didascalia
+  // "Cambia foto" a fare da doppione. Resta solo "Aggiungi una foto" quando non c'è ancora.
+  return `
+    <div style="text-align:center">
+      <label for="foto-input" style="cursor:pointer; display:inline-block">
+        ${mediaConAnello}
+        ${fotoUrl ? "" : `<p class="mono link-btn" style="margin-top:6px; font-size:12px">Aggiungi una foto</p>`}
+      </label>
+      <input id="foto-input" type="file" accept="image/*"
+             style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden" />
+      <p class="error-text" id="foto-error" hidden style="margin-top:4px"></p>
+    </div>
+  `;
+}
+
+export function attachFotoUpload(container, onDone) {
+  const input = container.querySelector("#foto-input");
+  if (!input) return;
+  input.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const errorEl = container.querySelector("#foto-error");
+    errorEl.hidden = true;
+    try {
+      const formData = new FormData();
+      formData.append("foto", file);
+      await api.postForm("/profilo/foto", formData);
+      onDone();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    }
+  });
+}
+
+// PROFILI (tab Profilo della coach): elenco atleti navigabile. Toccando un atleta si apre
+// la sua scheda completa — anagrafica privata, obiettivi dal questionario, feedback e
+// sfide recenti, presenze, pagamento, reset password. La coach non si allena, quindi qui
+// niente livello/scala/achievements suoi.
+// Elenco atleti + scheda del singolo. Usato dalla pagina coach "Atleti" (menù ☰).
+export function montaElencoAtleti(content) {
+  renderProfiloCoach(content, null, null, { soloElenco: true });
+}
+
+function renderProfiloCoach(content, p, onFotoCaricata, opts = {}) {
+  let atletaAperto = null;
+
+  function render() {
+    if (atletaAperto == null) renderLista();
+    else renderDettaglio(atletaAperto);
+  }
+
+  function renderLista() {
+    const testataCoach = opts.soloElenco
+      ? ""
+      : `
+        <div class="card" style="margin-bottom:12px">${fotoProfiloHtml(p?.fotoUrl, "C")}</div>
+        <div class="card" style="margin-bottom:12px">
+          <details class="blocco-mese" id="notifiche-card">
+            <summary>Notifiche push</summary>
+            <div class="blocco-corpo">
+              <p class="mono" style="color:var(--mute); font-size:12px; margin-bottom:8px">Ricevi la notifica per fare l'appello a fine allenamento.</p>
+              <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+            </div>
+          </details>
+        </div>
+        <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px">PROFILI ATLETI</p>`;
+    content.innerHTML = `
+      ${testataCoach}
+      <div class="card" style="margin-top:10px" id="atleti-list"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+    `;
+    if (!opts.soloElenco) {
+      attachFotoUpload(content, onFotoCaricata ?? (() => {}));
+      initNotifiche(content);
+    }
+
+    const list = content.querySelector("#atleti-list");
+    api
+      .get("/atleti")
+      .then(({ atleti }) => {
+        if (!atleti.length) {
+          list.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessun atleta ancora.</p>`;
+          return;
+        }
+        list.innerHTML = atleti
+          .map((a, i) => {
+            const nome = a.nickname || `${a.nome} ${a.cognome}`.trim();
+            const livelloHtml = a.livello
+              ? `<span class="mono" style="color:${a.livello.attuale.colore}">Livello ${a.livello.attuale.numero}</span>`
+              : `<span class="mono" style="color:var(--mute)">Nessun livello</span>`;
+            const feedbackHtml = a.ultimoFeedback
+              ? `${FACCINA_EMOJI[a.ultimoFeedback.faccina]} · ${giorniFa(a.ultimoFeedback.data)}`
+              : "Nessun feedback";
+            return `
+              <button type="button" class="atleta-riga" data-user-id="${a.userId}"
+                style="display:block; width:100%; text-align:left; background:none; border:none;
+                       ${i === 0 ? "" : "border-top:1px solid var(--border);"} padding:12px 0;
+                       color:inherit; font-family:inherit; cursor:pointer">
+                <span style="display:flex; justify-content:space-between; align-items:baseline">
+                  <span style="font-size:14px; font-weight:600">${esc(nome)}</span>
+                  ${livelloHtml}
+                </span>
+                <span class="mono" style="color:var(--mute); font-size:12px; display:block; margin-top:4px">
+                  ${a.nomePiano ? `${a.nomePiano} · ` : ""}${a.presenzeUltime4Settimane} presenze (28gg) · ${feedbackHtml}
+                </span>
+              </button>
+            `;
+          })
+          .join("");
+
+        list.querySelectorAll(".atleta-riga").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            atletaAperto = Number(btn.dataset.userId);
+            render();
+          });
+        });
+      })
+      .catch((err) => {
+        list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      });
+  }
+
+  function renderDettaglio(userId) {
+    content.innerHTML = `
+      <button type="button" class="link-btn" id="torna-lista">‹ Torna ai profili</button>
+      <div id="scheda" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+    `;
+    content.querySelector("#torna-lista").addEventListener("click", () => {
+      atletaAperto = null;
+      render();
+    });
+
+    const scheda = content.querySelector("#scheda");
+    api
+      .get(`/atleti/${userId}`)
+      .then((d) => {
+        scheda.innerHTML = schedaAtletaHtml(d);
+        initSchedaAzioni(scheda);
+      })
+      .catch((err) => {
+        scheda.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      });
+  }
+
+  render();
+}
+
+function schedaAtletaHtml(d) {
+  const a = d.anagrafica;
+  const dp = d.datiPrivati;
+  const at = d.attivita;
+  const nome = a.nickname || `${a.nome} ${a.cognome}`.trim();
+  const nomeCompleto = `${a.nome} ${a.cognome}`.trim();
+  const dn = formatDataNascita(a.dataNascita);
+
+  const riga = (label, val) => `
+    <div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--border)">
+      <span class="mono" style="color:var(--mute); font-size:13px">${label}</span>
+      <span style="font-size:14px; text-align:right">${val ?? "—"}</span>
+    </div>`;
+
+  const obiettivi = obiettiviElenco(dp.personalizzazione);
+
+  const feedbackHtml = at.feedbackRecenti.length
+    ? at.feedbackRecenti
+        .map(
+          (f) => `
+            <div style="display:flex; align-items:baseline; gap:8px; padding:6px 0; border-top:1px solid var(--border)">
+              <span style="font-size:18px">${FACCINA_EMOJI[f.faccina] ?? "•"}</span>
+              <span class="mono" style="font-size:12px; color:var(--mute)">
+                ${f.difficolta ? `${DIFFICOLTA_LABEL[f.difficolta] ?? f.difficolta} · ` : ""}${giorniFa(f.data)}
+              </span>
+              ${f.nota ? `<span style="font-size:12px">— ${esc(f.nota)}</span>` : ""}
+            </div>`
+        )
+        .join("")
+    : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun feedback.</p>`;
+
+  const sfideHtml = at.sfideFatte.length
+    ? at.sfideFatte
+        .map(
+          (s) => `
+            <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border)">
+              <span style="font-size:13px">${esc(s.titolo)}</span>
+              <span class="mono" style="color:var(--mute); font-size:12px; white-space:nowrap">${giorniFa(s.data)}${s.punti ? ` · +${s.punti}` : ""}</span>
+            </div>`
+        )
+        .join("")
+    : `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna sfida completata.</p>`;
+
+  const richiesteHtml = at.richiesteRecenti.length
+    ? at.richiesteRecenti
+        .map(
+          (r) =>
+            `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${esc(
+              r.categoria ? etichettaCategoria(r.categoria) : r.testoLibero ?? ""
+            )} · ${giorniFa(r.data)}</p>`
+        )
+        .join("")
+    : `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna richiesta recente.</p>`;
+
+  const feedbackMensileHtml = (at.feedbackMensile ?? []).length
+    ? at.feedbackMensile
+        .map((fm) => {
+          const righe = riassuntoRisposte(FEEDBACK_MENSILE_DOMANDE, fm.risposte);
+          return `
+            <div style="padding:8px 0; border-top:1px solid var(--border)">
+              <p class="mono" style="font-size:12px; color:var(--mute)">${MESI[fm.mese - 1]?.toUpperCase()} ${fm.anno}</p>
+              ${
+                righe.length
+                  ? righe
+                      .map(
+                        (r) =>
+                          `<p style="font-size:13px; margin-top:4px">${esc(r.testo)}<br><span style="color:var(--accent)">${esc(r.risposta)}</span></p>`
+                      )
+                      .join("")
+                  : `<p class="mono" style="font-size:12px; color:var(--mute); margin-top:4px">Nessuna risposta.</p>`
+              }
+            </div>`;
+        })
+        .join("")
+    : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun feedback mensile.</p>`;
+
+  const performanceHtml = (at.performance ?? []).length
+    ? at.performance
+        .map(
+          (r) => `
+            <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border)">
+              <span style="font-size:13px">${esc(r.esercizio)}</span>
+              <span class="mono" style="color:var(--mute); font-size:12px; white-space:nowrap">${r.peso} kg · ${formatDataBreve(r.data)}</span>
+            </div>`
+        )
+        .join("")
+    : null;
+
+  const livelloBadge = at.livello
+    ? `<span class="mono" style="color:${at.livello.attuale.colore}; font-size:12px">Livello ${at.livello.attuale.numero} — ${at.livello.attuale.nome}</span>`
+    : `<span class="mono" style="color:var(--mute); font-size:12px">Nessun livello</span>`;
+
+  const avatar = a.fotoUrl
+    ? `<img src="${mediaUrl(a.fotoUrl)}" alt="" style="width:54px; height:54px; border-radius:50%; object-fit:cover; flex-shrink:0" />`
+    : `<span style="width:54px; height:54px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--mute); flex-shrink:0">${(nome[0] ?? "?").toUpperCase()}</span>`;
+
+  return `
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:12px">
+        ${avatar}
+        <div style="min-width:0">
+          <p style="font-weight:700; font-size:17px">${esc(nome)}</p>
+          ${nomeCompleto && nomeCompleto !== nome ? `<p class="mono" style="color:var(--mute); font-size:12px">${esc(nomeCompleto)}</p>` : ""}
+          <p style="margin-top:2px">${livelloBadge}</p>
+        </div>
+      </div>
+      ${pagamentoBadgeHtml(d.userId, at.pagamentoMese)}
+      ${abbonamentoCoachHtml(d.userId, at.abbonamento)}
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">ANAGRAFICA</p>
+      <div style="margin-top:6px">
+        ${riga("Data di nascita", dn ? `${dn}${a.eta != null ? ` · ${a.eta} anni` : ""}` : null)}
+        ${riga("Iscritto dal", formatDataNascita(a.dataIscrizione))}
+        ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
+        ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
+        ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">OBIETTIVI</p>
+      ${
+        obiettivi.length
+          ? `<ul style="list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:5px">${obiettivi
+              .map((o) => `<li style="font-size:14px">${o.emoji} ${esc(o.label)}</li>`)
+              .join("")}</ul>`
+          : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px">Non ha ancora indicato i suoi obiettivi.</p>`
+      }
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">ATTIVITÀ</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${at.presenzeTotali} presenze totali · ${at.presenzeUltime4Settimane} negli ultimi 28 giorni</p>
+      <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin-top:12px">FEEDBACK RECENTI</p>
+      <div style="margin-top:4px">${feedbackHtml}</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">SFIDE FATTE</p>
+      <div style="margin-top:6px">${sfideHtml}</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">RICHIESTE RECENTI</p>
+      <div style="margin-top:6px">${richiesteHtml}</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">FEEDBACK MENSILE</p>
+      <div style="margin-top:2px">${feedbackMensileHtml}</div>
+    </div>
+
+    ${
+      performanceHtml
+        ? `<div class="card" style="margin-top:12px">
+             <p class="mono" style="color:var(--mute); font-size:12px">PERFORMANCE</p>
+             <div style="margin-top:6px">${performanceHtml}</div>
+           </div>`
+        : ""
+    }
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">BADGE</p>
+      <div style="margin-top:10px">${badgeMensiliHtml(at.badgeMensili)}</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:12px">GESTIONE</p>
+      <div style="margin-top:10px">
+        <label class="mono" style="display:block; color:var(--mute); font-size:11px; letter-spacing:1px; margin-bottom:6px" for="iscrizione-data-${d.userId}">
+          DATA DI ISCRIZIONE
+        </label>
+        <div style="display:flex; gap:8px">
+          <input type="date" id="iscrizione-data-${d.userId}" class="iscrizione-data" data-user-id="${d.userId}" value="${a.dataIscrizione ?? ""}"
+            style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-family:inherit; font-size:14px" />
+          <button type="button" class="btn iscrizione-salva" data-user-id="${d.userId}" style="width:auto; padding:8px 16px">Salva</button>
+        </div>
+        <p class="error-text iscrizione-error" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px"></p>
+        <p class="success-text iscrizione-ok" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px">Salvata ✓</p>
+      </div>
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+        <button type="button" class="link-btn reset-password-btn" data-user-id="${d.userId}" data-nome="${esc(nome).replace(/"/g, "&quot;")}"
+          style="text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+          RESET PASSWORD
+        </button>
+      </div>
+      <div class="reset-password-esito" data-user-id="${d.userId}" style="margin-top:6px"></div>
+    </div>
+  `;
+}
+
+function initSchedaAzioni(scheda) {
+  scheda.querySelectorAll(".pagamento-toggle").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const pagato = btn.dataset.stato === "pagato";
+      const nuovoStato = pagato ? "non_pagato" : "pagato";
+      btn.disabled = true;
+      try {
+        await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovoStato });
+        // Aggiornamento in loco: la coach vede subito l'esito, senza ricaricare la scheda.
+        const oraPagato = nuovoStato === "pagato";
+        const col = oraPagato ? "var(--livello-1)" : "var(--livello-5)";
+        btn.dataset.stato = oraPagato ? "pagato" : "non_pagato";
+        btn.style.borderColor = col;
+        btn.style.background = `color-mix(in srgb, ${col} 14%, transparent)`;
+        btn.style.color = col;
+        btn.querySelector(".pagamento-label").textContent = oraPagato
+          ? "✓ ABBONAMENTO PAGATO"
+          : "ABBONAMENTO DA PAGARE";
+      } catch {
+        // errore silenzioso: lo stato resta quello di prima
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  scheda.querySelectorAll(".abb-piano-coach").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      sel.disabled = true;
+      try {
+        await api.post("/pagamenti", { userId: Number(sel.dataset.userId), piano: sel.value });
+      } catch {
+        // silenzioso
+      }
+      sel.disabled = false;
+    });
+  });
+
+  scheda.querySelectorAll(".iscrizione-salva").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = Number(btn.dataset.userId);
+      const input = scheda.querySelector(`.iscrizione-data[data-user-id="${userId}"]`);
+      const errorEl = scheda.querySelector(`.iscrizione-error[data-user-id="${userId}"]`);
+      const okEl = scheda.querySelector(`.iscrizione-ok[data-user-id="${userId}"]`);
+      errorEl.hidden = true;
+      okEl.hidden = true;
+      btn.disabled = true;
+      try {
+        await api.post(`/atleti/${userId}/iscrizione`, { dataIscrizione: input.value || null });
+        okEl.hidden = false;
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  scheda.querySelectorAll(".reset-password-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = Number(btn.dataset.userId);
+      if (!confirm(`Reimpostare la password di ${btn.dataset.nome}? Verrà disconnesso da tutti i dispositivi.`)) return;
+      const esito = scheda.querySelector(`.reset-password-esito[data-user-id="${userId}"]`);
+      btn.disabled = true;
+      try {
+        const { passwordTemporanea } = await api.post(`/atleti/${userId}/reset-password`);
+        esito.innerHTML = `
+          <p class="mono" style="font-size:12px; color:var(--text)">
+            Password temporanea: <strong style="letter-spacing:1px">${passwordTemporanea}</strong>
+          </p>
+          <p class="mono" style="font-size:11px; color:var(--mute); margin-top:2px">
+            Comunicagliela: potrà cambiarla dal suo Profilo → Sicurezza.
+          </p>
+        `;
+      } catch (err) {
+        esito.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ─── Card "IMPOSTAZIONI" (in fondo al profilo): Notifiche push, Sicurezza,
+// Regolamento — ognuna a tendina — più il pulsante Esci. ───────────────────────
+
+// I 6 livelli con nome, colore e numero di allenamenti necessari per raggiungerli.
+// Tenere allineato a worker/src/lib/livelli.ts (LIVELLI).
+const LIVELLI_REGOLAMENTO = [
+  { numero: 1, nome: "Starter", colore: "#8BC53F", allenamentiMin: 3 },
+  { numero: 2, nome: "Principiante", colore: "#2D7DD2", allenamentiMin: 18 },
+  { numero: 3, nome: "Intermedio", colore: "#F4B740", allenamentiMin: 36 },
+  { numero: 4, nome: "Avanzato", colore: "#FF7A29", allenamentiMin: 60 },
+  { numero: 5, nome: "Esperto", colore: "#E63946", allenamentiMin: 75 },
+  { numero: 6, nome: "Leggendario", colore: "#A85CFF", allenamentiMin: 90 },
+];
+
+function livelliRegolamentoHtml() {
+  // La card del livello 1 si vede, quelle da 2 a 6 restano sfocate: la grafica è
+  // una sorpresa che si svela salendo di livello.
+  return `
+    <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 0 4px; margin-top:4px">
+      ${LIVELLI_REGOLAMENTO.map(
+        (l) => `
+        <div style="flex:0 0 auto; width:92px; text-align:center">
+          <img src="/cards/card_final_${l.numero}.png" alt="Livello ${l.numero} — ${l.nome}"
+               style="width:92px; height:92px; object-fit:contain${l.numero >= 2 ? "; filter:blur(6px)" : ""}" />
+          <p style="font-weight:700; font-size:12px; margin-top:4px; color:${l.colore}">${l.numero}. ${l.nome}</p>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:1px">da ${l.allenamentiMin} allenamenti</p>
+        </div>`
+      ).join("")}
+    </div>`;
+}
+
+// Come funziona l'app, in breve. Bozza: Francesca può ritoccare i testi.
+// Ogni voce: { titolo, corpo, extra? } — `extra` è HTML già pronto, appeso sotto al corpo.
+const REGOLAMENTO = [
+  {
+    titolo: "Presenze",
+    corpo:
+      "In Home prenoti la presenza il giorno dell'allenamento («CI SONO»). A fine sessione la coach fa l'appello e conferma chi c'era davvero: solo allora la presenza è valida e prendi i punti.",
+  },
+  {
+    titolo: "Quali allenamenti contano",
+    corpo:
+      "Per punti, livelli e sfide valgono solo gli allenamenti di funzionale del lunedì, mercoledì e venerdì. Il core & stretching del martedì e i corsi in palestra puoi farli, ma non danno punti e non contano per le sfide di presenza: nelle sfide sono aperte solo le lezioni di funzionale.",
+  },
+  {
+    titolo: "Anelli di riepilogo",
+    corpo:
+      "In Home ci sono tre anelli: Allenamenti, Sfide e Feedback. Sono solo un riepilogo di quello che hai fatto nella settimana, non incidono sul livello.",
+  },
+  {
+    titolo: "Classifica",
+    corpo:
+      "Nella pagina Sfide c'è la classifica per settimana, mese e totale. I punti arrivano dalle attività che fai (vedi «Sistema di punteggio»). La freccia accanto ai punti segna il tuo ultimo sorpasso: verde ▲ quando superi qualcuno per punti, rossa ▼ quando ti superano, con quante posizioni hai guadagnato o perso rispetto a prima di quel sorpasso. Il confronto è con la tua posizione precedente, non con la settimana o il mese scorso, e la freccia resta finché la tua posizione non cambia di nuovo.",
+  },
+  {
+    titolo: "Sistema di punteggio",
+    corpo:
+      "I punti alimentano la classifica (settimana, mese, totale). Quanto vale ogni attività:",
+    extra: `
+      <ul style="list-style:none; padding:0; margin:8px 0 0; display:flex; flex-direction:column; gap:6px">
+        <li class="mono" style="font-size:13px">🏋️ Presenza confermata dalla coach — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">🏅 Tutte le sfide del mese completate — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">💧 Daily Drop — <strong>+5 punti</strong></li>
+        <li class="mono" style="font-size:13px">💬 Feedback dopo l'allenamento — <strong>+2 punti</strong></li>
+        <li class="mono" style="font-size:13px">🗒️ Questionario del mese — <strong>+15 punti</strong></li>
+      </ul>
+      <p style="font-size:13px; margin-top:12px">
+        <strong>💧 Daily Drop</strong> — ogni tanto, in un giorno di allenamento, a un'ora
+        a sorpresa arriva una notifica: lo scopo è ricordarti di bere. Fermati, bevi un
+        sorso d'acqua e condividi la foto del momento. Non capita tutti i giorni; se
+        rispondi prendi +5 punti.
+      </p>`,
+  },
+  {
+    titolo: "Livelli",
+    corpo:
+      "Ci sono 6 livelli. Si sale in base al numero di allenamenti fatti (presenze confermate dalla coach) — non serve farli di fila, conta quanti in totale. La card del livello e la scala sono nel Profilo.",
+    extra: livelliRegolamentoHtml(),
+  },
+  {
+    titolo: "Badge",
+    corpo:
+      "I badge di stagione (autunno e primavera) si sbloccano completando le sfide del periodo. Li trovi nella card «I tuoi badge».",
+  },
+  {
+    titolo: "Programma",
+    corpo:
+      "Ogni mese la coach pubblica il programma: focus del mese, obiettivo, perché, risultato atteso, sane abitudini e le merende fit. I mesi futuri restano bloccati finché non è il loro turno.",
+  },
+  {
+    titolo: "Feed",
+    corpo:
+      "Il diario del gruppo: livelli raggiunti, sfide, Daily Drop, annunci della coach. Puoi reagire ai post con le emoji, niente commenti.",
+  },
+  {
+    titolo: "Obiettivi personali",
+    corpo:
+      "Rispondi a qualche domanda guidata sui tuoi obiettivi: la coach li vede e tara il lavoro su di te. Puoi rivederli quando vuoi dalla card «Obiettivi personali».",
+  },
+];
+
+function regolamentoHtml() {
+  return REGOLAMENTO.map(
+    (r) => `
+      <div style="padding:8px 0; border-top:1px solid var(--border)">
+        <p style="font-weight:700; font-size:13px">${r.titolo}</p>
+        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:3px; line-height:1.5">${r.corpo}</p>
+        ${r.extra ?? ""}
+      </div>`
+  ).join("");
+}
+
+// ─── Card "ABBONAMENTI" (vista atleta): sceglie il piano tra i 6. Niente prezzo —
+// quello lo vede solo la coach. Il cambio vale dal mese successivo. ───
+function abbonamentoStato(p) {
+  const attuale = p.abbonamento?.piano ?? null;
+  const prossimoRaw = p.abbonamento?.pianoProssimo ?? null;
+  // Un "prossimo" uguale all'attuale = nessun cambio in sospeso (es. cambio annullato).
+  const prossimo = prossimoRaw && prossimoRaw !== attuale ? prossimoRaw : null;
+  const mostrato = prossimo ?? attuale; // il piano che vale "d'ora in avanti"
+  return { attuale, prossimo, mostrato };
+}
+
+function abbonamentoCardHtml(p) {
+  const { attuale, prossimo, mostrato } = abbonamentoStato(p);
+  const nomeDi = (k) => (k ? pianoByKey(k)?.nome ?? k : null);
+  // Con un piano già scelto la card è chiusa: si vede solo quello che vale ora, gli altri
+  // compaiono toccando "Cambia piano".
+  const collassa = !!attuale;
+
+  const pillHtml = (pl) => {
+    const on = pl.key === mostrato;
+    const nascosta = collassa && !on;
+    const tag = on
+      ? pl.key === prossimo
+        ? ` <span class="mono" style="font-size:10px; color:${pl.colore}">· DAL MESE PROSSIMO</span>`
+        : ` <span class="mono" style="font-size:10px; color:${pl.colore}">· ATTUALE</span>`
+      : "";
+    return `
+      <button type="button" class="abb-pill" data-key="${pl.key}"${nascosta ? " hidden" : ""}
+        style="text-align:left; padding:10px 12px; border-radius:10px; cursor:pointer; font-family:inherit;
+               border:1px solid ${on ? pl.colore : "var(--border)"};
+               background:${on ? `color-mix(in srgb, ${pl.colore} 12%, transparent)` : "var(--surface-2)"}; color:var(--text)">
+        <span style="font-weight:700; letter-spacing:1px; color:${pl.colore}">${pl.nome}</span>${tag}
+        <span class="mono" style="display:block; color:var(--mute); font-size:11px; margin-top:2px">${pl.giorni}</span>
+      </button>`;
+  };
+
+  let info;
+  if (!attuale) info = "Scegli il tuo piano per iniziare.";
+  else if (prossimo)
+    info = `Ora sei su <strong>${nomeDi(attuale)}</strong>. Dal mese prossimo passi a <strong>${nomeDi(prossimo)}</strong> — tocca ${nomeDi(attuale)} per annullare.`;
+  else info = "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo.";
+
+  return `
+    <div class="card" style="margin-top:12px" id="abbonamento-card">
+      <p class="sezione-label">Abbonamenti</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${LEGENDA_GIORNI}</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px">${info}</p>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px">
+        ${PIANI.map(pillHtml).join("")}
+      </div>
+      ${
+        collassa
+          ? `<button type="button" class="link-btn" id="abb-cambia" style="margin-top:8px">Cambia piano ▾</button>
+             <button type="button" class="link-btn" id="abb-chiudi" hidden style="margin-top:8px">Chiudi ▴</button>`
+          : ""
+      }
+      <details style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
+        <summary class="mono" style="cursor:pointer; color:var(--accent); font-size:12px; letter-spacing:1px; list-style:none">
+          Info e costi abbonamenti ▾
+        </summary>
+        <div style="margin-top:10px">
+          <button type="button" id="abb-volantino"
+            style="display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:8px;
+                   background:#fff; cursor:zoom-in; overflow:hidden">
+            <img src="/abbonamenti-info.jpg" alt="100FT — Lezioni settimanali e abbonamenti"
+                 style="width:100%; display:block" />
+          </button>
+          <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
+            Tocca l'immagine per ingrandirla.
+          </p>
+        </div>
+      </details>
+    </div>`;
+}
+
+// Volantino "Info e costi abbonamenti" a schermo intero, DENTRO l'app (niente tab nuova:
+// così si torna indietro con "✕ Chiudi" o Esc, senza uscire dalla PWA).
+function apriVolantinoAbbonamenti() {
+  const ov = document.createElement("div");
+  ov.style.cssText =
+    "position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; flex-direction:column";
+  ov.innerHTML = `
+    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:14px 16px; border-bottom:1px solid var(--border)">
+      <span class="mono" style="font-size:12px; letter-spacing:1px; color:var(--mute)">INFO E COSTI ABBONAMENTI</span>
+      <button type="button" class="btn" id="vol-chiudi"
+        style="width:auto; padding:6px 14px; background:var(--surface-2); color:var(--text)">✕ Chiudi</button>
+    </div>
+    <div style="flex:1; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff">
+      <img src="/abbonamenti-info.jpg" alt="100FT — Lezioni settimanali e abbonamenti"
+           style="display:block; width:100%; min-width:760px" />
+    </div>`;
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") chiudi();
+  };
+  ov.querySelector("#vol-chiudi").addEventListener("click", chiudi);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(ov);
+}
+
+function initAbbonamento(content, p, onSaved) {
+  const card = content.querySelector("#abbonamento-card");
+  if (!card) return;
+  const { attuale, prossimo, mostrato } = abbonamentoStato(p);
+  const nomeDi = (k) => pianoByKey(k)?.nome ?? k;
+
+  card.querySelector("#abb-volantino")?.addEventListener("click", apriVolantinoAbbonamenti);
+
+  const cambia = card.querySelector("#abb-cambia");
+  const chiudi = card.querySelector("#abb-chiudi");
+  const pills = [...card.querySelectorAll(".abb-pill")];
+  if (cambia && chiudi) {
+    cambia.addEventListener("click", () => {
+      pills.forEach((b) => (b.hidden = false));
+      cambia.hidden = true;
+      chiudi.hidden = false;
+    });
+    chiudi.addEventListener("click", () => {
+      pills.forEach((b) => (b.hidden = b.dataset.key !== mostrato));
+      chiudi.hidden = true;
+      cambia.hidden = false;
+    });
+  }
+
+  pills.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const key = btn.dataset.key;
+      if (key === mostrato) return; // è già il piano che vale d'ora in avanti
+      const msg =
+        key === attuale && prossimo
+          ? `Annulli il passaggio a ${nomeDi(prossimo)} e resti su ${nomeDi(attuale)}?`
+          : attuale
+            ? `Passi al piano ${nomeDi(key)} dal mese prossimo?`
+            : `Scegli il piano ${nomeDi(key)}?`;
+      if (!confirm(msg)) return;
+      btn.disabled = true;
+      try {
+        await api.post("/abbonamento", { piano: key });
+        onSaved();
+      } catch (err) {
+        alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function impostazioniCardHtml() {
+  return `
+    <div class="card" style="margin-top:12px" id="impostazioni-card">
+      <p class="sezione-label">Impostazioni</p>
+      <div style="margin-top:10px">
+        <details class="blocco-mese" id="notifiche-card">
+          <summary>Notifiche push</summary>
+          <div class="blocco-corpo">
+            <div id="notifiche-stato"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
+          </div>
+        </details>
+        <details class="blocco-mese" id="sicurezza-card">
+          <summary>Sicurezza</summary>
+          <div class="blocco-corpo">
+            <form id="cambio-password-form">
+              <div class="field">
+                <label for="pw-attuale">Password attuale</label>
+                <input id="pw-attuale" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field">
+                <label for="pw-nuova">Nuova password</label>
+                <input id="pw-nuova" type="password" autocomplete="new-password" minlength="8" required />
+              </div>
+              <div class="field">
+                <label for="pw-conferma">Conferma nuova password</label>
+                <input id="pw-conferma" type="password" autocomplete="new-password" minlength="8" required />
+              </div>
+              <p class="error-text" id="pw-error" hidden></p>
+              <p class="success-text" id="pw-success" hidden>Password aggiornata.</p>
+              <button class="btn" type="submit" style="width:100%">Salva nuova password</button>
+            </form>
+          </div>
+        </details>
+        <details class="blocco-mese">
+          <summary>Regolamento</summary>
+          <div class="blocco-corpo">${regolamentoHtml()}</div>
+        </details>
+      </div>
+      <button class="btn" id="impostazioni-logout" style="width:100%; margin-top:14px; background:var(--surface-2); color:var(--text)">Esci</button>
+    </div>
+  `;
+}
+
+function initSicurezza(content) {
+  const card = content.querySelector("#sicurezza-card");
+  if (!card) return;
+  const form = card.querySelector("#cambio-password-form");
+  const errorEl = card.querySelector("#pw-error");
+  const successEl = card.querySelector("#pw-success");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    const attuale = card.querySelector("#pw-attuale").value;
+    const nuova = card.querySelector("#pw-nuova").value;
+    const conferma = card.querySelector("#pw-conferma").value;
+
+    if (nuova !== conferma) {
+      errorEl.textContent = "Le nuove password non coincidono";
+      errorEl.hidden = false;
+      return;
+    }
+
+    const submitBtn = form.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    try {
+      await api.post("/auth/change-password", { attuale, nuova });
+      form.reset();
+      successEl.hidden = false;
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+export async function initNotifiche(content, conPromemoria = false) {
+  const box = content.querySelector("#notifiche-stato");
+  const stato = await statoNotifiche().catch(() => "non-supportato");
+
+  if (stato === "non-supportato") {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Non disponibili su questo dispositivo/browser — su iPhone serve aver aggiunto l'app alla schermata Home da Safari.</p>`;
+    return;
+  }
+  if (stato === "negato") {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Bloccate dalle impostazioni del telefono — vanno riattivate da lì per questa app.</p>`;
+    return;
+  }
+
+  const promemoriaHtml =
+    conPromemoria && stato === "attive"
+      ? `<div id="promemoria-extra" style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:10px">
+           <p class="mono" style="color:var(--mute); font-size:12px">Promemoria facoltativi:</p>
+           <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
+             <input type="checkbox" id="pm-acqua" /> Ricordami di bere — 11:00 e 16:00
+           </label>
+           <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
+             <input type="checkbox" id="pm-merenda" /> Ricordami la merenda — 1 ora e mezza prima dell'allenamento
+           </label>
+         </div>`
+      : "";
+
+  box.innerHTML =
+    stato === "attive"
+      ? `<p style="font-size:13px">Attive ✓</p>
+         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>
+         ${promemoriaHtml}`
+      : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
+         <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px">Attiva notifiche</button>`;
+
+  content.querySelector("#notifiche-toggle").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try {
+      if (stato === "attive") await disattivaNotifiche();
+      else await attivaNotifiche();
+      initNotifiche(content, conPromemoria);
+    } catch (err) {
+      box.innerHTML = `<p class="error-text">${err.message}</p>`;
+    }
+  });
+
+  if (conPromemoria && stato === "attive") {
+    const acqua = content.querySelector("#pm-acqua");
+    const merenda = content.querySelector("#pm-merenda");
+    leggiPromemoria()
+      .then((p) => {
+        acqua.checked = !!p.promemoriaAcqua;
+        merenda.checked = !!p.promemoriaMerenda;
+      })
+      .catch(() => {});
+    const salva = () =>
+      salvaPromemoria({ promemoriaAcqua: acqua.checked, promemoriaMerenda: merenda.checked }).catch(() => {});
+    acqua.addEventListener("change", salva);
+    merenda.addEventListener("change", salva);
+  }
+}
+
+// ─── Card "I TUOI DATI" (anagrafica privata: data nascita, peso, altezza, note) ───
+function datiPersonaliCardHtml(p) {
+  const dn = formatDataNascita(p.dataNascita);
+  const eta = calcolaEta(p.dataNascita);
+  const dp = p.datiPrivati ?? {};
+  const riga = (label, val) => `
+    <div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--border)">
+      <span class="mono" style="color:var(--mute); font-size:13px">${label}</span>
+      <span style="font-size:14px; text-align:right">${val ?? "—"}</span>
+    </div>`;
+  const inputStyle =
+    "width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:inherit; font-size:14px";
+  return `
+    <div class="card" style="margin-top:12px" id="dati-card">
+      <details class="blocco-mese" id="dati-details">
+        <summary>I tuoi dati</summary>
+        <div class="blocco-corpo">
+          <div id="dati-vista">
+            ${riga("Nickname", p.nickname ? esc(p.nickname) : null)}
+            ${riga("Nome", p.nome ? esc(p.nome) : null)}
+            ${riga("Cognome", p.cognome ? esc(p.cognome) : null)}
+            ${riga("Data di nascita", dn ? `${dn}${eta != null ? ` · ${eta} anni` : ""}` : null)}
+            ${riga("Peso", dp.peso != null ? `${dp.peso} kg` : null)}
+            ${riga("Altezza", dp.altezza != null ? `${dp.altezza} cm` : null)}
+            ${riga("Note / infortuni", dp.noteInfortuni ? esc(dp.noteInfortuni) : null)}
+            <p class="mono" style="color:var(--mute); font-size:11px; margin-top:10px">Nickname, nome e cognome sono visibili agli altri; il resto solo a te e alla coach</p>
+            <button type="button" class="link-btn" id="dati-modifica" style="margin-top:8px">Modifica</button>
+          </div>
+          <form id="dati-form" hidden style="margin-top:12px">
+            <div class="field">
+              <label for="dati-nickname">Nickname</label>
+              <input id="dati-nickname" type="text" maxlength="40" value="${esc(p.nickname ?? "")}" />
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="field" style="flex:1">
+                <label for="dati-nome">Nome</label>
+                <input id="dati-nome" type="text" maxlength="60" value="${esc(p.nome ?? "")}" />
+              </div>
+              <div class="field" style="flex:1">
+                <label for="dati-cognome">Cognome</label>
+                <input id="dati-cognome" type="text" maxlength="60" value="${esc(p.cognome ?? "")}" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="dati-data">Data di nascita</label>
+              <input id="dati-data" type="date" value="${p.dataNascita ?? ""}" />
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="field" style="flex:1">
+                <label for="dati-peso">Peso (kg)</label>
+                <input id="dati-peso" type="number" step="0.1" min="20" max="300" inputmode="decimal" value="${dp.peso ?? ""}" />
+              </div>
+              <div class="field" style="flex:1">
+                <label for="dati-altezza">Altezza (cm)</label>
+                <input id="dati-altezza" type="number" step="1" min="100" max="250" inputmode="numeric" value="${dp.altezza ?? ""}" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="dati-note">Note / infortuni (per la coach)</label>
+              <textarea id="dati-note" rows="3" maxlength="1000" style="${inputStyle}; resize:vertical">${dp.noteInfortuni ? esc(dp.noteInfortuni) : ""}</textarea>
+            </div>
+            <p class="error-text" id="dati-error" hidden></p>
+            <div style="display:flex; gap:8px">
+              <button class="btn" type="submit" style="flex:1">Salva</button>
+              <button type="button" class="btn" id="dati-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
+            </div>
+          </form>
+        </div>
+      </details>
+    </div>`;
+}
+
+function initDatiPersonali(content, onSaved) {
+  const card = content.querySelector("#dati-card");
+  if (!card) return;
+  const dettaglio = card.querySelector("#dati-details");
+  const vista = card.querySelector("#dati-vista");
+  const form = card.querySelector("#dati-form");
+  const modifica = card.querySelector("#dati-modifica");
+  const errorEl = card.querySelector("#dati-error");
+
+  const apri = (mostra) => {
+    if (mostra) dettaglio.open = true;
+    form.hidden = !mostra;
+    vista.hidden = mostra;
+  };
+  modifica.addEventListener("click", () => apri(true));
+  card.querySelector("#dati-annulla").addEventListener("click", () => apri(false));
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+    const nome = card.querySelector("#dati-nome").value.trim();
+    const cognome = card.querySelector("#dati-cognome").value.trim();
+    if (!nome || !cognome) {
+      errorEl.textContent = "Nome e cognome non possono essere vuoti";
+      errorEl.hidden = false;
+      return;
+    }
+    const pesoRaw = card.querySelector("#dati-peso").value.trim();
+    const altezzaRaw = card.querySelector("#dati-altezza").value.trim();
+    const payload = {
+      nickname: card.querySelector("#dati-nickname").value.trim() || null,
+      nome,
+      cognome,
+      dataNascita: card.querySelector("#dati-data").value || null,
+      peso: pesoRaw === "" ? null : Number(pesoRaw),
+      altezza: altezzaRaw === "" ? null : Number(altezzaRaw),
+      noteInfortuni: card.querySelector("#dati-note").value.trim() || null,
+    };
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.post("/profilo/me", payload);
+      onSaved();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+      btn.disabled = false;
+    }
+  });
+}
+
+// ─── Card "OBIETTIVI PERSONALI" (questionario a risposta guidata, mostrato come
+// elenco puntato con emoji) ───
+function obiettiviCardHtml(p) {
+  const answers = p.datiPrivati?.personalizzazione ?? {};
+  const elenco = obiettiviElenco(answers);
+  const compilata = elenco.length > 0;
+  return `
+    <div class="card" style="margin-top:12px" id="personalizza-card">
+      <p class="sezione-label">Obiettivi personali</p>
+      <div id="personalizza-vista" style="margin-top:8px">
+        ${
+          compilata
+            ? `<ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px">${elenco
+                 .map((o) => `<li style="font-size:14px">${o.emoji} ${esc(o.label)}</li>`)
+                 .join("")}</ul>
+               <button type="button" class="link-btn" id="personalizza-apri" style="margin-top:10px">Modifica gli obiettivi</button>`
+            : `<p class="mono" style="color:var(--mute); font-size:13px">Rispondi a qualche domanda veloce: la coach potrà tarare meglio il lavoro su di te.</p>
+               <button class="btn" type="button" id="personalizza-apri" style="width:100%; margin-top:10px">Inizia</button>`
+        }
+      </div>
+      <form id="personalizza-form" hidden style="margin-top:12px"></form>
+
+      <details class="blocco-mese" id="performance-blocco" style="margin-top:18px">
+        <summary>Performance</summary>
+        <div class="blocco-corpo">
+          <p class="mono" style="color:var(--mute); font-size:13px">Tieni traccia dei carichi che utilizzi nei tuoi esercizi.</p>
+          <div id="performance-lista" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+        </div>
+      </details>
+    </div>`;
+}
+
+// Sezione "Performance": ultimo carico usato per ogni esercizio + storico. Solo kg.
+async function initPerformance(content) {
+  const box = content.querySelector("#performance-lista");
+  if (!box) return;
+  let data;
+  try {
+    data = await api.get("/performance");
+  } catch {
+    box.innerHTML = `<p class="error-text">Impossibile caricare la Performance</p>`;
+    return;
+  }
+  const per = new Map(data.esercizi.map((e) => [e.nome, e]));
+
+  box.innerHTML = PERFORMANCE_ESERCIZI.map(
+    (cat) => `
+      <details class="blocco-mese perf-cat">
+        <summary>${cat.emoji} ${cat.categoria}</summary>
+        <div class="blocco-corpo">
+          ${cat.esercizi
+            .map((nome) => {
+              const e = per.get(nome) ?? {};
+              const ha = e.ultimoPeso != null;
+              return `
+                <div class="perf-riga" data-esercizio="${esc(nome)}" style="border-top:1px solid var(--border); padding:10px 0">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+                    <div style="min-width:0">
+                      <p style="font-size:14px">${esc(nome)}</p>
+                      <p class="mono" style="color:${ha ? "var(--text)" : "var(--mute)"}; font-size:12px; margin-top:2px">
+                        ${ha ? `Ultimo peso: ${e.ultimoPeso} kg` : "Nessun peso registrato"}
+                      </p>
+                    </div>
+                    <button type="button" class="link-btn perf-apri" style="flex-shrink:0; text-decoration:none">${ha ? "Modifica" : "+ Aggiungi peso"}</button>
+                  </div>
+                  <div class="perf-panel" hidden style="margin-top:10px"></div>
+                </div>`;
+            })
+            .join("")}
+        </div>
+      </details>`
+  ).join("");
+
+  box.querySelectorAll(".perf-riga").forEach((riga) => {
+    const nome = riga.dataset.esercizio;
+    const panel = riga.querySelector(".perf-panel");
+    riga.querySelector(".perf-apri").addEventListener("click", async () => {
+      if (!panel.hidden) {
+        panel.hidden = true;
+        panel.innerHTML = "";
+        return;
+      }
+      const iniziale = per.get(nome)?.ultimoPeso ?? 20;
+      panel.innerHTML = `
+        <p style="font-size:13px">Quanto hai utilizzato?</p>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:6px">
+          <button type="button" class="btn perf-meno" style="width:40px; background:var(--surface-2); color:var(--text)">−</button>
+          <input class="perf-input" type="number" inputmode="numeric" min="1" max="500" step="1" value="${iniziale}"
+                 style="width:72px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font-family:inherit" />
+          <span class="mono" style="color:var(--mute)">kg</span>
+          <button type="button" class="btn perf-piu" style="width:40px; background:var(--surface-2); color:var(--text)">+</button>
+          <button type="button" class="btn perf-salva" style="flex:1">Salva</button>
+        </div>
+        <p class="error-text perf-err" hidden style="margin-top:6px"></p>
+        <div class="perf-storico" style="margin-top:10px"></div>`;
+      panel.hidden = false;
+
+      const input = panel.querySelector(".perf-input");
+      const clamp = (n) => Math.max(1, Math.min(500, Math.round(n) || 1));
+      panel.querySelector(".perf-meno").addEventListener("click", () => (input.value = clamp((Number(input.value) || 0) - 1)));
+      panel.querySelector(".perf-piu").addEventListener("click", () => (input.value = clamp((Number(input.value) || 0) + 1)));
+
+      try {
+        const { storico } = await api.get(`/performance/${encodeURIComponent(nome)}`);
+        if (storico.length) {
+          panel.querySelector(".perf-storico").innerHTML = `
+            <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px">STORICO</p>
+            ${storico
+              .map((s) => `<p class="mono" style="font-size:12px; margin-top:3px">${s.peso} kg <span style="color:var(--mute)">· ${formatDataBreve(s.data)}</span></p>`)
+              .join("")}`;
+        }
+      } catch {
+        /* lo storico è un extra: se non arriva, pazienza */
+      }
+
+      panel.querySelector(".perf-salva").addEventListener("click", async (ev) => {
+        const err = panel.querySelector(".perf-err");
+        err.hidden = true;
+        const peso = Number(input.value);
+        if (!Number.isInteger(peso) || peso < 1 || peso > 500) {
+          err.textContent = "Inserisci un peso in kg (numero intero)";
+          err.hidden = false;
+          return;
+        }
+        ev.target.disabled = true;
+        try {
+          await api.post("/performance", { esercizio: nome, peso });
+          initPerformance(content);
+        } catch (e2) {
+          err.textContent = e2 instanceof ApiError ? e2.message : "Errore imprevisto";
+          err.hidden = false;
+          ev.target.disabled = false;
+        }
+      });
+    });
+  });
+}
+
+function initPersonalizza(content, p, onSaved) {
+  const card = content.querySelector("#personalizza-card");
+  if (!card) return;
+  const vista = card.querySelector("#personalizza-vista");
+  const form = card.querySelector("#personalizza-form");
+  let q = null;
+
+  card.querySelector("#personalizza-apri").addEventListener("click", () => {
+    form.innerHTML = `
+      <div id="pz-domande"></div>
+      <p class="error-text" id="pz-error" hidden></p>
+      <div style="display:flex; gap:8px">
+        <button class="btn" type="submit" style="flex:1">Salva</button>
+        <button type="button" class="btn" id="pz-annulla" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
+      </div>`;
+    q = costruisciQuestionario(form.querySelector("#pz-domande"), PERSONALIZZAZIONE_DOMANDE, p.datiPrivati?.personalizzazione ?? {}, { nascondiHintMultipla: true });
+    form.hidden = false;
+    vista.hidden = true;
+
+    form.querySelector("#pz-annulla").addEventListener("click", () => {
+      form.hidden = true;
+      form.innerHTML = "";
+      vista.hidden = false;
+    });
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = form.querySelector("#pz-error");
+    if (errorEl) errorEl.hidden = true;
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.post("/profilo/me", { personalizzazione: q ? q.getRisposte() : {} });
+      onSaved();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+      }
+      btn.disabled = false;
+    }
+  });
+}
+
+// ─── Prima card: identità (foto + nome + livello). La foto è sempre toccabile per
+// cambiare immagine; la matita in alto a destra apre "PERSONALIZZA LA TUA FOTO"
+// (colore/stile/intensità dell'anello — vedi apriPersonalizzaFoto più sotto).
+// Nickname/nome/cognome si modificano dalla card "I tuoi dati". ───
+function identitaCardHtml(p) {
+  const nomeCompleto = `${p.nome ?? ""} ${p.cognome ?? ""}`.trim();
+  const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
+
+  const livelloLinea = p.livello
+    ? `<p class="mono" style="color:${p.livello.attuale.colore}; font-size:13px; margin-top:4px; text-align:center">Livello ${p.livello.attuale.numero} — ${p.livello.attuale.nome}</p>`
+    : `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px; text-align:center">Nessun livello ancora — fai i tuoi primi 3 allenamenti per sbloccarlo.</p>`;
+
+  const abbAttivo = !!p.abbonamentoAttivo;
+  const iscrizione = formatDataNascita(p.dataIscrizione);
+  const iscrizioneLinea = iscrizione
+    ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px; text-align:center">Iscritto dal ${iscrizione}</p>`
+    : "";
+
+  return `
+    <div class="card" id="identita-card" style="position:relative">
+      <button type="button" class="abbonamento-luce${abbAttivo ? " attivo" : ""}" aria-label="Stato abbonamento"
+        style="position:absolute; top:4px; left:4px; width:34px; height:34px; border-radius:50%; border:none; padding:0; background:none; cursor:pointer"></button>
+      <span class="abbonamento-banner" hidden
+        style="position:absolute; top:40px; left:6px; z-index:4; font-size:11px; font-weight:700; letter-spacing:0.5px;
+               padding:4px 9px; border-radius:6px; white-space:nowrap; background:var(--surface-2); color:var(--text); border:1px solid var(--border)">
+        ${abbAttivo ? "Abbonamento attivo" : "Abbonamento non attivo"}
+      </span>
+      <button type="button" class="link-btn" id="identita-modifica" aria-label="Personalizza la tua foto"
+        style="position:absolute; top:12px; right:12px; text-decoration:none; color:var(--text); line-height:0; padding:4px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </button>
+
+      <div id="identita-vista" style="position:relative; z-index:1">
+        ${fotoProfiloHtml(p.fotoUrl, iniziale, true, p.fotoPersonalizzazione)}
+        <p style="font-weight:700; font-size:20px; margin-top:10px; text-align:center">${esc(p.nickname || nomeCompleto || "Atleta")}</p>
+        ${
+          p.nickname && nomeCompleto
+            ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:2px; text-align:center">${esc(nomeCompleto)}</p>`
+            : ""
+        }
+        ${livelloLinea}
+        ${iscrizioneLinea}
+      </div>
+    </div>
+  `;
+}
+
+function initIdentita(content, p, onSaved) {
+  const card = content.querySelector("#identita-card");
+  if (!card) return;
+
+  montaCampoVivo(card);
+
+  card.querySelector("#identita-modifica").addEventListener("click", () => {
+    apriPersonalizzaFoto(p, onSaved);
+  });
+
+  // Luce stato abbonamento (in alto a sinistra): toccandola compare/sparisce il bannerino.
+  const luce = card.querySelector(".abbonamento-luce");
+  const bannerAbb = card.querySelector(".abbonamento-banner");
+  if (luce && bannerAbb) {
+    const chiudiFuori = (ev) => {
+      if (!luce.contains(ev.target)) {
+        bannerAbb.hidden = true;
+        document.removeEventListener("click", chiudiFuori);
+      }
+    };
+    luce.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const daMostrare = bannerAbb.hidden;
+      bannerAbb.hidden = !daMostrare;
+      if (daMostrare) setTimeout(() => document.addEventListener("click", chiudiFuori), 0);
+      else document.removeEventListener("click", chiudiFuori);
+    });
+  }
+}
+
+// ─── Modal "PERSONALIZZA LA TUA FOTO": preview live grande + scelta di colore, stile e
+// intensità dell'anello attorno alla foto profilo. Tocca solo l'anello — niente avatar,
+// niente cambio forma/tema. Se si esce senza salvare, la personalizzazione precedente
+// resta invariata (lo stato locale non viene mai scritto finché non si preme SALVA). ───
+function apriPersonalizzaFoto(p, onSaved) {
+  const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
+  let stato = { ...(p.fotoPersonalizzazione ?? DEFAULT_FOTO_PERSONALIZZAZIONE) };
+
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; flex-direction:column";
+  ov.innerHTML = `
+    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:14px 16px; border-bottom:1px solid var(--border)">
+      <span class="mono" style="font-size:12px; letter-spacing:1px; color:var(--mute)">PERSONALIZZA LA TUA FOTO</span>
+      <button type="button" class="btn" id="pf-chiudi"
+        style="width:auto; padding:6px 14px; background:var(--surface-2); color:var(--text)">✕</button>
+    </div>
+    <div style="flex:1; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; padding:24px 16px 100px">
+      <div id="pf-preview" style="display:flex; justify-content:center; padding:12px 0 28px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">COLORE</p>
+      <div id="pf-colori" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:26px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">STILE</p>
+      <div id="pf-stili" style="display:flex; flex-direction:column; gap:8px; margin-bottom:26px"></div>
+
+      <p class="mono" style="color:var(--mute); font-size:12px; letter-spacing:1px; margin-bottom:10px">INTENSITÀ</p>
+      <div id="pf-intensita" style="display:flex; gap:8px"></div>
+      <p class="error-text" id="pf-error" hidden style="margin-top:14px"></p>
+    </div>
+    <div style="flex:0 0 auto; padding:14px 16px; border-top:1px solid var(--border); background:var(--bg)">
+      <button class="btn" type="button" id="pf-salva" style="width:100%">Salva</button>
+    </div>
+  `;
+  document.body.appendChild(ov);
+
+  const preview = ov.querySelector("#pf-preview");
+  const renderPreview = () => {
+    preview.innerHTML = fotoProfiloHtml(p.fotoUrl, iniziale, false, stato, 140);
+  };
+
+  const coloriBox = ov.querySelector("#pf-colori");
+  coloriBox.innerHTML = COLORI_FOTO.map(
+    (c) => `
+      <button type="button" class="pf-colore" data-colore="${c.key}" aria-label="${c.label}"
+        style="width:34px; height:34px; border-radius:50%; background:${c.hex}; cursor:pointer;
+               box-shadow:0 0 0 1px var(--border);
+               border:2px solid ${stato.colore === c.key ? "var(--text)" : "transparent"}"></button>`
+  ).join("");
+
+  const stiliBox = ov.querySelector("#pf-stili");
+  stiliBox.innerHTML = STILI_FOTO.map(
+    (s) => `
+      <button type="button" class="pf-stile" data-stile="${s.key}"
+        style="text-align:left; padding:12px 14px; border-radius:10px; cursor:pointer;
+               background:${stato.stile === s.key ? "var(--surface-2)" : "var(--surface)"};
+               border:1px solid ${stato.stile === s.key ? "var(--text)" : "var(--border)"}; color:var(--text)">
+        <span style="font-weight:600; font-size:14px">${s.label}</span>
+        <span class="mono" style="display:block; color:var(--mute); font-size:12px; margin-top:2px">${s.desc}</span>
+      </button>`
+  ).join("");
+
+  const intensitaBox = ov.querySelector("#pf-intensita");
+  intensitaBox.innerHTML = INTENSITA_FOTO.map(
+    (i) => `
+      <button type="button" class="pf-intensita" data-intensita="${i.key}"
+        style="flex:1; padding:10px 0; border-radius:8px; cursor:pointer; font-family:var(--font-mono); font-size:12px; letter-spacing:0.5px;
+               background:${stato.intensita === i.key ? "var(--surface-2)" : "var(--surface)"};
+               border:1px solid ${stato.intensita === i.key ? "var(--text)" : "var(--border)"}; color:var(--text)">${i.label.toUpperCase()}</button>`
+  ).join("");
+
+  const aggiorna = () => {
+    renderPreview();
+    coloriBox.querySelectorAll(".pf-colore").forEach((b) => {
+      b.style.borderColor = b.dataset.colore === stato.colore ? "var(--text)" : "transparent";
+    });
+    stiliBox.querySelectorAll(".pf-stile").forEach((b) => {
+      const on = b.dataset.stile === stato.stile;
+      b.style.background = on ? "var(--surface-2)" : "var(--surface)";
+      b.style.borderColor = on ? "var(--text)" : "var(--border)";
+    });
+    intensitaBox.querySelectorAll(".pf-intensita").forEach((b) => {
+      const on = b.dataset.intensita === stato.intensita;
+      b.style.background = on ? "var(--surface-2)" : "var(--surface)";
+      b.style.borderColor = on ? "var(--text)" : "var(--border)";
+    });
+  };
+  aggiorna();
+
+  coloriBox.querySelectorAll(".pf-colore").forEach((b) => {
+    b.addEventListener("click", () => {
+      stato.colore = b.dataset.colore;
+      aggiorna();
+    });
+  });
+  stiliBox.querySelectorAll(".pf-stile").forEach((b) => {
+    b.addEventListener("click", () => {
+      stato.stile = b.dataset.stile;
+      aggiorna();
+    });
+  });
+  intensitaBox.querySelectorAll(".pf-intensita").forEach((b) => {
+    b.addEventListener("click", () => {
+      stato.intensita = b.dataset.intensita;
+      aggiorna();
+    });
+  });
+
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") chiudi();
+  };
+  ov.querySelector("#pf-chiudi").addEventListener("click", chiudi);
+  document.addEventListener("keydown", onKey);
+
+  ov.querySelector("#pf-salva").addEventListener("click", async () => {
+    const errorEl = ov.querySelector("#pf-error");
+    errorEl.hidden = true;
+    const btn = ov.querySelector("#pf-salva");
+    btn.disabled = true;
+    try {
+      await api.post("/profilo/me", { fotoPersonalizzazione: stato });
+      chiudi();
+      onSaved();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+      btn.disabled = false;
+    }
+  });
+}
+
+async function loadProfilo(el) {
+  const content = el.querySelector("#profilo-content");
+  try {
+    const p = await api.get("/profilo/me");
+
+    if (p.role === "coach") {
+      navigate("/coach/impostazioni");
+      return;
+    }
+
+    const progressiCard = `
+      <div class="card" style="margin-top:12px">
+        <p class="sezione-label">I tuoi progressi</p>
+        <div style="display:flex; justify-content:space-around; text-align:center; margin-top:14px">
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.presenzeTotali}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Presenze tot.</p>
+          </div>
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.anelli.settimaneCompletateTotali}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
+          </div>
+          <div>
+            <p style="font-weight:600; font-size:18px">${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}</p>
+            <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
+          </div>
+        </div>
+        <details class="blocco-mese" style="margin-top:16px">
+          <summary>Statistiche</summary>
+          <div class="blocco-corpo">
+            <div id="statistiche-box"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
+          </div>
+        </details>
+      </div>
+    `;
+
+    const badgeCard = `
+      <div class="card" style="margin-top:12px">
+        <p class="sezione-label">I tuoi badge</p>
+        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili)}</div>
+      </div>`;
+
+    content.innerHTML = `
+      ${identitaCardHtml(p)}
+      ${datiPersonaliCardHtml(p)}
+      ${obiettiviCardHtml(p)}
+      ${badgeCard}
+      ${progressiCard}
+      ${abbonamentoCardHtml(p)}
+      ${impostazioniCardHtml()}
+    `;
+
+    // Il colore scelto per l'anello della foto è anche il colore d'identità di tutto il
+    // profilo (barrette, link, bottoni, tinta tenue delle card) — non solo dell'anello.
+    const coloreScelto = COLORI_FOTO.find((c) => c.key === p.fotoPersonalizzazione?.colore)?.hex;
+    if (coloreScelto) content.style.setProperty("--accent", coloreScelto);
+    else content.style.removeProperty("--accent");
+    content.classList.toggle("ha-colore", !!coloreScelto);
+
+    // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
+    // (resta solo per la coach, che non ha la card Impostazioni).
+    el.querySelector("#logout-btn")?.remove();
+
+    attachFotoUpload(content, () => loadProfilo(el));
+    initIdentita(content, p, () => loadProfilo(el));
+    initDatiPersonali(content, () => loadProfilo(el));
+    initPersonalizza(content, p, () => loadProfilo(el));
+    initPerformance(content);
+    initStatistiche(content);
+    initAbbonamento(content, p, () => loadProfilo(el));
+    initNotifiche(content, true);
+    initSicurezza(content);
+    content.querySelector("#impostazioni-logout")?.addEventListener("click", async () => {
+      await logout();
+      navigate("/login");
+    });
+  } catch (err) {
+    content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+  }
 }

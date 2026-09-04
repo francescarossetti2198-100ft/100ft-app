@@ -1,16 +1,276 @@
 import { renderTabbar } from "../components/tabbar.js";
+import { api, ApiError, mediaUrl } from "../api.js";
+import { fotoProfiloHtml } from "./profilo.js";
 
-// TODO: post misti (foto sfide, presenze/streak, traguardi, annunci coach),
-// filtri per categoria, reazioni emoji (brief, sezione 8.5).
+const TIPO_INFO = {
+  level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
+  new_pb: { icona: "💪", azione: "ha fatto un nuovo Personal Best" },
+  consistency: { icona: "🔥", azione: "ha raggiunto un traguardo di costanza" },
+  athlete_of_week: { icona: "⭐", azione: "è Atleta della Settimana" },
+  daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
+  sfida: { icona: "🏆", azione: "ha completato una sfida" },
+  badge: { icona: "🏅", azione: "ha conquistato il badge di" },
+  annuncio_coach: { icona: "📣", azione: "annuncio" },
+  allenamento: { icona: "🏋️", azione: "" },
+};
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const EMOJI = ["👍", "🔥", "💪", "🎉"];
+
+// Playlist ufficiale di 100FT su Spotify — mini-banner stretto in fondo al Feed.
+const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/playlist/3Qw3Mw1PuhB8H1BslDyWaw";
+
+// Logo Spotify (SVG inline, path ufficiale monopath) — niente asset esterni, niente embed.
+const SPOTIFY_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" style="width:26px;height:26px;flex:0 0 auto;display:block"><path fill="#1ED760" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.56-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`;
+
+function bannerSpotifyHtml() {
+  return `
+    <a class="card" href="${SPOTIFY_PLAYLIST_URL}" target="_blank" rel="noopener"
+       style="display:flex; align-items:center; gap:10px; text-decoration:none;
+              margin:10px 0 0; padding:10px 14px">
+      ${SPOTIFY_LOGO}
+      <span class="mono" style="color:var(--mute); font-size:12px; line-height:1.4">
+        La nostra <strong style="color:var(--text)">playlist di Spotify</strong> per allenarti con la carica ↗
+      </span>
+    </a>
+  `;
+}
+
+// Link per inoltrare un post su WhatsApp: apre WhatsApp col testo già pronto, poi è
+// l'utente a scegliere la chat (il gruppo palestra). wa.me non permette di postare
+// direttamente in un gruppo specifico. In fondo al messaggio c'è il link al Feed: WhatsApp
+// ne mostra l'anteprima (meta OG in index.html) e chi legge può aprirlo per vedere il post.
+function linkWhatsApp(testoPost, autore, azione) {
+  const righe = [`${autore}${azione ? ` ${azione}` : ""} — 100FT`];
+  const testo = String(testoPost ?? "").replace(/<[^>]*>/g, "").trim();
+  if (testo) righe.push("", testo);
+  righe.push("", `Guarda nel Feed 👉 ${location.origin}/#/feed`);
+  return `https://wa.me/?text=${encodeURIComponent(righe.join("\n"))}`;
+}
+
+function tempoFa(dataIso) {
+  const diffMs = Date.now() - new Date(dataIso + "Z").getTime();
+  const minuti = Math.floor(diffMs / 60000);
+  if (minuti < 1) return "adesso";
+  if (minuti < 60) return `${minuti} min`;
+  const ore = Math.floor(minuti / 60);
+  if (ore < 24) return `${ore} h`;
+  return `${Math.floor(ore / 24)} g`;
+}
+
+// TODO: filtri per tipo, commenti (brief, sezione 11 — solo reazioni previste, niente commenti).
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
+  // Testata fissa: "Feed" + ricerca + banner Spotify restano in cima mentre la lista scorre
+  // sotto. I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
   el.innerHTML = `
-    <h1>Feed</h1>
-    <div class="card">
-      <p class="mono" style="color:var(--mute)">I post del gruppo arrivano qui.</p>
+    <style>
+      /* Piccola animazione dell'emoji quando si mette (o toglie) una reazione. */
+      .rz-emoji { display:inline-block; }
+      .reazione-btn.rz-animate .rz-emoji { animation: rz-pop .45s ease-out; }
+      @keyframes rz-pop {
+        0%   { transform: scale(1); }
+        30%  { transform: scale(1.45) rotate(-6deg); }
+        55%  { transform: scale(.9) rotate(4deg); }
+        75%  { transform: scale(1.12) rotate(-2deg); }
+        100% { transform: scale(1) rotate(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reazione-btn.rz-animate .rz-emoji { animation: none; }
+      }
+      #feed-cerca-wrap { position:relative; margin-top:10px }
+      #feed-cerca {
+        width:100%; box-sizing:border-box; padding:9px 34px 9px 34px; border-radius:9px;
+        border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+        font-size:14px; font-family:inherit;
+      }
+      #feed-cerca::placeholder { color:var(--mute) }
+      #feed-cerca-wrap .fc-lente { position:absolute; left:11px; top:50%; transform:translateY(-50%);
+        color:var(--mute); pointer-events:none; line-height:0 }
+      #feed-cerca-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%);
+        border:none; background:none; color:var(--mute); font-size:18px; cursor:pointer;
+        padding:4px 8px; line-height:1 }
+    </style>
+    <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
+      <h1 style="margin:0; padding-right:48px">Feed</h1>
+      <div id="feed-cerca-wrap">
+        <span class="fc-lente">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </span>
+        <input id="feed-cerca" type="search" autocomplete="off" enterkeyhint="search"
+          placeholder="Cerca persone, sfide, parole nel feed…" aria-label="Cerca nel Feed" />
+        <button type="button" id="feed-cerca-clear" aria-label="Cancella ricerca" hidden>&times;</button>
+      </div>
+      <div id="feed-persone"></div>
+      ${bannerSpotifyHtml()}
     </div>
+    <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
+
+  const list = el.querySelector("#feed-list");
+  const input = el.querySelector("#feed-cerca");
+  const clear = el.querySelector("#feed-cerca-clear");
+  const personeBox = el.querySelector("#feed-persone");
+
+  montaFeed(list);
+
+  let timer;
+  const esegui = async () => {
+    const q = input.value.trim();
+    clear.hidden = q.length === 0;
+    if (q.length < 2) {
+      personeBox.innerHTML = "";
+      montaFeed(list);
+      return;
+    }
+    montaFeed(list, { q });
+    try {
+      const { atleti } = await api.get(`/atleti/cerca?q=${encodeURIComponent(q)}`);
+      personeBox.innerHTML = atleti.length ? personeHtml(atleti) : "";
+    } catch {
+      personeBox.innerHTML = "";
+    }
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(esegui, 220);
+  });
+  clear.addEventListener("click", () => {
+    input.value = "";
+    clear.hidden = true;
+    personeBox.innerHTML = "";
+    montaFeed(list);
+    input.focus();
+  });
+}
+
+// Striscia orizzontale dei profili che corrispondono alla ricerca — tap = scheda pubblica.
+function personeHtml(atleti) {
+  return `
+    <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 2px 4px">
+      ${atleti
+        .map((a) => {
+          const nomeCompleto = `${a.nome ?? ""} ${a.cognome ?? ""}`.trim();
+          const etichetta = a.nickname || nomeCompleto || "Atleta";
+          const iniziale = (etichetta[0] || "?").toUpperCase();
+          return `
+            <a href="#/atleta?id=${a.userId}" style="flex:0 0 auto; width:76px; text-align:center;
+               text-decoration:none; color:var(--text)">
+              ${fotoProfiloHtml(a.fotoUrl, iniziale, false, a.fotoPersonalizzazione, 52)}
+              <p class="mono" style="font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden;
+                 text-overflow:ellipsis">${esc(etichetta)}</p>
+            </a>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+// Disegna la lista del Feed dentro `list` (un contenitore già nel DOM). Riusata dalla
+// pagina Feed dell'atleta e da quella della coach (dentro lo shell, senza tabbar), e dalla
+// scheda pubblica di un atleta (`opts.userId` = solo i suoi post). `opts.q` = ricerca.
+export async function montaFeed(list, opts = {}) {
+  try {
+    const params = new URLSearchParams();
+    if (opts.userId) params.set("userId", String(opts.userId));
+    if (opts.q) params.set("q", opts.q);
+    const qs = params.toString();
+    const { posts } = await api.get(qs ? `/feed?${qs}` : "/feed");
+
+    if (!posts.length) {
+      const vuoto = opts.q
+        ? "Nessun risultato per questa ricerca."
+        : opts.userId
+          ? "Ancora nessun post."
+          : "Ancora nessun post.";
+      list.innerHTML = `<p class="mono" style="color:var(--mute)">${vuoto}</p>`;
+      return;
+    }
+
+    list.innerHTML = posts
+      .map((p) => {
+        const info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
+        const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento";
+        const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
+
+        // Cerchio della foto prima del nome: per gli atleti apre la loro scheda pubblica
+        // (/atleta?id=...), per i post della coach (userId assente) resta solo visivo.
+        const iniziale = (autore[0] || "?").toUpperCase();
+        const avatarHtml = fotoProfiloHtml(p.fotoUrl, iniziale, false, p.fotoPersonalizzazione, 34);
+        const avatarBlock = p.userId
+          ? `<a href="#/atleta?id=${p.userId}" style="flex:0 0 auto; line-height:0">${avatarHtml}</a>`
+          : `<span style="flex:0 0 auto; line-height:0">${avatarHtml}</span>`;
+
+        const reazioniHtml = EMOJI.map((e) => {
+          const r = p.reazioni.find((x) => x.emoji === e);
+          const attiva = r?.mia;
+          return `
+            <button type="button" class="reazione-btn" data-post="${p.id}" data-emoji="${e}"
+              style="background:${attiva ? "var(--accent)" : "var(--surface-2)"}; border:none; border-radius:6px;
+                     padding:4px 8px; font-size:13px; color:var(--text); cursor:pointer">
+              <span class="rz-emoji">${e}</span> ${r?.n ?? ""}
+            </button>
+          `;
+        }).join("");
+
+        return `
+          <div class="card" style="margin-bottom:12px">
+            <div style="display:flex; align-items:center; gap:10px">
+              ${avatarBlock}
+              <p style="font-size:14px; flex:1; min-width:0; margin:0; line-height:1.35">
+                <strong>${autore}</strong>
+                ${info.icona}${info.azione ? ` <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>` : ""}
+              </p>
+              <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; align-self:flex-start">${tempoFa(p.data)}</span>
+            </div>
+            <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
+            ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
+            ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
+                 class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+                        background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                        padding:8px 12px; color:var(--text); font-size:13px; text-decoration:none">
+                 ⬇ ${esc(p.allegatoNome) || "Scarica la scheda"}
+               </a>` : ""}
+            <div style="display:flex; gap:6px; margin-top:10px; align-items:center">
+              ${reazioniHtml}
+              <a href="${linkWhatsApp(p.testo, autore, info.azione)}" target="_blank" rel="noopener"
+                 class="mono" style="margin-left:auto; color:#1ED760; font-size:12px; text-decoration:none; white-space:nowrap">
+                ↗ WhatsApp
+              </a>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    list.querySelectorAll(".reazione-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        // Fa "poppare" l'emoji; il reflow forza il riavvio dell'animazione a ogni tocco.
+        btn.classList.remove("rz-animate");
+        void btn.offsetWidth;
+        btn.classList.add("rz-animate");
+        try {
+          // Aspetta sia la risposta sia la fine dell'animazione prima di ridisegnare la lista.
+          await Promise.all([
+            api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji }),
+            new Promise((r) => setTimeout(r, 420)),
+          ]);
+          montaFeed(list, opts);
+        } catch {
+          // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
+          btn.classList.remove("rz-animate");
+        }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+  }
 }

@@ -24,6 +24,6 @@ export async function requireAuth(c: Context<{ Bindings: Env; Variables: Variabl
 
 // Richiede specificamente il coach (pannello admin, dati privati, gestione sfide/programma).
 export async function requireCoach(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) {
-  if (!c.var.user || !c.var.user.isCoach) return c.json({ error: "Accesso riservato al coach" }, 403);
+  if (!c.var.user || c.var.user.role !== "coach") return c.json({ error: "Accesso riservato al coach" }, 403);
   await next();
 }
