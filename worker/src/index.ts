@@ -54,10 +54,11 @@ app.use("*", async (c, next) => {
 
 app.use("*", attachUser);
 
-// Risposte API sempre dinamiche/autenticate: mai in cache lato browser.
+// Risposte API sempre dinamiche/autenticate: mai in cache lato browser. Eccezione: le
+// media servite da /api/foto (chiavi UUID immutabili) che impostano una loro Cache-Control.
 app.use("*", async (c, next) => {
   await next();
-  c.header("Cache-Control", "no-store");
+  if (!c.req.path.startsWith("/api/foto/")) c.header("Cache-Control", "no-store");
 });
 
 app.get("/api/health", (c) => c.json({ ok: true }));
