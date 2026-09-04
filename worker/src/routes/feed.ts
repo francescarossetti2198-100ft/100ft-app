@@ -9,6 +9,30 @@ type Variables = { user: SessionUser };
 const feed = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 feed.get("/", requireAuth, async (c) => {
+  // Filtri opzionali:
+  //  ?userId=N -> solo i post di quell'atleta (feed della sua scheda pubblica)
+  //  ?q=testo  -> ricerca: testo del post, nome/nickname dell'autore, o "coach" per i
+  //               post della coach (annunci + diario, che hanno user_id NULL)
+  const userIdFiltro = c.req.query("userId");
+  const q = (c.req.query("q") ?? "").trim();
+
+  const condizioni: string[] = [];
+  const parametri: unknown[] = [];
+
+  if (userIdFiltro && /^\d+$/.test(userIdFiltro)) {
+    condizioni.push("p.user_id = ?");
+    parametri.push(Number(userIdFiltro));
+  }
+  if (q) {
+    const like = `%${q}%`;
+    condizioni.push(
+      "(p.testo LIKE ? OR a.nome LIKE ? OR a.nickname LIKE ? OR (p.user_id IS NULL AND ? LIKE '%coach%'))"
+    );
+    parametri.push(like, like, like, q.toLowerCase());
+  }
+
+  const whereSql = condizioni.length ? `WHERE ${condizioni.join(" AND ")}` : "";
+
   const { results: posts } = await c.env.DB.prepare(
     `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
             p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
@@ -16,38 +40,46 @@ feed.get("/", requireAuth, async (c) => {
             a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
      FROM post_feed p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
+     ${whereSql}
      ORDER BY p.data DESC
      LIMIT 50`
-  ).all<{
-    id: number;
-    tipo: string;
-    testo: string;
-    contenutoUrl: string | null;
-    allegatoUrl: string | null;
-    allegatoNome: string | null;
-    data: string;
-    userId: number | null;
-    nome: string | null;
-    nickname: string | null;
-    fotoUrl: string | null;
-    fotoPersonalizzazione: string | null;
-  }>();
-
-  const { results: reazioni } = await c.env.DB.prepare(
-    `SELECT post_id AS postId, emoji, COUNT(*) AS n,
-            MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mia
-     FROM feed_reazioni
-     WHERE post_id IN (SELECT id FROM post_feed ORDER BY data DESC LIMIT 50)
-     GROUP BY post_id, emoji`
   )
-    .bind(c.var.user.userId)
-    .all<{ postId: number; emoji: string; n: number; mia: number }>();
+    .bind(...parametri)
+    .all<{
+      id: number;
+      tipo: string;
+      testo: string;
+      contenutoUrl: string | null;
+      allegatoUrl: string | null;
+      allegatoNome: string | null;
+      data: string;
+      userId: number | null;
+      nome: string | null;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+    }>();
 
+  const idPost = posts.map((p) => p.id);
   const reazioniPerPost = new Map<number, { emoji: string; n: number; mia: boolean }[]>();
-  for (const r of reazioni) {
-    const lista = reazioniPerPost.get(r.postId) ?? [];
-    lista.push({ emoji: r.emoji, n: r.n, mia: !!r.mia });
-    reazioniPerPost.set(r.postId, lista);
+
+  if (idPost.length) {
+    const segnaposto = idPost.map(() => "?").join(",");
+    const { results: reazioni } = await c.env.DB.prepare(
+      `SELECT post_id AS postId, emoji, COUNT(*) AS n,
+              MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mia
+       FROM feed_reazioni
+       WHERE post_id IN (${segnaposto})
+       GROUP BY post_id, emoji`
+    )
+      .bind(c.var.user.userId, ...idPost)
+      .all<{ postId: number; emoji: string; n: number; mia: number }>();
+
+    for (const r of reazioni) {
+      const lista = reazioniPerPost.get(r.postId) ?? [];
+      lista.push({ emoji: r.emoji, n: r.n, mia: !!r.mia });
+      reazioniPerPost.set(r.postId, lista);
+    }
   }
 
   return c.json({

@@ -262,8 +262,10 @@ export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true, personalizza
     ? `<span style="display:inline-flex; border-radius:50%; vertical-align:middle; ${anello}">${media}</span>`
     : media;
 
-  // Fuori dalla modalità modifica: solo la foto, niente "Cambia foto" / input.
-  if (!modifica) return `<div style="text-align:center">${mediaConAnello}</div>`;
+  // Fuori dalla modalità modifica: solo la foto, sempre centrata. `display:flex` e non
+  // `text-align:center` perché senza anello la foto è un <img display:block> (che
+  // ignorerebbe text-align e resterebbe a sinistra).
+  if (!modifica) return `<div style="display:flex; justify-content:center">${mediaConAnello}</div>`;
 
   // Una volta scelta una foto, si cambia toccando la foto stessa — niente più didascalia
   // "Cambia foto" a fare da doppione. Resta solo "Aggiungi una foto" quando non c'è ancora.

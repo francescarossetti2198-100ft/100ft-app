@@ -7,6 +7,7 @@ import { hashPassword } from "../lib/password";
 import { parseRisposte } from "../lib/questionario";
 import { statoTrofei } from "../lib/trofei";
 import { statoBadgeMensili } from "../lib/badgeMensili";
+import { calcolaAnelli } from "../lib/settimana";
 import { adessoRoma } from "../lib/oggi";
 import { pianoDelMese, pianoProssimo } from "../lib/abbonamenti";
 import { prezzoPiano, nomePiano } from "../lib/abbonamentiPiani";
@@ -101,6 +102,43 @@ atleti.get("/", requireCoach, async (c) => {
   );
 
   return c.json({ atleti: risultato, mese, anno });
+});
+
+// Ricerca atleti per nome / cognome / nickname — barra di ricerca del Feed. Aperta a
+// chiunque sia loggato (come /:id/pubblico); solo dati pubblici. DEVE stare prima di
+// "/:id" (altrimenti "cerca" verrebbe interpretato come un id → requireCoach).
+atleti.get("/cerca", requireAuth, async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  if (q.length < 2) return c.json({ atleti: [] });
+
+  const like = `%${q}%`;
+  const { results } = await c.env.DB.prepare(
+    `SELECT u.id AS userId, p.nome, p.cognome, p.nickname,
+            p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione
+     FROM users u
+     JOIN athlete_profile p ON p.user_id = u.id
+     WHERE u.role = 'atleta' AND u.status = 'attivo'
+       AND (p.nome LIKE ? OR p.cognome LIKE ? OR p.nickname LIKE ?
+            OR (p.nome || ' ' || p.cognome) LIKE ?)
+     ORDER BY p.nome, p.cognome
+     LIMIT 12`
+  )
+    .bind(like, like, like, like)
+    .all<{
+      userId: number;
+      nome: string;
+      cognome: string;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+    }>();
+
+  return c.json({
+    atleti: results.map((r) => ({
+      ...r,
+      fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+    })),
+  });
 });
 
 // Scheda completa di un atleta — pagina PROFILI della coach. Include i dati privati
@@ -297,9 +335,30 @@ atleti.get("/:id/pubblico", requireAuth, async (c) => {
 
   if (!row) return c.json({ error: "Atleta non trovato" }, 404);
 
-  const presenzeTotali = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
-    .bind(id)
-    .first<{ n: number }>();
+  // Stessi numeri che l'atleta vede nel proprio Profilo ("I miei progressi" + "I miei
+  // badge"), qui in sola lettura per un compagno. Niente statistiche, niente dati privati.
+  const [presenzeTotali, anelli, badgeMensili, posizione] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM presenze WHERE user_id = ? AND confermata = 1`)
+      .bind(id)
+      .first<{ n: number }>(),
+    calcolaAnelli(c.env.DB, id),
+    statoBadgeMensili(c.env.DB, id),
+    c.env.DB.prepare(
+      `WITH punti_atleti AS (
+         SELECT u.id AS userId, COALESCE(SUM(x.xp_assegnati), 0) AS punti
+         FROM users u
+         JOIN athlete_profile p ON p.user_id = u.id
+         LEFT JOIN xp_log x ON x.user_id = u.id
+         WHERE u.role = 'atleta' AND u.status = 'attivo'
+         GROUP BY u.id
+       )
+       SELECT (SELECT COUNT(*) FROM punti_atleti WHERE punti > mio.punti) + 1 AS posizione,
+              (SELECT COUNT(*) FROM punti_atleti) AS totaleAtleti
+       FROM punti_atleti mio WHERE mio.userId = ?`
+    )
+      .bind(id)
+      .first<{ posizione: number; totaleAtleti: number }>(),
+  ]);
 
   return c.json({
     userId: id,
@@ -310,6 +369,10 @@ atleti.get("/:id/pubblico", requireAuth, async (c) => {
     fotoPersonalizzazione: parseFotoPersonalizzazione(row.fotoPersonalizzazione),
     dataIscrizione: row.dataIscrizione,
     livello: calcolaLivello(presenzeTotali?.n ?? 0),
+    presenzeTotali: presenzeTotali?.n ?? 0,
+    settimaneComplete: anelli.settimaneCompletateTotali,
+    classifica: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
+    badgeMensili,
   });
 });
 

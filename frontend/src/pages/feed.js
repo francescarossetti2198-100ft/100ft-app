@@ -64,8 +64,8 @@ function tempoFa(dataIso) {
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
-  // Testata fissa: "Feed" + banner Spotify restano in cima mentre la lista scorre sotto.
-  // I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
+  // Testata fissa: "Feed" + ricerca + banner Spotify restano in cima mentre la lista scorre
+  // sotto. I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
   el.innerHTML = `
     <style>
       /* Piccola animazione dell'emoji quando si mette (o toglie) una reazione. */
@@ -81,9 +81,33 @@ export function renderFeed(appEl) {
       @media (prefers-reduced-motion: reduce) {
         .reazione-btn.rz-animate .rz-emoji { animation: none; }
       }
+      #feed-cerca-wrap { position:relative; margin-top:10px }
+      #feed-cerca {
+        width:100%; box-sizing:border-box; padding:9px 34px 9px 34px; border-radius:9px;
+        border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+        font-size:14px; font-family:inherit;
+      }
+      #feed-cerca::placeholder { color:var(--mute) }
+      #feed-cerca-wrap .fc-lente { position:absolute; left:11px; top:50%; transform:translateY(-50%);
+        color:var(--mute); pointer-events:none; line-height:0 }
+      #feed-cerca-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%);
+        border:none; background:none; color:var(--mute); font-size:18px; cursor:pointer;
+        padding:4px 8px; line-height:1 }
     </style>
     <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
       <h1 style="margin:0; padding-right:48px">Feed</h1>
+      <div id="feed-cerca-wrap">
+        <span class="fc-lente">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </span>
+        <input id="feed-cerca" type="search" autocomplete="off" enterkeyhint="search"
+          placeholder="Cerca persone, sfide, parole nel feed…" aria-label="Cerca nel Feed" />
+        <button type="button" id="feed-cerca-clear" aria-label="Cancella ricerca" hidden>&times;</button>
+      </div>
+      <div id="feed-persone"></div>
       ${bannerSpotifyHtml()}
     </div>
     <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
@@ -91,17 +115,83 @@ export function renderFeed(appEl) {
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
 
-  montaFeed(el.querySelector("#feed-list"));
+  const list = el.querySelector("#feed-list");
+  const input = el.querySelector("#feed-cerca");
+  const clear = el.querySelector("#feed-cerca-clear");
+  const personeBox = el.querySelector("#feed-persone");
+
+  montaFeed(list);
+
+  let timer;
+  const esegui = async () => {
+    const q = input.value.trim();
+    clear.hidden = q.length === 0;
+    if (q.length < 2) {
+      personeBox.innerHTML = "";
+      montaFeed(list);
+      return;
+    }
+    montaFeed(list, { q });
+    try {
+      const { atleti } = await api.get(`/atleti/cerca?q=${encodeURIComponent(q)}`);
+      personeBox.innerHTML = atleti.length ? personeHtml(atleti) : "";
+    } catch {
+      personeBox.innerHTML = "";
+    }
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(esegui, 220);
+  });
+  clear.addEventListener("click", () => {
+    input.value = "";
+    clear.hidden = true;
+    personeBox.innerHTML = "";
+    montaFeed(list);
+    input.focus();
+  });
+}
+
+// Striscia orizzontale dei profili che corrispondono alla ricerca — tap = scheda pubblica.
+function personeHtml(atleti) {
+  return `
+    <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 2px 4px">
+      ${atleti
+        .map((a) => {
+          const nomeCompleto = `${a.nome ?? ""} ${a.cognome ?? ""}`.trim();
+          const etichetta = a.nickname || nomeCompleto || "Atleta";
+          const iniziale = (etichetta[0] || "?").toUpperCase();
+          return `
+            <a href="#/atleta?id=${a.userId}" style="flex:0 0 auto; width:76px; text-align:center;
+               text-decoration:none; color:var(--text)">
+              ${fotoProfiloHtml(a.fotoUrl, iniziale, false, a.fotoPersonalizzazione, 52)}
+              <p class="mono" style="font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden;
+                 text-overflow:ellipsis">${esc(etichetta)}</p>
+            </a>`;
+        })
+        .join("")}
+    </div>`;
 }
 
 // Disegna la lista del Feed dentro `list` (un contenitore già nel DOM). Riusata dalla
-// pagina Feed dell'atleta e da quella della coach (dentro lo shell, senza tabbar).
-export async function montaFeed(list) {
+// pagina Feed dell'atleta e da quella della coach (dentro lo shell, senza tabbar), e dalla
+// scheda pubblica di un atleta (`opts.userId` = solo i suoi post). `opts.q` = ricerca.
+export async function montaFeed(list, opts = {}) {
   try {
-    const { posts } = await api.get("/feed");
+    const params = new URLSearchParams();
+    if (opts.userId) params.set("userId", String(opts.userId));
+    if (opts.q) params.set("q", opts.q);
+    const qs = params.toString();
+    const { posts } = await api.get(qs ? `/feed?${qs}` : "/feed");
 
     if (!posts.length) {
-      list.innerHTML = `<p class="mono" style="color:var(--mute)">Ancora nessun post.</p>`;
+      const vuoto = opts.q
+        ? "Nessun risultato per questa ricerca."
+        : opts.userId
+          ? "Ancora nessun post."
+          : "Ancora nessun post.";
+      list.innerHTML = `<p class="mono" style="color:var(--mute)">${vuoto}</p>`;
       return;
     }
 
@@ -173,7 +263,7 @@ export async function montaFeed(list) {
             api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji }),
             new Promise((r) => setTimeout(r, 420)),
           ]);
-          montaFeed(list);
+          montaFeed(list, opts);
         } catch {
           // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
           btn.classList.remove("rz-animate");
