@@ -160,17 +160,25 @@ export function renderProfilo(appEl) {
         width: 26px; height: 3px; border-radius: 2px; background: var(--accent);
       }
       /* Luce stato abbonamento (card identità): rossa = non attivo, verde = attivo,
-         entrambe lampeggiano. */
+         entrambe lampeggiano. Il <button> è un'area di tocco ampia e trasparente
+         (l'area minima consigliata su mobile); il pallino visibile è lo ::before,
+         centrato. z-index alto perché #identita-vista (z-index:1) la copre. */
       #profilo-content .abbonamento-luce {
+        z-index: 4;
+        display: flex; align-items: center; justify-content: center;
+        background: none; box-shadow: none;
+      }
+      #profilo-content .abbonamento-luce::before {
+        content: ""; width: 13px; height: 13px; border-radius: 50%;
         background: #ef4444; box-shadow: 0 0 7px #ef4444;
         animation: abb-pulse 1.3s ease-in-out infinite;
       }
-      #profilo-content .abbonamento-luce.attivo {
+      #profilo-content .abbonamento-luce.attivo::before {
         background: #22c55e; box-shadow: 0 0 7px #22c55e;
       }
       @keyframes abb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
       @media (prefers-reduced-motion: reduce) {
-        #profilo-content .abbonamento-luce { animation: none; }
+        #profilo-content .abbonamento-luce::before { animation: none; }
       }
       /* Sotto-sezioni della Performance ("Parte bassa" / "Upper body"): ognuna a tendina,
          titolo più grande delle altre etichette a tendina del profilo. */
@@ -1412,9 +1420,9 @@ function identitaCardHtml(p) {
   return `
     <div class="card" id="identita-card" style="position:relative">
       <button type="button" class="abbonamento-luce${abbAttivo ? " attivo" : ""}" aria-label="Stato abbonamento"
-        style="position:absolute; top:16px; left:16px; width:13px; height:13px; border-radius:50%; border:none; padding:0; cursor:pointer"></button>
+        style="position:absolute; top:4px; left:4px; width:34px; height:34px; border-radius:50%; border:none; padding:0; background:none; cursor:pointer"></button>
       <span class="abbonamento-banner" hidden
-        style="position:absolute; top:36px; left:14px; z-index:3; font-size:11px; font-weight:700; letter-spacing:0.5px;
+        style="position:absolute; top:40px; left:6px; z-index:4; font-size:11px; font-weight:700; letter-spacing:0.5px;
                padding:4px 9px; border-radius:6px; white-space:nowrap; background:var(--surface-2); color:var(--text); border:1px solid var(--border)">
         ${abbAttivo ? "Abbonamento attivo" : "Abbonamento non attivo"}
       </span>
