@@ -3,7 +3,7 @@ import { initSfida, MESI, SEL_STYLE, CRITERI_TRAGUARDO, oraCorrente } from "../c
 
 export function renderCoachSfide(appEl) {
   const { mese, anno } = oraCorrente();
-  renderPaginaCoach(appEl, { titolo: "Sfide" }, (el) => {
+  renderPaginaCoach(appEl, { titolo: "Gestione sfide" }, (el) => {
     el.innerHTML = `
       <div class="card">
         <div id="sfide-elenco" style="margin-top:0">

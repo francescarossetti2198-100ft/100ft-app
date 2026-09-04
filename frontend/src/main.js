@@ -18,6 +18,7 @@ import { renderCoachPresenze } from "./pages/coach/presenze.js";
 import { renderCoachChiusure } from "./pages/coach/chiusure.js";
 import { renderCoachMese } from "./pages/coach/mese.js";
 import { renderCoachSfide } from "./pages/coach/sfide.js";
+import { renderCoachSfideVista } from "./pages/coach/sfide-vista.js";
 import { renderCoachAtleti } from "./pages/coach/atleti.js";
 import { renderCoachPuntiExtra } from "./pages/coach/punti-extra.js";
 import { renderCoachComunicazioni } from "./pages/coach/comunicazioni.js";
@@ -36,7 +37,7 @@ const perCoach = (rottaCoach) => (renderAtleta) => (appEl) =>
 
 registerRoute("/", { render: (appEl) => (getUser()?.role === "coach" ? navigate("/coach") : renderHome(appEl)) });
 registerRoute("/programma", { render: perCoach("/coach")(renderProgramma) });
-registerRoute("/sfide", { render: perCoach("/coach/sfide")(renderSfide) });
+registerRoute("/sfide", { render: perCoach("/coach/sfide-vista")(renderSfide) });
 registerRoute("/feed", { render: perCoach("/coach/feed")(renderFeed) });
 registerRoute("/profilo", { render: renderProfilo });
 registerRoute("/atleta", { render: renderAtletaPubblico });
@@ -47,6 +48,7 @@ registerRoute("/coach/presenze", { render: renderCoachPresenze });
 registerRoute("/coach/chiusure", { render: renderCoachChiusure });
 registerRoute("/coach/mese", { render: renderCoachMese });
 registerRoute("/coach/sfide", { render: renderCoachSfide });
+registerRoute("/coach/sfide-vista", { render: renderCoachSfideVista });
 registerRoute("/coach/atleti", { render: renderCoachAtleti });
 registerRoute("/coach/punti-extra", { render: renderCoachPuntiExtra });
 registerRoute("/coach/comunicazioni", { render: renderCoachComunicazioni });

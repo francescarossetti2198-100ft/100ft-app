@@ -109,7 +109,18 @@ function variazioneHtml(v) {
 export function renderSfide(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
-  el.innerHTML = `
+  el.innerHTML = `<h1>Sfide</h1><div id="sfide-vista"></div>`;
+  appEl.appendChild(el);
+  appEl.appendChild(renderTabbar());
+  montaSfide(el.querySelector("#sfide-vista"));
+}
+
+// Vista Sfide (Daily Drop + classifica + carosello dei mesi) dentro `container`, già nel
+// DOM. Riusata dalla pagina Sfide dell'atleta e da quella della dashboard coach (dove il
+// Daily Drop non ha senso: `conDailyDrop:false`). Le sfide completate/da fare le gestisce
+// `sfidaItemHtml`, che già distingue il ruolo coach ("Come coach non partecipi").
+export function montaSfide(container, { conDailyDrop = true } = {}) {
+  container.innerHTML = `
     <style>
       /* Scheda mese: dark/editoriale, un accento per mese (--mese-accento) su titolo e
          fondo, resto invariato. Palette solo dai token di brand. */
@@ -157,17 +168,14 @@ export function renderSfide(appEl) {
         line-height: 1; padding: 4px 10px; cursor: pointer; font-family: inherit;
       }
     </style>
-    <h1>Sfide</h1>
-    <div id="daily-drop-card" class="card" style="margin-bottom:16px"></div>
+    ${conDailyDrop ? `<div id="daily-drop-card" class="card" style="margin-bottom:16px"></div>` : ""}
     <div id="classifica"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     <div id="sfide-list" style="margin-top:16px"></div>
   `;
-  appEl.appendChild(el);
-  appEl.appendChild(renderTabbar());
 
-  loadDailyDrop(el);
-  loadClassifica(el, "mese");
-  loadSfide(el);
+  if (conDailyDrop) loadDailyDrop(container);
+  loadClassifica(container, "mese");
+  loadSfide(container);
 }
 
 async function loadDailyDrop(el) {
