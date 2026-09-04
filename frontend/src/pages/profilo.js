@@ -255,9 +255,14 @@ function abbonamentoCoachHtml(userId, abb) {
 export function fotoProfiloHtml(fotoUrl, iniziale, modifica = true, personalizzazione = null, dimensione = 84) {
   const anello = anelloWrapperStyle(personalizzazione);
   const bordoNeutro = anello ? "" : "border:2px solid var(--border);";
+  const segnaposto = (display) =>
+    `<span style="display:${display}; width:${dimensione}px; height:${dimensione}px; border-radius:50%; background:var(--surface-2); align-items:center; justify-content:center; font-size:${Math.round(dimensione * 0.33)}px; color:var(--mute)">${iniziale}</span>`;
   const media = fotoUrl
-    ? `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo" style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; object-fit:cover; display:block; ${bordoNeutro}" />`
-    : `<span style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:${Math.round(dimensione * 0.33)}px; color:var(--mute)">${iniziale}</span>`;
+    ? // Se il file non c'è più su R2 (foto orfana) l'<img> fallisce: mostra il segnaposto.
+      `<img src="${mediaUrl(fotoUrl)}" alt="Foto profilo"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+         style="width:${dimensione}px; height:${dimensione}px; border-radius:50%; object-fit:cover; display:block; ${bordoNeutro}" />${segnaposto("none")}`
+    : segnaposto("flex");
   const mediaConAnello = anello
     ? `<span style="display:inline-flex; border-radius:50%; vertical-align:middle; ${anello}">${media}</span>`
     : media;

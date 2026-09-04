@@ -88,10 +88,15 @@ function meseAccento(key) {
 // leggibile anche per chi non ha ancora caricato una foto.
 function avatarHtml(a) {
   const nome = a.nickname || a.nome || "?";
+  const segnaposto = (display) =>
+    `<span style="display:${display}; width:22px; height:22px; border-radius:50%; background:var(--surface-2); align-items:center; justify-content:center; font-size:11px; color:var(--mute)">${nome[0].toUpperCase()}</span>`;
   if (a.fotoUrl) {
-    return `<img src="${mediaUrl(a.fotoUrl)}" alt="" style="width:22px; height:22px; border-radius:50%; object-fit:cover" />`;
+    // Foto orfana su R2 → l'<img> fallisce: ripiega sul cerchio con l'iniziale.
+    return `<img src="${mediaUrl(a.fotoUrl)}" alt=""
+       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"
+       style="width:22px; height:22px; border-radius:50%; object-fit:cover" />${segnaposto("none")}`;
   }
-  return `<span style="width:22px; height:22px; border-radius:50%; background:var(--surface-2); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--mute)">${nome[0].toUpperCase()}</span>`;
+  return segnaposto("inline-flex");
 }
 
 // Ultimo spostamento in classifica (a ogni sorpasso di punti): freccia verde su se hai
