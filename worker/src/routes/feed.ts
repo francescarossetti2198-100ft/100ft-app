@@ -60,6 +60,14 @@ feed.get("/", requireAuth, async (c) => {
       fotoPersonalizzazione: string | null;
     }>();
 
+  // Foto della coach — i suoi post (annuncio / diario / merenda) hanno user_id NULL, quindi
+  // il LEFT JOIN sopra non la aggancia. La recuperiamo a parte e la mettiamo su quei post.
+  const coach = await c.env.DB.prepare(
+    `SELECT p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione
+     FROM users u JOIN athlete_profile p ON p.user_id = u.id
+     WHERE u.role = 'coach' LIMIT 1`
+  ).first<{ fotoUrl: string | null; fotoPersonalizzazione: string | null }>();
+
   const idPost = posts.map((p) => p.id);
   const reazioniPerPost = new Map<number, { emoji: string; n: number; mia: boolean }[]>();
 
@@ -83,11 +91,17 @@ feed.get("/", requireAuth, async (c) => {
   }
 
   return c.json({
-    posts: posts.map((p) => ({
-      ...p,
-      fotoPersonalizzazione: parseFotoPersonalizzazione(p.fotoPersonalizzazione),
-      reazioni: reazioniPerPost.get(p.id) ?? [],
-    })),
+    posts: posts.map((p) => {
+      const daCoach = p.userId == null;
+      return {
+        ...p,
+        fotoUrl: daCoach ? (coach?.fotoUrl ?? null) : p.fotoUrl,
+        fotoPersonalizzazione: parseFotoPersonalizzazione(
+          daCoach ? coach?.fotoPersonalizzazione : p.fotoPersonalizzazione
+        ),
+        reazioni: reazioniPerPost.get(p.id) ?? [],
+      };
+    }),
   });
 });
 

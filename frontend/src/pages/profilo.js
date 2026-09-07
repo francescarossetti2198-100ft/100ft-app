@@ -1490,7 +1490,7 @@ function initIdentita(content, p, onSaved) {
 // intensità dell'anello attorno alla foto profilo. Tocca solo l'anello — niente avatar,
 // niente cambio forma/tema. Se si esce senza salvare, la personalizzazione precedente
 // resta invariata (lo stato locale non viene mai scritto finché non si preme SALVA). ───
-function apriPersonalizzaFoto(p, onSaved) {
+export function apriPersonalizzaFoto(p, onSaved) {
   const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
   let stato = { ...(p.fotoPersonalizzazione ?? DEFAULT_FOTO_PERSONALIZZAZIONE) };
 

@@ -30,10 +30,17 @@ profilo.get("/me", requireAuth, async (c) => {
   // Profilo per lei è lo STATO ABBONAMENTI (vedi GET /atleti). Serve però la foto profilo:
   // vale anche per la coach ed è mostrata in classifica accanto al nome.
   if (c.var.user.role === "coach") {
-    const row = await c.env.DB.prepare(`SELECT foto_url AS fotoUrl FROM athlete_profile WHERE user_id = ?`)
+    const row = await c.env.DB.prepare(
+      `SELECT foto_url AS fotoUrl, foto_personalizzazione AS fotoPersonalizzazione
+       FROM athlete_profile WHERE user_id = ?`
+    )
       .bind(userId)
-      .first<{ fotoUrl: string | null }>();
-    return c.json({ role: "coach" as const, fotoUrl: row?.fotoUrl ?? null });
+      .first<{ fotoUrl: string | null; fotoPersonalizzazione: string | null }>();
+    return c.json({
+      role: "coach" as const,
+      fotoUrl: row?.fotoUrl ?? null,
+      fotoPersonalizzazione: parseFotoPersonalizzazione(row?.fotoPersonalizzazione),
+    });
   }
 
   // Le sfide "traguardo" (completa profilo, obiettivi, ecc.) scattano anche solo aprendo
@@ -183,7 +190,6 @@ profilo.get("/statistiche", requireAuth, async (c) => {
 // (data di nascita, peso, altezza, note infortuni) + risposte al questionario.
 // Salvataggio parziale: i campi non presenti nel body restano invariati.
 profilo.post("/me", requireAuth, async (c) => {
-  if (c.var.user.role !== "atleta") return c.json({ error: "Solo per gli atleti" }, 403);
   const userId = c.var.user.userId;
 
   const body = await c.req.json<{
@@ -199,6 +205,13 @@ profilo.post("/me", requireAuth, async (c) => {
   }>();
 
   const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+
+  // La coach può modificare SOLO la personalizzazione della foto (l'anello): niente
+  // nickname / dati / questionario — quelli sono roba da atleti.
+  if (c.var.user.role !== "atleta") {
+    const consentiti = Object.keys(body).every((k) => k === "fotoPersonalizzazione");
+    if (!consentiti) return c.json({ error: "Solo per gli atleti" }, 403);
+  }
 
   // --- validazioni sui soli campi presenti ---
   if (has("nome") && (body.nome == null || String(body.nome).trim() === "" || String(body.nome).trim().length > 60)) {
