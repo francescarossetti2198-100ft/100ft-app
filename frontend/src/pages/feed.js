@@ -12,6 +12,7 @@ const TIPO_INFO = {
   badge: { icona: "🏅", azione: "ha conquistato il badge di" },
   annuncio_coach: { icona: "📣", azione: "annuncio" },
   allenamento: { icona: "🏋️", azione: "" },
+  merenda: { icona: "🍎", azione: "merenda di oggi" },
 };
 
 const esc = (s) =>
@@ -198,7 +199,7 @@ export async function montaFeed(list, opts = {}) {
     list.innerHTML = posts
       .map((p) => {
         const info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
-        const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento";
+        const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento" || p.tipo === "merenda";
         const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
 
         // Cerchio della foto prima del nome: per gli atleti apre la loro scheda pubblica
