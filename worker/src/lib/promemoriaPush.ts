@@ -63,7 +63,8 @@ export async function inviaPromemoriaAllenamentoSeAttivo(env: Env): Promise<void
             title: "100FT — Ti alleni oggi?",
             body: "Ricordati di registrare la presenza nell'app 💪",
             url: "/",
-          }
+          },
+          21600 // 6 ore: utile per tutta la giornata fino all'allenamento
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

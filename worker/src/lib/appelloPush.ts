@@ -56,7 +56,8 @@ export async function inviaAppelloSeAttivo(env: Env): Promise<void> {
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           env.VAPID_PUBLIC_KEY,
           env.VAPID_PRIVATE_KEY,
-          { title: "Allenamento finito", body: "Conferma le presenze di oggi 📋", url: "/coach" }
+          { title: "Allenamento finito", body: "Conferma le presenze di oggi 📋", url: "/coach" },
+          86400 // 1 giorno: l'appello può essere fatto anche più tardi
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

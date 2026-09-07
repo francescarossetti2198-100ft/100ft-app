@@ -73,7 +73,8 @@ export async function inviaPromemoriaFeedbackSeAttivo(env: Env): Promise<void> {
             title: "100FT — Com'è andato l'allenamento?",
             body: "Lascia il feedback prima di mezzanotte: bastano 30 secondi 💬",
             url: "/",
-          }
+          },
+          10800 // 3 ore: il feedback scade a mezzanotte
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

@@ -67,7 +67,8 @@ export async function inviaPromemoriaAbbonamentoSeAttivo(env: Env): Promise<void
             title: "100FT",
             body: "Ricordati di saldare il tuo abbonamento mensile",
             url: "/profilo",
-          }
+          },
+          86400 // 1 giorno
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

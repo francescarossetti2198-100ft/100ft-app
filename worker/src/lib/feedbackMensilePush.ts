@@ -63,7 +63,8 @@ export async function inviaFeedbackMensileSeAttivo(env: Env): Promise<void> {
             title: "100FT — Com'è andato il mese?",
             body: `Raccontaci com'è andato ${MESI[mese - 1]}: 2 minuti nell'app 📋`,
             url: "/",
-          }
+          },
+          86400 // 1 giorno
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

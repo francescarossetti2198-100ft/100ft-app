@@ -148,7 +148,11 @@ export async function sendWebPush(
   subscription: PushSubscriptionInfo,
   vapidPublicKey: string,
   vapidPrivateKey: string,
-  payload: { title: string; body: string; url?: string }
+  payload: { title: string; body: string; url?: string },
+  // Per quanti secondi il servizio push (APNs/FCM) tiene la notifica se il telefono non è
+  // raggiungibile subito. 60s (il vecchio default) era troppo poco: su iPhone in tasca la
+  // notifica veniva scartata prima di comparire. Ogni promemoria passa un valore adatto.
+  ttlSecondi = 43200
 ): Promise<Response> {
   const jwt = await buildVapidJwt(subscription.endpoint, vapidPublicKey, vapidPrivateKey);
   const body = await encryptPayload(JSON.stringify(payload), subscription);
@@ -156,7 +160,7 @@ export async function sendWebPush(
   return fetch(subscription.endpoint, {
     method: "POST",
     headers: {
-      TTL: "60",
+      TTL: String(Math.max(0, Math.round(ttlSecondi))),
       "Content-Type": "application/octet-stream",
       "Content-Encoding": "aes128gcm",
       Authorization: `vapid t=${jwt}, k=${vapidPublicKey}`,

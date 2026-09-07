@@ -81,7 +81,8 @@ export async function inviaPromemoriaPresenzaSeraSeAttivo(env: Env): Promise<voi
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           env.VAPID_PUBLIC_KEY,
           env.VAPID_PRIVATE_KEY,
-          { title: "100FT — Ci sei oggi?", body, url: "/" }
+          { title: "100FT — Ci sei oggi?", body, url: "/" },
+          10800 // 3 ore: utile fino a poco prima dell'allenamento
         );
         if (res.status === 404 || res.status === 410) {
           await env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();

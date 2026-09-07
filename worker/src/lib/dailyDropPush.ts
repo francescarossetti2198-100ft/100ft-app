@@ -31,7 +31,8 @@ export async function inviaDailyDropSeAttivo(env: Env): Promise<void> {
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           env.VAPID_PUBLIC_KEY,
           env.VAPID_PRIVATE_KEY,
-          { title: "100FT — Daily Drop 💧", body: "Fermati e bevi un sorso d'acqua, poi condividi la foto del momento. Apri l'app!", url: "/" }
+          { title: "100FT — Daily Drop 💧", body: "Fermati e bevi un sorso d'acqua, poi condividi la foto del momento. Apri l'app!", url: "/" },
+          600 // 10 min: il Daily Drop è a tempo (finestra di risposta breve), ma tolleri un piccolo ritardo di consegna
         );
         // 404/410 = sottoscrizione scaduta o revocata lato browser, va rimossa.
         if (res.status === 404 || res.status === 410) {
