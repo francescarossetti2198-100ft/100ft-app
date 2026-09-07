@@ -31,13 +31,16 @@ const PERIODI = [
 // cambiare, quindi l'input è nascosto dentro una <label> che fa da bottone "Scatta la
 // foto". Scelto un file, l'etichetta lo conferma. `cls` = classe sull'input per il resto
 // del codice (`.foto-input`, `.dd-foto`).
-function fotoInputHtml(cls) {
+// `galleria: true` → niente `capture`, così il telefono lascia scegliere tra fotocamera e
+// galleria (per le sfide foto). Senza, forza la fotocamera (Daily Drop: "foto al volo").
+function fotoInputHtml(cls, { galleria = false } = {}) {
+  const label = galleria ? "📷 Scatta o scegli una foto" : "📷 Scatta la foto";
   return `
     <label class="foto-btn" style="position:relative; width:100%; margin-top:10px; display:flex;
            align-items:center; justify-content:center; gap:8px; padding:12px 20px; border-radius:10px;
            background:var(--surface-2); color:var(--text); font-weight:600; font-size:15px; cursor:pointer">
-      <span class="foto-btn-txt">📷 Scatta la foto</span>
-      <input class="${cls}" type="file" accept="image/*" capture="environment"
+      <span class="foto-btn-txt" data-label="${label}">${label}</span>
+      <input class="${cls}" type="file" accept="image/*"${galleria ? "" : ' capture="environment"'}
              style="position:absolute; width:1px; height:1px; opacity:0" />
     </label>
   `;
@@ -47,7 +50,7 @@ function attachFotoInput(scope) {
   scope.querySelectorAll(".foto-btn input[type=file]").forEach((input) => {
     input.addEventListener("change", () => {
       const txt = input.closest(".foto-btn")?.querySelector(".foto-btn-txt");
-      if (txt) txt.textContent = input.files[0] ? "✓ Foto pronta — tocca per cambiare" : "📷 Scatta la foto";
+      if (txt) txt.textContent = input.files[0] ? "✓ Foto pronta — tocca per cambiare" : txt.dataset.label;
     });
   });
 }
@@ -331,7 +334,7 @@ function sfidaItemHtml(s, oggi) {
           ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">Come coach non partecipi alle sfide.</p>`
           : s.tipo === "foto"
             ? `
-          ${fotoInputHtml("foto-input")}
+          ${fotoInputHtml("foto-input", { galleria: true })}
           <p class="error-text foto-error" hidden style="margin-top:6px"></p>
           <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
         `
