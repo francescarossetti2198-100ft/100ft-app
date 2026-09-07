@@ -26,35 +26,29 @@ push.post("/", requireAuth, async (c) => {
   return c.json({ ok: true }, 201);
 });
 
-// Promemoria push opzionali (per utente): "bevi acqua" (11:00 e 16:00) e "fai merenda"
-// (1h30 prima dell'allenamento). Il client manda sempre entrambi i valori.
+// Promemoria push opzionale (per utente): "bevi acqua" (11:00 e 16:00). La colonna
+// notifiche_preferenze.promemoria_merenda resta nello schema ma non è più usata (il
+// promemoria merenda è stato tolto: la merenda del giorno esce nel Feed).
 push.get("/preferenze", requireAuth, async (c) => {
   const row = await c.env.DB.prepare(
-    `SELECT promemoria_acqua AS promemoriaAcqua, promemoria_merenda AS promemoriaMerenda
-     FROM notifiche_preferenze WHERE user_id = ?`
+    `SELECT promemoria_acqua AS promemoriaAcqua FROM notifiche_preferenze WHERE user_id = ?`
   )
     .bind(c.var.user.userId)
-    .first<{ promemoriaAcqua: number; promemoriaMerenda: number }>();
-  return c.json({
-    promemoriaAcqua: !!row?.promemoriaAcqua,
-    promemoriaMerenda: !!row?.promemoriaMerenda,
-  });
+    .first<{ promemoriaAcqua: number }>();
+  return c.json({ promemoriaAcqua: !!row?.promemoriaAcqua });
 });
 
 push.post("/preferenze", requireAuth, async (c) => {
-  const { promemoriaAcqua, promemoriaMerenda } = await c.req.json<{
-    promemoriaAcqua?: boolean;
-    promemoriaMerenda?: boolean;
-  }>();
+  const { promemoriaAcqua } = await c.req.json<{ promemoriaAcqua?: boolean }>();
   await c.env.DB.prepare(
     `INSERT INTO notifiche_preferenze (user_id, promemoria_acqua, promemoria_merenda)
-     VALUES (?, ?, ?)
+     VALUES (?, ?, 0)
      ON CONFLICT (user_id) DO UPDATE SET
        promemoria_acqua = excluded.promemoria_acqua,
-       promemoria_merenda = excluded.promemoria_merenda,
+       promemoria_merenda = 0,
        aggiornata_il = datetime('now')`
   )
-    .bind(c.var.user.userId, promemoriaAcqua ? 1 : 0, promemoriaMerenda ? 1 : 0)
+    .bind(c.var.user.userId, promemoriaAcqua ? 1 : 0)
     .run();
   return c.json({ ok: true });
 });

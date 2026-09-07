@@ -45,7 +45,7 @@ export async function inviaNotificaDiProva() {
   return api.post("/push/test");
 }
 
-// Promemoria opzionali: "bevi acqua" e "fai merenda". { promemoriaAcqua, promemoriaMerenda }.
+// Promemoria opzionale: "bevi acqua" (11:00 e 16:00). { promemoriaAcqua }.
 export async function leggiPromemoria() {
   return api.get("/push/preferenze");
 }
