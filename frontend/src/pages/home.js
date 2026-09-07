@@ -76,9 +76,8 @@ export function renderHome(appEl) {
         border: 1px solid var(--border); border-radius: 12px;
         background: none; color: inherit; font-family: inherit;
       }
-      #timeline-card .giorno-tile.oggi { border-color: var(--accent); cursor: pointer; }
+      #timeline-card .giorno-tile.oggi { border-color: var(--accent); }
       #timeline-card .giorno-tile.dim { opacity: 0.5; }
-      #timeline-card .giorno-tile:disabled { opacity: 0.5; cursor: default; }
       /* Sessione in corso adesso: il giorno "respira" con un lampeggio fioco e lento. */
       #timeline-card .giorno-tile.live { animation: gt-live 1.7s ease-in-out infinite; }
       @keyframes gt-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -89,6 +88,24 @@ export function renderHome(appEl) {
       #timeline-card .gt-ora { font-size: 10px; color: var(--mute); margin: 3px 0 0; }
       #timeline-card .gt-stato { font-size: 10px; letter-spacing: 1px; margin: 6px 0 0; }
       #timeline-card .gt-hint { font-size: 9px; color: var(--mute); opacity: 0.75; margin: 4px 0 0; }
+      /* Scelta presenza per la sessione di oggi: 💪 Presente / 😔 Assente. */
+      #timeline-card .gt-chiedi { font-size: 10px; letter-spacing: 1px; color: var(--mute); margin: 6px 0 0; }
+      #timeline-card .gt-scelta { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+      #timeline-card .gt-opt {
+        font-family: inherit; font-size: 11px; padding: 5px 4px; border-radius: 8px;
+        border: 1px solid var(--border); background: none; color: var(--mute); cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;
+      }
+      #timeline-card .gt-opt .gt-emoji { font-size: 14px; }
+      #timeline-card .gt-opt:disabled { opacity: 0.6; cursor: default; }
+      #timeline-card .gt-opt.gt-si.on {
+        border-color: var(--livello-1); color: var(--livello-1); font-weight: 700;
+        background: color-mix(in srgb, var(--livello-1) 15%, transparent);
+      }
+      #timeline-card .gt-opt.gt-no.on {
+        border-color: var(--livello-5); color: var(--livello-5); font-weight: 700;
+        background: color-mix(in srgb, var(--livello-5) 15%, transparent);
+      }
 
       /* "Il tuo allenamento di oggi": un'unica card con dentro il messaggio della coach,
          "Prima dell'allenamento" (richieste) e "Post allenamento" (feedback). Le sezioni
@@ -459,7 +476,8 @@ async function loadTimeline(el) {
       const conclusa = passato || (oggi && finita);
 
       const chiuso = s.stato === "chiuso";
-      const cliccabile = oggi && !chiuso;
+      // Oggi e la sessione non è ancora finita: l'atleta può ancora scegliere Presente/Assente.
+      const puoiScegliere = oggi && !chiuso && !conclusa;
 
       let segno = "";
       let stato = "";
@@ -488,18 +506,35 @@ async function loadTimeline(el) {
       // solo i futuri, i chiusi e i passati senza risposta.
       const conEsito = s.stato === "presente" || stato === "ASSENTE";
       const dim = chiuso || futuro || (!oggi && !conEsito);
-      const cls = `giorno-tile${cliccabile ? " oggi" : ""}${live && !chiuso ? " live" : ""}${dim ? " dim" : ""}`;
+      const cls = `giorno-tile${puoiScegliere ? " oggi" : ""}${live && !chiuso ? " live" : ""}${dim ? " dim" : ""}`;
+
+      if (puoiScegliere) {
+        // 💪 Presente = prenoto · 😔 Assente = dico che non vengo. Quella attiva è evidenziata.
+        const sceltoSi = s.stato === "presente" || s.stato === "in_attesa";
+        const sceltoNo = s.stato === "assente";
+        return `
+          <div class="${cls}">
+            <p class="gt-nome">${giorno}</p>
+            <p class="gt-ora mono">${orario}</p>
+            ${!sceltoSi && !sceltoNo ? `<p class="gt-chiedi mono">CI SEI?</p>` : ""}
+            <div class="gt-scelta">
+              <button type="button" class="gt-opt gt-si${sceltoSi ? " on" : ""}" data-presente="1">
+                <span class="gt-emoji">💪</span> Presente
+              </button>
+              <button type="button" class="gt-opt gt-no${sceltoNo ? " on" : ""}" data-presente="0">
+                <span class="gt-emoji">😔</span> Assente
+              </button>
+            </div>
+          </div>`;
+      }
 
       const corpo = `
         <p class="gt-nome">${segno}${giorno}</p>
         <p class="gt-ora mono">${chiuso ? "festività / chiusura" : orario}</p>
         <p class="gt-stato mono" style="color:${statoColore}">${stato}</p>
-        ${cliccabile ? `<p class="gt-hint mono">${s.stato === "indeciso" ? "tocca per prenotare" : s.stato === "in_attesa" ? "tocca per annullare" : "tocca per cambiare"}</p>` : ""}
       `;
 
-      return cliccabile
-        ? `<button type="button" class="${cls}" data-stato="${s.stato}">${corpo}</button>`
-        : `<div class="${cls}">${corpo}</div>`;
+      return `<div class="${cls}">${corpo}</div>`;
     };
 
     card.innerHTML = sezione(
@@ -518,20 +553,21 @@ async function loadTimeline(el) {
       }
     }
 
-    card.querySelector(".giorno-tile.oggi")?.addEventListener("click", async (e) => {
-      const btn = e.currentTarget;
-      // Se ha già prenotato (o è confermato presente) il tocco annulla, altrimenti prenota.
-      const presente = !["in_attesa", "presente"].includes(btn.dataset.stato);
-      btn.disabled = true;
-      try {
-        await api.post("/presenze/conferma", { presente });
-        loadSettimana(el);
-        loadTimeline(el);
-        loadPresenzeOggi(el);
-        loadFeedback(el);
-      } catch {
-        btn.disabled = false;
-      }
+    const opzioni = card.querySelectorAll(".giorno-tile.oggi .gt-opt");
+    opzioni.forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const presente = btn.dataset.presente === "1";
+        opzioni.forEach((b) => (b.disabled = true));
+        try {
+          await api.post("/presenze/conferma", { presente });
+          loadSettimana(el);
+          loadTimeline(el);
+          loadPresenzeOggi(el);
+          loadFeedback(el);
+        } catch {
+          opzioni.forEach((b) => (b.disabled = false));
+        }
+      });
     });
   } catch (err) {
     card.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
