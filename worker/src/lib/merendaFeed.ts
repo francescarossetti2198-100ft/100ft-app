@@ -31,12 +31,13 @@ function oraRoma(): { data: string; oraMinuti: string } {
   };
 }
 
-// Alle 16:00 (ora di Roma), l'ora della merenda: se il coach ha preparato una merenda fit
-// datata oggi, la pubblica nel Feed con un messaggio d'apertura sempre diverso + titolo,
-// descrizione e la grafica se c'è. Una sola volta al giorno (merenda_feed_notifiche).
+// Alle 08:00 (ora di Roma): la merenda fit datata oggi diventa visibile nella sezione
+// "Merende fit" del Programma dalle 07:00, quindi il post nel Feed esce poco dopo, la
+// mattina. Messaggio d'apertura sempre diverso + titolo, descrizione e la grafica se c'è.
+// Una sola volta al giorno (merenda_feed_notifiche).
 export async function pubblicaMerendaDelGiornoSeAttivo(env: Env): Promise<void> {
   const { data, oraMinuti } = oraRoma();
-  if (oraMinuti !== "16:00") return;
+  if (oraMinuti !== "08:00") return;
 
   const merenda = await env.DB.prepare(
     `SELECT titolo, descrizione, foto_url AS fotoUrl, link_url AS linkUrl
