@@ -1059,6 +1059,9 @@ export async function initNotifiche(content, conPromemoria = false) {
            <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
              <input type="checkbox" id="pm-acqua" /> Ricordami di bere — 11:00 e 16:00
            </label>
+           <label style="display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer">
+             <input type="checkbox" id="pm-merenda" /> Ricordami la merenda — 1 ora e mezza prima dell'allenamento
+           </label>
          </div>`
       : "";
 
@@ -1083,14 +1086,17 @@ export async function initNotifiche(content, conPromemoria = false) {
 
   if (conPromemoria && stato === "attive") {
     const acqua = content.querySelector("#pm-acqua");
+    const merenda = content.querySelector("#pm-merenda");
     leggiPromemoria()
       .then((p) => {
         acqua.checked = !!p.promemoriaAcqua;
+        merenda.checked = !!p.promemoriaMerenda;
       })
       .catch(() => {});
-    acqua.addEventListener("change", () =>
-      salvaPromemoria({ promemoriaAcqua: acqua.checked }).catch(() => {})
-    );
+    const salva = () =>
+      salvaPromemoria({ promemoriaAcqua: acqua.checked, promemoriaMerenda: merenda.checked }).catch(() => {});
+    acqua.addEventListener("change", salva);
+    merenda.addEventListener("change", salva);
   }
 }
 

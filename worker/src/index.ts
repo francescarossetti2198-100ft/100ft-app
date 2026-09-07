@@ -30,6 +30,7 @@ import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
 import { inviaAppelloSeAttivo } from "./lib/appelloPush";
 import { inviaPromemoriaAbbonamentoSeAttivo } from "./lib/abbonamentoPush";
 import { inviaPromemoriaAcquaSeAttivo } from "./lib/promemoriaAcquaPush";
+import { inviaPromemoriaMerendaSeAttivo } from "./lib/promemoriaMerendaPush";
 import { inviaPromemoriaFeedbackSeAttivo } from "./lib/feedbackPromemoriaPush";
 import { inviaPromemoriaPresenzaSeraSeAttivo } from "./lib/promemoriaPresenzaSeraPush";
 import { pubblicaMerendaDelGiornoSeAttivo } from "./lib/merendaFeed";
@@ -109,6 +110,7 @@ export default {
     ctx.waitUntil(inviaAppelloSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaAbbonamentoSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaAcquaSeAttivo(env));
+    ctx.waitUntil(inviaPromemoriaMerendaSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaFeedbackSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaPresenzaSeraSeAttivo(env));
     ctx.waitUntil(pubblicaMerendaDelGiornoSeAttivo(env));
