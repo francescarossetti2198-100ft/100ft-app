@@ -2,7 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout, getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
-import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria } from "../push.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria, inviaNotificaDiProva } from "../push.js";
 import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
@@ -1071,6 +1071,8 @@ export async function initNotifiche(content, conPromemoria = false) {
   box.innerHTML =
     stato === "attive"
       ? `<p style="font-size:13px">Attive ✓</p>
+         <button class="btn" id="notifiche-prova" style="width:100%; margin-top:8px">Invia una notifica di prova</button>
+         <p class="mono" id="notifiche-prova-esito" hidden style="font-size:12px; margin-top:6px"></p>
          <button class="btn" id="notifiche-toggle" style="width:100%; margin-top:8px; background:var(--surface-2); color:var(--text)">Disattiva</button>
          ${promemoriaHtml}`
       : `<p class="mono" style="color:var(--mute); font-size:13px">Ricevi un avviso quando arriva il Daily Drop e il promemoria del giorno di allenamento.</p>
@@ -1084,6 +1086,26 @@ export async function initNotifiche(content, conPromemoria = false) {
       initNotifiche(content, conPromemoria);
     } catch (err) {
       box.innerHTML = `<p class="error-text">${err.message}</p>`;
+    }
+  });
+
+  content.querySelector("#notifiche-prova")?.addEventListener("click", async (e) => {
+    const esito = content.querySelector("#notifiche-prova-esito");
+    e.target.disabled = true;
+    e.target.textContent = "Invio…";
+    try {
+      const { inviate } = await inviaNotificaDiProva();
+      esito.textContent = inviate
+        ? "Inviata ✓ — dovrebbe arrivarti tra pochi secondi."
+        : "Inviata, ma nessun dispositivo ha risposto. Se non arriva, disattiva e riattiva le notifiche.";
+      esito.style.color = inviate ? "var(--livello-1)" : "var(--livello-5)";
+    } catch {
+      esito.textContent = "Non è stato possibile inviare la notifica di prova.";
+      esito.style.color = "var(--livello-5)";
+    } finally {
+      esito.hidden = false;
+      e.target.disabled = false;
+      e.target.textContent = "Invia una notifica di prova";
     }
   });
 
