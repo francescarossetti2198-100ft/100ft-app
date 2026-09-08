@@ -13,10 +13,6 @@ export function renderCoachImpostazioni(appEl) {
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:0">NOTIFICHE PUSH</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Notifica per fare l'appello a fine allenamento. Sotto puoi anche attivare i promemoria per bere e per la merenda.</p>
         <div id="notifiche-stato" style="margin-top:8px"><p class="mono" style="color:var(--mute); font-size:13px">Verifico...</p></div>
-        <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
-          <button class="btn" id="imp-prova-drop" style="width:100%; background:var(--surface-2); color:var(--text)">Prova il Daily Drop (solo a te)</button>
-          <p class="mono" id="imp-prova-drop-esito" hidden style="font-size:12px; margin-top:6px"></p>
-        </div>
       </div>
 
       <div class="card" style="margin-top:16px">
@@ -48,26 +44,6 @@ export function renderCoachImpostazioni(appEl) {
       )
     );
     initNotifiche(el, true); // anche la coach può attivare i promemoria bere / merenda
-
-    el.querySelector("#imp-prova-drop").addEventListener("click", async (e) => {
-      const esito = el.querySelector("#imp-prova-drop-esito");
-      e.target.disabled = true;
-      e.target.textContent = "Invio…";
-      try {
-        const { inviate } = await api.post("/daily-drop/prova");
-        esito.textContent = inviate
-          ? "Inviata ✓ — dovrebbe arrivarti come la ricevono gli atleti."
-          : "Nessun dispositivo ha risposto. Attiva le notifiche qui sopra e riprova.";
-        esito.style.color = inviate ? "var(--livello-1)" : "var(--livello-5)";
-      } catch (err) {
-        esito.textContent = err?.message || "Non è stato possibile inviare la prova.";
-        esito.style.color = "var(--livello-5)";
-      } finally {
-        esito.hidden = false;
-        e.target.disabled = false;
-        e.target.textContent = "Prova il Daily Drop (solo a te)";
-      }
-    });
 
     el.querySelector("#imp-esci").addEventListener("click", async () => {
       await logout();
