@@ -4,7 +4,7 @@ import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
 import { oggi as oggiInfo } from "../lib/oggi";
-import { statoDailyDrop } from "../lib/dailyDropOrario";
+import { statoDailyDrop, FINESTRA_RISPOSTA_MIN } from "../lib/dailyDropOrario";
 import { sendWebPush } from "../lib/webPush";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
@@ -114,11 +114,13 @@ dailyDrop.post("/simula", requireCoach, async (c) => {
     .first();
   if (!atleta) return c.json({ error: "Atleta non trovato" }, 404);
 
+  // Stessa finestra del Daily Drop reale (FINESTRA_RISPOSTA_MIN), così la prova è fedele.
+  const scadenza = `+${FINESTRA_RISPOSTA_MIN} minutes`;
   await c.env.DB.prepare(
-    `INSERT INTO daily_drop_test (user_id, scade_il) VALUES (?, datetime('now', '+30 minutes'))
-     ON CONFLICT (user_id) DO UPDATE SET scade_il = datetime('now', '+30 minutes')`
+    `INSERT INTO daily_drop_test (user_id, scade_il) VALUES (?, datetime('now', ?))
+     ON CONFLICT (user_id) DO UPDATE SET scade_il = datetime('now', ?)`
   )
-    .bind(userId)
+    .bind(userId, scadenza, scadenza)
     .run();
 
   const { results: iscrizioni } = await c.env.DB.prepare(
@@ -153,7 +155,7 @@ dailyDrop.post("/simula", requireCoach, async (c) => {
     })
   );
 
-  return c.json({ ok: true, inviate, finestraMinuti: 30 });
+  return c.json({ ok: true, inviate, finestraMinuti: FINESTRA_RISPOSTA_MIN });
 });
 
 export default dailyDrop;
