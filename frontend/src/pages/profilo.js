@@ -601,13 +601,18 @@ function schedaAtletaHtml(d) {
         <p class="error-text iscrizione-error" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px"></p>
         <p class="success-text iscrizione-ok" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px">Salvata ✓</p>
       </div>
-      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:12px">
         <button type="button" class="link-btn reset-password-btn" data-user-id="${d.userId}" data-nome="${esc(nome).replace(/"/g, "&quot;")}"
-          style="text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+          style="text-align:left; text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
           RESET PASSWORD
+        </button>
+        <button type="button" class="link-btn simula-drop-btn" data-user-id="${d.userId}"
+          style="text-align:left; text-decoration:none; color:var(--mute); font-family:var(--font-mono); font-size:11px; letter-spacing:1px">
+          SIMULA DAILY DROP
         </button>
       </div>
       <div class="reset-password-esito" data-user-id="${d.userId}" style="margin-top:6px"></div>
+      <p class="mono simula-drop-esito" data-user-id="${d.userId}" hidden style="margin-top:6px; font-size:12px"></p>
     </div>
   `;
 }
@@ -690,6 +695,25 @@ function initSchedaAzioni(scheda) {
       } catch (err) {
         esito.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
       } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  scheda.querySelectorAll(".simula-drop-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = Number(btn.dataset.userId);
+      const esito = scheda.querySelector(`.simula-drop-esito[data-user-id="${userId}"]`);
+      btn.disabled = true;
+      try {
+        const { finestraMinuti } = await api.post("/daily-drop/simula", { userId });
+        esito.textContent = `Fatto. L'atleta ha ${finestraMinuti} minuti per rispondere al Daily Drop dalla pagina Sfide (gli è arrivata anche la notifica, se le ha attive).`;
+        esito.style.color = "var(--livello-1)";
+      } catch (err) {
+        esito.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        esito.style.color = "var(--livello-5)";
+      } finally {
+        esito.hidden = false;
         btn.disabled = false;
       }
     });
