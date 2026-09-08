@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
 import { oggi as oggiInfo } from "../lib/oggi";
 import { statoDailyDrop } from "../lib/dailyDropOrario";
+import { sendWebPush } from "../lib/webPush";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
 // Solo in occasione dei giorni di allenamento (lun/mer/ven), e non ogni volta — occasionale,
@@ -71,6 +72,49 @@ dailyDrop.post("/", requireAuth, async (c) => {
   await awardXp(c.env.DB, c.var.user.userId, "daily_drop", 5);
 
   return c.json({ ok: true }, 201);
+});
+
+// Prova del Daily Drop — solo coach: manda ai PROPRI dispositivi esattamente la stessa
+// notifica che ricevono gli atleti quando scatta il Daily Drop, così la coach può vedere
+// come appare senza aspettare (e senza mandarla a nessun altro).
+dailyDrop.post("/prova", requireCoach, async (c) => {
+  const { results: iscrizioni } = await c.env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`
+  )
+    .bind(c.var.user.userId)
+    .all<{ id: number; endpoint: string; p256dh: string; auth: string }>();
+
+  if (iscrizioni.length === 0) {
+    return c.json({ error: "Attiva prima le notifiche su questo dispositivo" }, 400);
+  }
+
+  let inviate = 0;
+  await Promise.all(
+    iscrizioni.map(async (s) => {
+      try {
+        const res = await sendWebPush(
+          { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
+          c.env.VAPID_PUBLIC_KEY,
+          c.env.VAPID_PRIVATE_KEY,
+          {
+            title: "100FT — Daily Drop 💧",
+            body: "Fermati e bevi un sorso d'acqua, poi condividi la foto del momento. Apri l'app!",
+            url: "/",
+          },
+          600
+        );
+        if (res.status === 404 || res.status === 410) {
+          await c.env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(s.id).run();
+        } else if (res.ok) {
+          inviate++;
+        }
+      } catch {
+        // ignora il singolo invio fallito
+      }
+    })
+  );
+
+  return c.json({ ok: true, inviate });
 });
 
 export default dailyDrop;
