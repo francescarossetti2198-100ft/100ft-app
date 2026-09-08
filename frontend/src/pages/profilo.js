@@ -1079,7 +1079,28 @@ export async function initNotifiche(content, conPromemoria = false) {
     return;
   }
   if (stato === "negato") {
-    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Bloccate dalle impostazioni del telefono — vanno riattivate da lì per questa app.</p>`;
+    // Il permesso è stato rifiutato: il browser non lascia richiederlo di nuovo dall'app,
+    // va riattivato dalle impostazioni del telefono. Guida passo-passo + "ricontrolla".
+    box.innerHTML = `
+      <p class="mono" style="color:var(--mute); font-size:13px">
+        Le notifiche sono bloccate. Puoi riattivarle così:
+      </p>
+      <ol class="mono" style="color:var(--mute); font-size:12px; margin:8px 0 0; padding-left:18px; line-height:1.7">
+        <li><strong style="color:var(--text)">iPhone</strong>: Impostazioni → scorri fino a <strong style="color:var(--text)">100FT</strong> → Notifiche → attiva “Consenti notifiche”. Poi chiudi e riapri l'app.</li>
+        <li><strong style="color:var(--text)">Android</strong>: tieni premuto sull'icona dell'app → Info app → Notifiche → attiva.</li>
+      </ol>
+      <button class="btn" id="notifiche-ricontrolla" style="width:100%; margin-top:10px">Ho riattivato — ricontrolla</button>
+      <p class="mono" id="notifiche-ricontrolla-esito" hidden style="font-size:12px; margin-top:6px; color:var(--livello-5)">
+        Ancora bloccate. Assicurati di aver chiuso e riaperto del tutto l'app dopo aver cambiato l'impostazione.
+      </p>`;
+    content.querySelector("#notifiche-ricontrolla").addEventListener("click", async () => {
+      const nuovo = await statoNotifiche().catch(() => "non-supportato");
+      if (nuovo === "negato") {
+        content.querySelector("#notifiche-ricontrolla-esito").hidden = false;
+      } else {
+        initNotifiche(content, conPromemoria);
+      }
+    });
     return;
   }
 
