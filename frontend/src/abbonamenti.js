@@ -1,5 +1,6 @@
-// I 5 piani di abbonamento 100FT. Il prezzo NON si mostra mai nell'app dell'atleta —
-// solo sulla dashboard coach. ⚠️ Tenere in sync con worker/src/lib/abbonamentiPiani.ts.
+// I piani di abbonamento 100FT. Il prezzo NON si mostra mai nell'app dell'atleta —
+// solo sulla dashboard coach. ⚠️ Tenere in sync con worker/src/lib/abbonamentiPiani.ts
+// e con il volantino frontend/public/abbonamenti-info.jpg.
 export const PIANI = [
   {
     key: "full",
@@ -21,13 +22,6 @@ export const PIANI = [
     giorni: "1 giorno a settimana a scelta",
     prezzo: 30,
     colore: "var(--livello-1)",
-  },
-  {
-    key: "mix",
-    nome: "MIX",
-    giorni: "1 funzionale + Mar + 1 corso fitness in palestra a scelta",
-    prezzo: 50,
-    colore: "var(--livello-6)",
   },
   {
     key: "fitnessdream",

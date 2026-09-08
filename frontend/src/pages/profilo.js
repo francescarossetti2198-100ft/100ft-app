@@ -823,9 +823,11 @@ function abbonamentoStato(p) {
 function abbonamentoCardHtml(p) {
   const { attuale, prossimo, mostrato } = abbonamentoStato(p);
   const nomeDi = (k) => (k ? pianoByKey(k)?.nome ?? k : null);
+  // Piano attuale ritirato (es. MIX): non è più tra le pill, va scelto un piano nuovo.
+  const pianoRitirato = !!attuale && !pianoByKey(attuale);
   // Con un piano già scelto la card è chiusa: si vede solo quello che vale ora, gli altri
-  // compaiono toccando "Cambia piano".
-  const collassa = !!attuale;
+  // compaiono toccando "Cambia piano". Se il piano è ritirato, la card resta aperta.
+  const collassa = !!attuale && !pianoRitirato;
 
   const pillHtml = (pl) => {
     const on = pl.key === mostrato;
@@ -846,7 +848,8 @@ function abbonamentoCardHtml(p) {
   };
 
   let info;
-  if (!attuale) info = "Scegli il tuo piano per iniziare.";
+  if (pianoRitirato) info = `Il piano <strong>${nomeDi(attuale)?.toUpperCase()}</strong> non è più disponibile — scegli un nuovo piano qui sotto.`;
+  else if (!attuale) info = "Scegli il tuo piano per iniziare.";
   else if (prossimo)
     info = `Ora sei su <strong>${nomeDi(attuale)}</strong>. Dal mese prossimo passi a <strong>${nomeDi(prossimo)}</strong> — tocca ${nomeDi(attuale)} per annullare.`;
   else info = "Il tuo piano resta ogni mese. Se lo cambi, vale dal mese prossimo.";
