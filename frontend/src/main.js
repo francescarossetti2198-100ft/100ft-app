@@ -2,6 +2,7 @@ import "./style.css";
 import { registerRoute, startRouter, navigate } from "./router.js";
 import { mountThemeToggle } from "./theme.js";
 import { loadSession, getUser } from "./auth.js";
+import { sincronizzaPush } from "./push.js";
 import { renderLogin } from "./pages/login.js";
 import { renderRegistrazione } from "./pages/registrazione.js";
 import { renderPasswordDimenticata } from "./pages/password-dimenticata.js";
@@ -90,6 +91,10 @@ async function bootstrap() {
   }
   mountThemeToggle();
   startRouter(document.getElementById("app"));
+
+  // Se l'utente è loggato e ha le notifiche attive nel browser, riallinea la
+  // sottoscrizione sul server (potrebbe averla persa se l'endpoint era scaduto).
+  if (getUser()) sincronizzaPush();
 }
 
 bootstrap();

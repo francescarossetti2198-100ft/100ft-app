@@ -45,6 +45,22 @@ export async function inviaNotificaDiProva() {
   return api.post("/push/test");
 }
 
+// Ri-registra sul server la sottoscrizione che il browser ha già, nel caso il server
+// l'abbia persa (endpoint scaduto lato FCM/APNs → cancellato dopo un 404/410, poi il
+// browser rinnova il token da solo). Idempotente. Da chiamare all'avvio dell'app.
+export async function sincronizzaPush() {
+  if (!supportato() || Notification.permission !== "granted") return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    const json = sub.toJSON();
+    await api.post("/push", { endpoint: json.endpoint, keys: json.keys });
+  } catch {
+    // best-effort: se fallisce, l'utente può sempre riattivare dal Profilo
+  }
+}
+
 // Promemoria opzionali: "bevi acqua" e "fai merenda". { promemoriaAcqua, promemoriaMerenda }.
 export async function leggiPromemoria() {
   return api.get("/push/preferenze");

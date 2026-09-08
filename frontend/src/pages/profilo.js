@@ -706,9 +706,13 @@ function initSchedaAzioni(scheda) {
       const esito = scheda.querySelector(`.simula-drop-esito[data-user-id="${userId}"]`);
       btn.disabled = true;
       try {
-        const { finestraMinuti } = await api.post("/daily-drop/simula", { userId });
-        esito.textContent = `Fatto. L'atleta ha ${finestraMinuti} minuti per rispondere al Daily Drop dalla pagina Sfide (gli è arrivata anche la notifica, se le ha attive).`;
-        esito.style.color = "var(--livello-1)";
+        const { finestraMinuti, inviate } = await api.post("/daily-drop/simula", { userId });
+        esito.textContent =
+          `Fatto. L'atleta ha ${finestraMinuti} minuti per rispondere al Daily Drop dalla pagina Sfide. ` +
+          (inviate
+            ? `Notifica inviata a ${inviate} dispositivo${inviate === 1 ? "" : "i"}.`
+            : `Nessuna notifica inviata: l'atleta deve riaprire l'app e riattivare le notifiche. La simulazione funziona lo stesso, basta che apra la pagina Sfide.`);
+        esito.style.color = inviate ? "var(--livello-1)" : "var(--livello-3)";
       } catch (err) {
         esito.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
         esito.style.color = "var(--livello-5)";
