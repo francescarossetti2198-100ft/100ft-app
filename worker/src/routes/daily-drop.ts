@@ -143,8 +143,8 @@ dailyDrop.post("/simula", requireCoach, async (c) => {
           c.env.VAPID_PUBLIC_KEY,
           c.env.VAPID_PRIVATE_KEY,
           {
-            title: "100FT — Daily Drop 💧",
-            body: "Fermati e bevi un sorso d'acqua, poi condividi la foto del momento. Apri l'app!",
+            title: "📸 100FT — Daily Drop!",
+            body: "È il momento: bevi un sorso e condividi SUBITO la foto. Hai 5 minuti per rispondere ⏱️",
             url: "/",
           },
           1800
