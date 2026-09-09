@@ -101,13 +101,17 @@ export async function verificaTraguardi(db: D1Database, userId: number): Promise
     if (!(await criterioSoddisfatto(db, userId, s))) continue;
 
     const prima = await snapshotProgressione(db, userId);
-    await db
+    // `INSERT OR IGNORE` + guardia su changes: se un'altra richiesta concorrente ha già
+    // completato questo traguardo (stesso sfida_id+user_id, vincolo UNIQUE), non si
+    // riassegnano punti né si ripubblica nel Feed.
+    const ins = await db
       .prepare(
-        `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati)
+        `INSERT OR IGNORE INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati)
          VALUES (?, ?, NULL, NULL, ?, ?)`
       )
       .bind(s.id, userId, oggi, PUNTI_SFIDA)
       .run();
+    if ((ins.meta.changes ?? 0) === 0) continue;
     await awardXp(db, userId, "sfida", PUNTI_SFIDA, s.id);
     // Ogni sfida completata (traguardi inclusi) compare nel Feed; le "lampo" col prefisso ⚡.
     await db

@@ -183,11 +183,14 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
 
-  await c.env.DB.prepare(
-    `INSERT INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati) VALUES (?, ?, ?, ?, ?, ?)`
+  // `INSERT OR IGNORE` (vincolo UNIQUE su sfida_id+user_id): due tap ravvicinati non
+  // creano una doppia partecipazione. Se non è stata inserita nessuna riga, era già fatta.
+  const ins = await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO partecipazioni_sfide (sfida_id, user_id, valore, foto_url, data, punti_assegnati) VALUES (?, ?, ?, ?, ?, ?)`
   )
     .bind(sfidaId, c.var.user.userId, valore, fotoUrl, oggi, sfida.punti)
     .run();
+  if ((ins.meta.changes ?? 0) === 0) return c.json({ error: "Hai già partecipato a questa sfida" }, 409);
 
   await awardXp(c.env.DB, c.var.user.userId, "sfida", sfida.punti, sfida.id);
 

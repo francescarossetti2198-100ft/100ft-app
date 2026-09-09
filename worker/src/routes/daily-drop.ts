@@ -6,6 +6,7 @@ import { salvaFoto } from "../lib/storage";
 import { oggi as oggiInfo } from "../lib/oggi";
 import { statoDailyDrop, FINESTRA_RISPOSTA_MIN } from "../lib/dailyDropOrario";
 import { sendWebPush } from "../lib/webPush";
+import { verificaTraguardi } from "../lib/traguardi";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
 // Solo in occasione dei giorni di allenamento (lun/mer/ven), e non ogni volta — occasionale,
@@ -92,6 +93,10 @@ dailyDrop.post("/", requireAuth, async (c) => {
 
   // +5 punti alla pubblicazione (sistema punti 2026-08).
   await awardXp(c.env.DB, c.var.user.userId, "daily_drop", 5);
+
+  // Completa subito il traguardo "Fai almeno un daily drop" (prima si sbloccava solo
+  // riaprendo le Sfide / il Profilo — chi chiudeva l'app restava senza i +10).
+  await verificaTraguardi(c.env.DB, c.var.user.userId);
 
   // La simulazione è "usa e getta".
   if (simulazione) {
