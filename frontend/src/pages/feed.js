@@ -1,6 +1,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { fotoProfiloHtml } from "./profilo.js";
+import { getUser } from "../auth.js";
 
 const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
@@ -210,6 +211,10 @@ export async function montaFeed(list, opts = {}) {
           ? `<a href="#/atleta?id=${p.userId}" style="flex:0 0 auto; line-height:0">${avatarHtml}</a>`
           : `<span style="flex:0 0 auto; line-height:0">${avatarHtml}</span>`;
 
+        // Solo la coach, e solo sui SUOI post (annuncio/diario/merenda, userId assente) —
+        // i post degli atleti non si cancellano da qui.
+        const puoiCancellare = getUser()?.role === "coach" && !p.userId;
+
         const reazioniHtml = EMOJI.map((e) => {
           const r = p.reazioni.find((x) => x.emoji === e);
           const attiva = r?.mia;
@@ -231,6 +236,11 @@ export async function montaFeed(list, opts = {}) {
                 ${info.icona}${info.azione ? ` <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>` : ""}
               </p>
               <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; align-self:flex-start">${tempoFa(p.data)}</span>
+              ${puoiCancellare
+                ? `<button type="button" class="feed-cancella-btn" data-post="${p.id}" aria-label="Cancella il post"
+                     style="flex:0 0 auto; align-self:flex-start; border:none; background:none; color:var(--mute);
+                            font-size:16px; line-height:1; padding:0 0 0 8px; cursor:pointer">✕</button>`
+                : ""}
             </div>
             <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
@@ -268,6 +278,19 @@ export async function montaFeed(list, opts = {}) {
         } catch {
           // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
           btn.classList.remove("rz-animate");
+        }
+      });
+    });
+    list.querySelectorAll(".feed-cancella-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Cancellare questo post dal Feed?")) return;
+        btn.disabled = true;
+        try {
+          await api.del(`/feed/${btn.dataset.post}`);
+          montaFeed(list, opts);
+        } catch (err) {
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          btn.disabled = false;
         }
       });
     });

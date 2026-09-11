@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
+import { eliminaFoto } from "../lib/storage";
 
 const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉"];
 
@@ -127,6 +128,33 @@ feed.post("/:id/reazioni", requireAuth, async (c) => {
     .run();
 
   return c.json({ ok: true, azione: "aggiunta" });
+});
+
+// Cancella un post pubblicato dalla coach (annuncio, voce di diario, merenda del giorno —
+// tutti con user_id NULL). Solo quelli: i post degli atleti (sfide, daily drop, livelli...)
+// non si toccano da qui. Le reazioni se ne vanno da sole (FK ON DELETE CASCADE); la
+// foto/allegato su R2 li ripuliamo a parte, best-effort.
+feed.delete("/:id", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "Post non valido" }, 400);
+
+  const post = await c.env.DB.prepare(
+    `SELECT user_id AS userId, contenuto_url AS contenutoUrl, allegato_url AS allegatoUrl
+     FROM post_feed WHERE id = ?`
+  )
+    .bind(id)
+    .first<{ userId: number | null; contenutoUrl: string | null; allegatoUrl: string | null }>();
+
+  if (!post) return c.json({ error: "Post non trovato" }, 404);
+  if (post.userId != null) {
+    return c.json({ error: "Puoi cancellare solo i post pubblicati da te" }, 403);
+  }
+
+  await c.env.DB.prepare(`DELETE FROM post_feed WHERE id = ?`).bind(id).run();
+
+  await Promise.all([eliminaFoto(c.env.FOTO_SFIDE, post.contenutoUrl), eliminaFoto(c.env.FOTO_SFIDE, post.allegatoUrl)]);
+
+  return c.json({ ok: true });
 });
 
 // Annunci del coach — post manuale (brief, sezione 11), user_id NULL.
