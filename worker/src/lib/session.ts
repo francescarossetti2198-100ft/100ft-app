@@ -1,4 +1,4 @@
-import type { Env, SessionUser } from "../types";
+import type { Env, Role, SessionUser } from "../types";
 
 // Sessioni "lunghe": il device ricorda il login (brief, sezione 2), niente re-login ogni volta.
 const SESSION_DURATION_DAYS = 180;
@@ -24,11 +24,8 @@ export async function createSession(
   const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
   await db
-    .prepare(
-      `INSERT INTO sessioni_login (token, atleta_id, is_coach, scade_il, user_agent)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .bind(token, user.isCoach ? null : user.atletaId, user.isCoach ? 1 : 0, expiresAt.toISOString(), userAgent)
+    .prepare(`INSERT INTO sessioni_login (token, user_id, scade_il, user_agent) VALUES (?, ?, ?, ?)`)
+    .bind(token, user.userId, expiresAt.toISOString(), userAgent)
     .run();
 
   return { token, expiresAt };
@@ -37,17 +34,16 @@ export async function createSession(
 export async function getSession(db: D1Database, token: string): Promise<SessionUser | null> {
   const row = await db
     .prepare(
-      `SELECT atleta_id AS atletaId, is_coach AS isCoach
-       FROM sessioni_login
-       WHERE token = ? AND scade_il > datetime('now')`
+      `SELECT u.id AS userId, u.role AS role
+       FROM sessioni_login s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token = ? AND s.scade_il > datetime('now')`
     )
     .bind(token)
-    .first<{ atletaId: number | null; isCoach: number }>();
+    .first<{ userId: number; role: Role }>();
 
   if (!row) return null;
-  if (row.isCoach) return { isCoach: true, atletaId: null };
-  if (row.atletaId === null) return null;
-  return { isCoach: false, atletaId: row.atletaId };
+  return { userId: row.userId, role: row.role };
 }
 
 export async function deleteSession(db: D1Database, token: string): Promise<void> {

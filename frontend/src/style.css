@@ -4,8 +4,13 @@
   --surface-2: #1e1e1e;
   --accent: #8b5cf6;
   --text: #f5f5f5;
-  --mute: #8a8a8a;
+  --mute: #f5f5f5;
   --border: #2a2a2a;
+
+  /* Chrome della tabbar: tenuti come token così il tema chiaro può ridefinirli
+     senza cambiare l'aspetto in scuro (la tabbar non si ridisegna). */
+  --tabbar-fg: #ffffff;
+  --tabbar-active-fg: #000000;
 
   /* Tag colore sessioni, coerenti con le schede PDF esistenti */
   --sessione-a: #ff7a29; /* arancio */
@@ -23,6 +28,51 @@
 
   --font-ui: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+/* Tema chiaro — attivato da <html data-theme="light"> (vedi frontend/src/theme.js
+   e lo script inline in index.html che lo applica prima del primo paint).
+   Ridefinisce solo le tinte neutre: i colori di livelli/sessioni restano identici
+   perché sono colori di brand e funzionano su entrambi i fondi. */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --surface-2: #e8e8ec;
+  --accent: #7c3aed;
+  --text: #16161a;
+  --mute: #6b6b73;
+  --border: #d9d9de;
+
+  --tabbar-fg: #16161a;
+  --tabbar-active-fg: #ffffff;
+}
+
+/* "Il tuo allenamento di oggi": card a colori invertiti rispetto al tema corrente,
+   così è la prima cosa che salta all'occhio nella Home. Ridefiniamo solo i token
+   neutri dentro la card — testo, bordi, input, bottoni e sfondo (.card usa
+   var(--surface)) si adattano da soli. I colori di brand restano invariati. */
+:root[data-theme="dark"] #allenamento-oggi-card {
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --surface-2: #e8e8ec;
+  --accent: #7c3aed;
+  --text: #16161a;
+  --mute: #6b6b73;
+  --border: #d9d9de;
+}
+:root[data-theme="light"] #allenamento-oggi-card {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1e1e1e;
+  --accent: #8b5cf6;
+  --text: #f5f5f5;
+  --mute: #b5b5bd;
+  --border: #2a2a2a;
+}
+/* Il testo della card (e i figli che ereditano il colore) deve seguire i token
+   invertiti, non il colore di base del <body>. */
+#allenamento-oggi-card {
+  color: var(--text);
 }
 
 * {
@@ -57,9 +107,85 @@ a {
   font-family: var(--font-mono);
 }
 
+/* Titoletto di sezione condiviso: Space Grotesk bold uppercase + barretta accento sotto.
+   Sostituisce i vari <p class="mono" style="color:var(--mute); font-size:12px"> che si
+   perdevano. Pensato per essere adottato via via in tutta l'app. */
+.sezione-label {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  margin: 0;
+}
+.sezione-label::after {
+  content: "";
+  display: block;
+  width: 26px;
+  height: 3px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Blocco a tendina (pagina Programma: Obiettivo / Perché questo mese / Risultato atteso).
+   Chiuso di default, si apre al tocco sul titolo. */
+details.blocco-mese {
+  border-top: 1px solid var(--border);
+}
+details.blocco-mese > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 0;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+details.blocco-mese > summary::-webkit-details-marker {
+  display: none;
+}
+details.blocco-mese > summary::after {
+  content: "\25BE";
+  color: var(--accent);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+details.blocco-mese[open] > summary::after {
+  transform: rotate(180deg);
+}
+details.blocco-mese > .blocco-corpo {
+  padding: 0 0 14px;
+}
+
+/* Kicker / etichetta breve: stessa impronta di .sezione-label (Space Grotesk bold
+   uppercase) ma senza barretta, per le scritte piccole sopra o sotto un titolo
+   (pagina Sfide, Daily Drop). Prima erano mono sottili in --mute e si perdevano. */
+.kicker {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+}
+
 .screen {
   flex: 1;
   padding: 20px 16px 90px;
+}
+
+/* Lascia spazio all'interruttore tema fisso in alto a destra */
+.screen > h1:first-child {
+  padding-right: 48px;
 }
 
 button,
@@ -111,6 +237,35 @@ input {
   padding: 16px;
 }
 
+/* Campo password con occhio mostra/nascondi (frontend/src/components/password-field.js) */
+.pw-wrap {
+  position: relative;
+}
+.pw-wrap input {
+  width: 100%;
+  padding-right: 44px;
+}
+.pw-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--mute);
+  cursor: pointer;
+  padding: 0;
+}
+.pw-eye svg {
+  width: 18px;
+  height: 18px;
+}
+
 .error-text {
   color: var(--livello-5);
   font-size: 13px;
@@ -132,29 +287,178 @@ input {
   text-decoration: underline;
 }
 
-nav.tabbar {
+/* Interruttore tema chiaro/scuro — montato una volta su <body> (frontend/src/theme.js),
+   fuori da #app così sopravvive ai cambi di pagina del router. */
+.theme-toggle {
   position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: 14px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ─── Dashboard coach: menù laterale ☰ (nessuna tabbar in basso) ─────────────── */
+.coach-screen {
+  padding-bottom: 28px;
+}
+.coach-hamburger {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 14px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3.5px;
+  cursor: pointer;
+  padding: 0;
+}
+.coach-hamburger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.coach-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.coach-drawer-backdrop.aperto {
+  opacity: 1;
+  pointer-events: auto;
+}
+.coach-drawer {
+  position: fixed;
+  top: 0;
   bottom: 0;
   left: 0;
-  right: 0;
+  z-index: 61;
+  width: min(78vw, 300px);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: calc(env(safe-area-inset-top) + 20px) 0 24px;
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+}
+.coach-drawer.aperto {
+  transform: translateX(0);
+}
+.coach-drawer-titolo {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 0 20px 10px;
+}
+.coach-drawer-gruppo {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 16px 20px 4px;
+}
+.coach-drawer-voce {
+  display: block;
+  padding: 11px 20px;
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.coach-drawer-voce.sub {
+  padding-left: 30px;
+}
+.coach-drawer-voce.attiva {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-drawer,
+  .coach-drawer-backdrop {
+    transition: none;
+  }
+}
+
+nav.tabbar {
+  position: fixed;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
   display: flex;
   justify-content: space-around;
   background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 10px 0;
 }
 
 nav.tabbar a {
   text-decoration: none;
-  color: var(--mute);
+  color: var(--tabbar-fg);
   font-size: 11px;
   font-family: var(--font-mono);
+  text-transform: uppercase;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-nav.tabbar a.active {
-  color: var(--accent);
+nav.tabbar a .tab-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--mute);
+}
+
+/* Il tab attivo si solleva e prende uno sfondo pieno — l'animazione riparte ogni volta che
+   il tab viene rimontato (ogni pagina ricrea la tabbar da zero, non è un elemento persistente
+   tra le navigazioni), quindi "muoversi" è ottenuto con una keyframe animation al mount, non
+   con una transition che richiederebbe lo stesso nodo DOM prima/dopo. */
+nav.tabbar a.active .tab-icon-box {
+  background: var(--accent);
+  color: var(--tabbar-active-fg);
+  animation: tab-pop 0.25s ease;
+}
+
+@keyframes tab-pop {
+  0% { transform: translateY(0) scale(0.85); }
+  60% { transform: translateY(-8px) scale(1.15); }
+  100% { transform: translateY(-6px) scale(1); }
 }

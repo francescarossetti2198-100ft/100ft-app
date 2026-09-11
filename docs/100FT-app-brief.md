@@ -67,31 +67,35 @@ Separazione netta tra autenticazione, profilo pubblico e dati privati (privacy g
 
 ---
 
-## 4. Sistema XP (indicativo, regolabile da admin)
+## 4. Sistema punti (aggiornato 2026-08)
 
-| Azione | XP |
+| Azione | Punti |
 |---|---|
-| Sessione completata | +10 |
-| Sfida | +5 / +20 (secondo difficoltà) |
-| Personal Best | +20 |
-| Athlete of the Week (Coach's Pick) | +30 |
-| Community Challenge | +10 |
-| Daily Drop | +10 |
+| Presenza confermata dalla coach (appello digitale) | +10 |
+| Sfida completata | +10 |
+| Tutte le sfide del mese completate | +10 (bonus) |
+| Daily Drop | +5 |
+| Feedback post-allenamento | +2 |
+| Questionario mensile | +15 |
+
+I punti sono sempre calcolati al volo da `xp_log`. La classifica (Settimana/Mese/Totale) li somma tutti. I livelli NON usano i punti (vedi sezione 5).
 
 ---
 
 ## 5. Sistema di livelli (permanente, non si azzera)
 
-Cumulativo, non a streak rigido — settimane totali (anche non consecutive) con tutti gli "anelli" settimanali chiusi.
+Cumulativo, non a streak — si sale in base al **numero di allenamenti** (presenze confermate dalla coach), anche non consecutivi. Gli anelli settimanali della Home sono solo una statistica e non incidono sul livello.
 
-| Livello | Nome | Settimane richieste | Colore |
+| Livello | Nome | Allenamenti richiesti | Colore |
 |---|---|---|---|
-| 1 | Facile | 1–3 | Verde `#8BC53F` |
-| 2 | Inizio | 4–8 | Blu `#2D7DD2` |
-| 3 | Intermedio | 9–15 | Oro `#F4B740` |
-| 4 | Avanzato | 16–24 | Arancio `#FF7A29` |
-| 5 | Esperto | 25–34 | Rosso `#E63946` |
-| 6 | Leggendario | 35+ | Viola `#A85CFF` |
+| 1 | Facile | 3–17 | Verde `#8BC53F` |
+| 2 | Inizio | 18–35 | Blu `#2D7DD2` |
+| 3 | Intermedio | 36–59 | Oro `#F4B740` |
+| 4 | Avanzato | 60–74 | Arancio `#FF7A29` |
+| 5 | Esperto | 75–89 | Rosso `#E63946` |
+| 6 | Leggendario | 90+ | Viola `#A85CFF` |
+
+(Equivalenti a 1/6/12/20/25/30 settimane da 3 allenamenti — calibrati sul calendario stagionale di 11 mesi.)
 
 Asset grafici pronti: `card_final_1.png` … `card_final_6.png`.
 
