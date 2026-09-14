@@ -1029,9 +1029,37 @@ function impostazioniCardHtml() {
           <div class="blocco-corpo">${regolamentoHtml()}</div>
         </details>
       </div>
-      <button class="btn" id="impostazioni-logout" style="width:100%; margin-top:14px; background:var(--surface-2); color:var(--text)">Esci</button>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:14px">
+        Se l'app resta bloccata su una pagina bianca o non si aggiorna dopo una novità, usa questo:
+      </p>
+      <button class="btn" id="ricarica-app-btn" type="button"
+        style="width:100%; margin-top:6px; background:transparent; border:1px solid var(--livello-5); color:var(--livello-5)">
+        Ricarica l'app
+      </button>
+      <button class="btn" id="impostazioni-logout" style="width:100%; margin-top:10px; background:var(--surface-2); color:var(--text)">Esci</button>
     </div>
   `;
+}
+
+// "Ricarica l'app": disinstalla il service worker + svuota tutte le cache e ricarica —
+// stesso effetto di eliminare e reinstallare l'icona dalla Home, ma dall'interno dell'app.
+// Serve per il caso "pagina bianca bloccata" (SW/cache vecchia incastrata su iPhone dopo
+// un lungo periodo senza apire l'app) senza dover passare dalla Home del telefono.
+export async function ricaricaApp() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrazioni = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrazioni.map((r) => r.unregister()));
+    }
+    if ("caches" in window) {
+      const chiavi = await caches.keys();
+      await Promise.all(chiavi.map((k) => caches.delete(k)));
+    }
+  } catch {
+    // anche se la pulizia fallisce in parte, ricarichiamo comunque
+  } finally {
+    location.reload();
+  }
 }
 
 function initSicurezza(content) {
@@ -1771,6 +1799,7 @@ async function loadProfilo(el) {
       await logout();
       navigate("/login");
     });
+    content.querySelector("#ricarica-app-btn")?.addEventListener("click", ricaricaApp);
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }

@@ -1,5 +1,5 @@
 import { renderPaginaCoach } from "../../components/coach-shell.js";
-import { fotoProfiloHtml, attachFotoUpload, initNotifiche, apriPersonalizzaFoto } from "../profilo.js";
+import { fotoProfiloHtml, attachFotoUpload, initNotifiche, apriPersonalizzaFoto, ricaricaApp } from "../profilo.js";
 import { api } from "../../api.js";
 import { logout } from "../../auth.js";
 import { navigate } from "../../router.js";
@@ -20,7 +20,14 @@ export function renderCoachImpostazioni(appEl) {
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Usa il pulsante in alto a destra per passare da chiaro a scuro (o automatico).</p>
       </div>
 
-      <button class="btn" id="imp-esci" style="width:100%; margin-top:20px; background:var(--surface-2); color:var(--text)">Esci</button>`;
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:20px">
+        Se l'app resta bloccata su una pagina bianca o non si aggiorna dopo una novità, usa questo:
+      </p>
+      <button class="btn" id="imp-ricarica" type="button"
+        style="width:100%; margin-top:6px; background:transparent; border:1px solid var(--livello-5); color:var(--livello-5)">
+        Ricarica l'app
+      </button>
+      <button class="btn" id="imp-esci" style="width:100%; margin-top:10px; background:var(--surface-2); color:var(--text)">Esci</button>`;
 
     let p = {};
     try { p = await api.get("/profilo/me"); } catch { /* mostra comunque il placeholder */ }
@@ -45,6 +52,7 @@ export function renderCoachImpostazioni(appEl) {
     );
     initNotifiche(el, true); // anche la coach può attivare i promemoria bere / merenda
 
+    el.querySelector("#imp-ricarica").addEventListener("click", ricaricaApp);
     el.querySelector("#imp-esci").addEventListener("click", async () => {
       await logout();
       navigate("/login");
