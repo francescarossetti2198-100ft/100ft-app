@@ -19,7 +19,7 @@ const TIPO_INFO = {
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-const EMOJI = ["👍", "🔥", "💪", "🎉"];
+const EMOJI = ["👍", "🔥", "💪", "🎉", "🖕"];
 
 // Playlist ufficiale di 100FT su Spotify — mini-banner stretto in fondo al Feed.
 const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/playlist/3Qw3Mw1PuhB8H1BslDyWaw";

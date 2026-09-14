@@ -4,7 +4,7 @@ import { requireAuth, requireCoach } from "../middleware/auth";
 import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 import { eliminaFoto } from "../lib/storage";
 
-const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉"];
+const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉", "🖕"];
 
 type Variables = { user: SessionUser };
 const feed = new Hono<{ Bindings: Env; Variables: Variables }>();
