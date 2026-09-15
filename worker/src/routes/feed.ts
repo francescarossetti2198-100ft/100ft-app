@@ -71,24 +71,33 @@ feed.get("/", requireAuth, async (c) => {
 
   const idPost = posts.map((p) => p.id);
   const reazioniPerPost = new Map<number, { emoji: string; n: number; mia: boolean }[]>();
+  const commentiPerPost = new Map<number, number>();
 
   if (idPost.length) {
     const segnaposto = idPost.map(() => "?").join(",");
-    const { results: reazioni } = await c.env.DB.prepare(
-      `SELECT post_id AS postId, emoji, COUNT(*) AS n,
-              MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mia
-       FROM feed_reazioni
-       WHERE post_id IN (${segnaposto})
-       GROUP BY post_id, emoji`
-    )
-      .bind(c.var.user.userId, ...idPost)
-      .all<{ postId: number; emoji: string; n: number; mia: number }>();
+    const [{ results: reazioni }, { results: commenti }] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT post_id AS postId, emoji, COUNT(*) AS n,
+                MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mia
+         FROM feed_reazioni
+         WHERE post_id IN (${segnaposto})
+         GROUP BY post_id, emoji`
+      )
+        .bind(c.var.user.userId, ...idPost)
+        .all<{ postId: number; emoji: string; n: number; mia: number }>(),
+      c.env.DB.prepare(
+        `SELECT post_id AS postId, COUNT(*) AS n FROM feed_commenti WHERE post_id IN (${segnaposto}) GROUP BY post_id`
+      )
+        .bind(...idPost)
+        .all<{ postId: number; n: number }>(),
+    ]);
 
     for (const r of reazioni) {
       const lista = reazioniPerPost.get(r.postId) ?? [];
       lista.push({ emoji: r.emoji, n: r.n, mia: !!r.mia });
       reazioniPerPost.set(r.postId, lista);
     }
+    for (const r of commenti) commentiPerPost.set(r.postId, r.n);
   }
 
   return c.json({
@@ -101,9 +110,113 @@ feed.get("/", requireAuth, async (c) => {
           daCoach ? coach?.fotoPersonalizzazione : p.fotoPersonalizzazione
         ),
         reazioni: reazioniPerPost.get(p.id) ?? [],
+        numeroCommenti: commentiPerPost.get(p.id) ?? 0,
       };
     }),
   });
+});
+
+// Chi ha reagito a un post, raggruppato per emoji — per il tap "vedi chi ha reagito".
+feed.get("/:id/reazioni", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.emoji, u.id AS userId, u.role, a.nome, a.nickname
+     FROM feed_reazioni r
+     JOIN users u ON u.id = r.user_id
+     LEFT JOIN athlete_profile a ON a.user_id = u.id
+     WHERE r.post_id = ?
+     ORDER BY r.data ASC`
+  )
+    .bind(postId)
+    .all<{ emoji: string; userId: number; role: string; nome: string | null; nickname: string | null }>();
+
+  return c.json({
+    reazioni: results.map((r) => ({
+      emoji: r.emoji,
+      userId: r.userId,
+      autore: r.role === "coach" ? "Coach" : r.nickname || r.nome || "Atleta",
+    })),
+  });
+});
+
+// Commenti di un post, in ordine cronologico.
+feed.get("/:id/commenti", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT co.id, co.testo, co.data, u.id AS userId, u.role, a.nome, a.nickname,
+            a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
+     FROM feed_commenti co
+     JOIN users u ON u.id = co.user_id
+     LEFT JOIN athlete_profile a ON a.user_id = u.id
+     WHERE co.post_id = ?
+     ORDER BY co.data ASC`
+  )
+    .bind(postId)
+    .all<{
+      id: number;
+      testo: string;
+      data: string;
+      userId: number;
+      role: string;
+      nome: string | null;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+    }>();
+
+  return c.json({
+    commenti: results.map((r) => ({
+      id: r.id,
+      testo: r.testo,
+      data: r.data,
+      userId: r.userId,
+      autore: r.role === "coach" ? "Coach" : r.nickname || r.nome || "Atleta",
+      fotoUrl: r.fotoUrl,
+      fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+      puoiCancellare: r.userId === c.var.user.userId || c.var.user.role === "coach",
+    })),
+  });
+});
+
+feed.post("/:id/commenti", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const post = await c.env.DB.prepare(`SELECT id FROM post_feed WHERE id = ?`).bind(postId).first();
+  if (!post) return c.json({ error: "Post non trovato" }, 404);
+
+  const { testo } = await c.req.json<{ testo?: string }>();
+  const pulito = testo?.trim() ?? "";
+  if (!pulito) return c.json({ error: "Scrivi qualcosa" }, 400);
+  if (pulito.length > 500) return c.json({ error: "Massimo 500 caratteri" }, 400);
+
+  await c.env.DB.prepare(`INSERT INTO feed_commenti (post_id, user_id, testo) VALUES (?, ?, ?)`)
+    .bind(postId, c.var.user.userId, pulito)
+    .run();
+
+  return c.json({ ok: true }, 201);
+});
+
+// Cancella un commento: l'autore può cancellare il proprio, la coach può cancellare
+// qualsiasi commento (moderazione).
+feed.delete("/commenti/:commentoId", requireAuth, async (c) => {
+  const id = Number(c.req.param("commentoId"));
+  if (!Number.isInteger(id)) return c.json({ error: "Commento non valido" }, 400);
+
+  const commento = await c.env.DB.prepare(`SELECT user_id AS userId FROM feed_commenti WHERE id = ?`)
+    .bind(id)
+    .first<{ userId: number }>();
+  if (!commento) return c.json({ error: "Commento non trovato" }, 404);
+  if (commento.userId !== c.var.user.userId && c.var.user.role !== "coach") {
+    return c.json({ error: "Puoi cancellare solo i tuoi commenti" }, 403);
+  }
+
+  await c.env.DB.prepare(`DELETE FROM feed_commenti WHERE id = ?`).bind(id).run();
+  return c.json({ ok: true });
 });
 
 // Toggle: se l'utente ha già reagito con questa emoji la rimuove, altrimenti la aggiunge.

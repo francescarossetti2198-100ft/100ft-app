@@ -62,7 +62,7 @@ function tempoFa(dataIso) {
   return `${Math.floor(ore / 24)} g`;
 }
 
-// TODO: filtri per tipo, commenti (brief, sezione 11 — solo reazioni previste, niente commenti).
+// TODO: filtri per tipo.
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -226,6 +226,7 @@ export async function montaFeed(list, opts = {}) {
             </button>
           `;
         }).join("");
+        const totReazioni = p.reazioni.reduce((s, r) => s + r.n, 0);
 
         return `
           <div class="card" style="margin-bottom:12px">
@@ -250,12 +251,26 @@ export async function montaFeed(list, opts = {}) {
                         padding:8px 12px; color:var(--text); font-size:13px; text-decoration:none">
                  ⬇ ${esc(p.allegatoNome) || "Scarica la scheda"}
                </a>` : ""}
-            <div style="display:flex; gap:6px; margin-top:10px; align-items:center">
+            <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap">
               ${reazioniHtml}
+              <button type="button" class="commenti-toggle-btn mono" data-post="${p.id}"
+                style="background:none; border:none; color:var(--mute); font-size:12px; cursor:pointer; padding:4px 2px">
+                💬 ${p.numeroCommenti || ""} ${p.numeroCommenti === 1 ? "commento" : "commenti"}
+              </button>
               <a href="${linkWhatsApp(p.testo, autore, info.azione)}" target="_blank" rel="noopener"
                  class="mono" style="margin-left:auto; color:#1ED760; font-size:12px; text-decoration:none; white-space:nowrap">
                 ↗ WhatsApp
               </a>
+            </div>
+            ${totReazioni > 0
+              ? `<button type="button" class="reazioni-chi-btn mono" data-post="${p.id}"
+                   style="background:none; border:none; color:var(--mute); font-size:11px; cursor:pointer; padding:4px 2px; text-align:left">
+                   ${totReazioni} ${totReazioni === 1 ? "reazione" : "reazioni"} · vedi chi
+                 </button>
+                 <div class="reazioni-chi-box" data-post="${p.id}" hidden style="margin-top:4px"></div>`
+              : ""}
+            <div class="commenti-box" data-post="${p.id}" hidden
+              style="margin-top:10px; border-top:1px solid var(--border); padding-top:10px; flex-direction:column; gap:8px">
             </div>
           </div>
         `;
@@ -294,6 +309,144 @@ export async function montaFeed(list, opts = {}) {
         }
       });
     });
+
+    // "N reazioni · vedi chi": apre/chiude un elenco testuale raggruppato per emoji, senza
+    // toccare il tap-per-reagire dei bottoni sopra (interazioni separate sullo stesso post).
+    list.querySelectorAll(".reazioni-chi-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const box = list.querySelector(`.reazioni-chi-box[data-post="${btn.dataset.post}"]`);
+        if (!box.hidden) {
+          box.hidden = true;
+          box.style.display = "none";
+          return;
+        }
+        box.hidden = false;
+        box.style.display = "block";
+        box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
+        try {
+          const { reazioni } = await api.get(`/feed/${btn.dataset.post}/reazioni`);
+          const gruppi = new Map();
+          reazioni.forEach((r) => gruppi.set(r.emoji, [...(gruppi.get(r.emoji) ?? []), r.autore]));
+          box.innerHTML = [...gruppi.entries()]
+            .map(
+              ([emoji, nomi]) =>
+                `<p class="mono" style="font-size:12px; color:var(--mute); margin:2px 0"><span style="font-size:14px">${emoji}</span> ${nomi.map(esc).join(", ")}</p>`
+            )
+            .join("");
+        } catch {
+          box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Non disponibile.</p>`;
+        }
+      });
+    });
+
+    // Commenti: caricati/postati per singolo post, senza ridisegnare tutto il Feed.
+    list.querySelectorAll(".commenti-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const box = list.querySelector(`.commenti-box[data-post="${btn.dataset.post}"]`);
+        if (!box.hidden) {
+          box.hidden = true;
+          box.style.display = "none";
+          return;
+        }
+        box.hidden = false;
+        box.style.display = "flex";
+        caricaCommenti(box, btn.dataset.post);
+      });
+    });
+
+    async function caricaCommenti(box, postId) {
+      box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
+      try {
+        const { commenti } = await api.get(`/feed/${postId}/commenti`);
+        box.innerHTML = `
+          <div class="commenti-lista" style="display:flex; flex-direction:column; gap:8px">
+            ${commenti.length
+              ? commenti.map((c) => commentoHtml(c, postId)).join("")
+              : `<p class="mono" style="color:var(--mute); font-size:12px">Ancora nessun commento.</p>`}
+          </div>
+          <div style="display:flex; gap:6px; margin-top:8px">
+            <input type="text" class="commento-input" placeholder="Scrivi un commento…" maxlength="500"
+              style="flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                     padding:8px 10px; color:var(--text); font-family:inherit; font-size:13px" />
+            <button type="button" class="commento-invia btn" style="width:auto; padding:8px 14px">Invia</button>
+          </div>
+          <p class="error-text commento-error" hidden style="font-size:12px; margin-top:4px"></p>
+        `;
+        aggiornaContatore(postId, commenti.length);
+        attachCommentoForm(box, postId);
+      } catch (err) {
+        box.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      }
+    }
+
+    function commentoHtml(c, postId) {
+      const iniziale = (c.autore[0] || "?").toUpperCase();
+      return `
+        <div class="commento-riga" style="display:flex; gap:8px; align-items:flex-start">
+          ${fotoProfiloHtml(c.fotoUrl, iniziale, false, c.fotoPersonalizzazione, 24)}
+          <div style="flex:1; min-width:0">
+            <p style="margin:0; font-size:13px">
+              <strong>${esc(c.autore)}</strong>
+              <span class="mono" style="color:var(--mute); font-size:11px">${tempoFa(c.data)}</span>
+            </p>
+            <p style="margin:2px 0 0; font-size:13px; white-space:pre-line">${esc(c.testo)}</p>
+          </div>
+          ${c.puoiCancellare
+            ? `<button type="button" class="commento-cancella-btn" data-commento="${c.id}" data-post="${postId}"
+                 aria-label="Cancella il commento"
+                 style="flex:0 0 auto; border:none; background:none; color:var(--mute); font-size:14px; cursor:pointer; padding:0 0 0 4px">✕</button>`
+            : ""}
+        </div>
+      `;
+    }
+
+    function attachCommentoForm(box, postId) {
+      const input = box.querySelector(".commento-input");
+      const invia = box.querySelector(".commento-invia");
+      const errEl = box.querySelector(".commento-error");
+
+      const submit = async () => {
+        const testo = input.value.trim();
+        if (!testo) return;
+        errEl.hidden = true;
+        invia.disabled = true;
+        try {
+          await api.post(`/feed/${postId}/commenti`, { testo });
+          input.value = "";
+          await caricaCommenti(box, postId);
+        } catch (err) {
+          errEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+          errEl.hidden = false;
+        } finally {
+          invia.disabled = false;
+        }
+      };
+
+      invia.addEventListener("click", submit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      });
+
+      box.querySelectorAll(".commento-cancella-btn").forEach((cbtn) => {
+        cbtn.addEventListener("click", async () => {
+          if (!confirm("Cancellare questo commento?")) return;
+          try {
+            await api.del(`/feed/commenti/${cbtn.dataset.commento}`);
+            await caricaCommenti(box, postId);
+          } catch (err) {
+            alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          }
+        });
+      });
+    }
+
+    function aggiornaContatore(postId, n) {
+      const btn = list.querySelector(`.commenti-toggle-btn[data-post="${postId}"]`);
+      if (btn) btn.textContent = `💬 ${n || ""} ${n === 1 ? "commento" : "commenti"}`.trim();
+    }
   } catch (err) {
     list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
   }
