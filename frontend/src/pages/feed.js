@@ -19,6 +19,16 @@ const TIPO_INFO = {
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+// Testo di post/commenti: escapato per sicurezza, poi i link (es. una ricetta, un post
+// Instagram) diventano cliccabili — prima restavano testo semplice, non aprivano nulla.
+const URL_RE = /(https?:\/\/[^\s]+)/g;
+const linkify = (s) =>
+  esc(s).replace(URL_RE, (url) => {
+    const trailing = url.match(/[.,:;!?)\]'"]+$/)?.[0] ?? "";
+    const href = trailing ? url.slice(0, -trailing.length) : url;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--accent); word-break:break-all">${href}</a>${trailing}`;
+  });
+
 const EMOJI = ["👍", "🔥", "💪", "🎉", "🖕"];
 
 // Playlist ufficiale di 100FT su Spotify — mini-banner stretto in fondo al Feed.
@@ -243,7 +253,7 @@ export async function montaFeed(list, opts = {}) {
                             font-size:16px; line-height:1; padding:0 0 0 8px; cursor:pointer">✕</button>`
                 : ""}
             </div>
-            <p style="margin-top:8px; white-space:pre-line">${p.testo}</p>
+            <p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
                  class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
@@ -389,7 +399,7 @@ export async function montaFeed(list, opts = {}) {
               <strong>${esc(c.autore)}</strong>
               <span class="mono" style="color:var(--mute); font-size:11px">${tempoFa(c.data)}</span>
             </p>
-            <p style="margin:2px 0 0; font-size:13px; white-space:pre-line">${esc(c.testo)}</p>
+            <p style="margin:2px 0 0; font-size:13px; white-space:pre-line">${linkify(c.testo)}</p>
           </div>
           ${c.puoiCancellare
             ? `<button type="button" class="commento-cancella-btn" data-commento="${c.id}" data-post="${postId}"

@@ -7,11 +7,6 @@ const MESI = [
   "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
 ];
 
-// Novità presentata da ottobre 2026 (richiesta di Francesca 2026-09-15): niente
-// assegnazione retroattiva di settembre (o mesi precedenti) il 1° ottobre — il primo mese
-// davvero "in gara" è ottobre, quindi il primo vincitore vero si vede il 1° novembre.
-const PRIMO_MESE_ATLETA_DEL_MESE = "2026-10";
-
 // Stesso orario-check delle altre notifiche mensili (feedbackMensilePush.ts) — giorno 1,
 // un orario diverso (09:00) per non ammucchiare tutto alle 10:00.
 function oraRoma(): { giorno: number; oraMinuti: string } {
@@ -32,13 +27,16 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
 // nessuno ha punti quel mese, nessun vincitore (niente da festeggiare). Il risultato resta
 // per sempre in `atleta_del_mese` — uno storico che non cambia anche se i punti vengono poi
 // corretti a mano.
+//
+// Novità presentata da ottobre 2026 (richiesta di Francesca): il 1° ottobre è la prima
+// volta che questo cron scatta ed assegna il titolo — per il mese di SETTEMBRE appena
+// concluso (non lo salta). Nessun guard aggiuntivo qui: il cron non può proprio girare
+// prima del 1° ottobre, quindi la prima assegnazione avviene naturalmente in quel momento.
 export async function assegnaAtletaDelMeseSeAttivo(env: Env): Promise<void> {
   const { giorno, oraMinuti } = oraRoma();
   if (giorno !== 1 || oraMinuti !== "09:00") return;
 
   const { mese, anno } = mesePrecedente();
-  const ym = `${anno}-${String(mese).padStart(2, "0")}`;
-  if (ym < PRIMO_MESE_ATLETA_DEL_MESE) return; // mese precedente all'inizio della novità
 
   const gia = await env.DB.prepare(`SELECT 1 FROM atleta_del_mese WHERE mese = ? AND anno = ?`)
     .bind(mese, anno)
