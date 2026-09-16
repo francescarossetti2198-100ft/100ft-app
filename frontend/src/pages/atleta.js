@@ -8,7 +8,7 @@ import { renderPaginaCoach } from "../components/coach-shell.js";
 import { api, ApiError } from "../api.js";
 import { currentQuery, navigate } from "../router.js";
 import { getUser } from "../auth.js";
-import { fotoProfiloHtml, formatDataNascita } from "./profilo.js";
+import { fotoProfiloHtml, formatDataNascita, trofeiVintiDa } from "./profilo.js";
 import { badgeMensiliHtml } from "../badge-mensili.js";
 import { montaFeed } from "./feed.js";
 
@@ -50,7 +50,12 @@ async function caricaAtleta(el) {
     return;
   }
   try {
-    const p = await api.get(`/atleti/${id}/pubblico`);
+    const [p, atletaMese] = await Promise.all([
+      api.get(`/atleti/${id}/pubblico`),
+      api.get("/atleta-mese").catch(() => ({ attuale: null, storico: [] })),
+    ]);
+    const userId = p.userId ?? Number(id);
+    const trofeiVinti = trofeiVintiDa(atletaMese.storico, userId);
     const nomeCompleto = `${p.nome ?? ""} ${p.cognome ?? ""}`.trim();
     const iniziale = (p.nickname || p.nome || "Atleta")[0]?.toUpperCase() ?? "?";
     const etichetta = p.nickname || nomeCompleto || "Atleta";
@@ -78,11 +83,12 @@ async function caricaAtleta(el) {
         }
         ${livelloLinea}
         ${iscrizioneLinea}
+        <div id="atleta-badge-mese"></div>
       </div>
 
       <div class="card" style="margin-top:12px">
         <p class="sezione-label">I badge di ${esc(etichetta)}</p>
-        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili)}</div>
+        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili, trofeiVinti)}</div>
       </div>
 
       <div class="card" style="margin-top:12px">
@@ -107,7 +113,19 @@ async function caricaAtleta(el) {
       <div id="atleta-feed" style="margin-top:10px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
     `;
 
-    montaFeed(content.querySelector("#atleta-feed"), { userId: p.userId ?? Number(id) });
+    montaFeed(content.querySelector("#atleta-feed"), { userId });
+
+    // "Atleta del mese": pillola in evidenza solo se questo atleta detiene il titolo del
+    // mese più recente. Il trofeo dei mesi passati resta comunque tra "I badge di" sopra.
+    const vinceAttuale = atletaMese.attuale?.vincitori.some((v) => v.userId === userId);
+    if (vinceAttuale) {
+      content.querySelector("#atleta-badge-mese").innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; margin-top:8px">
+          <img src="/trofei/trofeo_${String(atletaMese.attuale.mese).padStart(2, "0")}.png" alt="Trofeo Atleta del Mese"
+            style="width:64px; height:64px; object-fit:contain" />
+          <p class="mono" style="color:#F4B740; font-size:12px; margin-top:2px; font-weight:600">Atleta del Mese</p>
+        </div>`;
+    }
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Atleta non trovato"}</p>`;
   }

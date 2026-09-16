@@ -178,11 +178,13 @@ export function montaSfide(container, { conDailyDrop = true } = {}) {
     </style>
     ${conDailyDrop ? `<div id="daily-drop-card" class="card" style="margin-bottom:16px"></div>` : ""}
     <div id="classifica"><p class="mono" style="color:var(--mute)">Carico...</p></div>
+    <div id="albo-oro" style="margin-top:12px"></div>
     <div id="sfide-list" style="margin-top:16px"></div>
   `;
 
   if (conDailyDrop) loadDailyDrop(container);
   loadClassifica(container, "mese");
+  loadAlboOro(container);
   loadSfide(container);
 }
 
@@ -313,6 +315,75 @@ async function loadClassifica(el, periodo) {
     box.querySelectorAll(".periodo-btn").forEach((btn) => {
       btn.addEventListener("click", () => loadClassifica(el, btn.dataset.periodo));
     });
+  } catch {
+    box.remove();
+  }
+}
+
+// Un trofeo per mese di stagione (Set→Lug, 11 immagini), indicizzato per numero di mese —
+// stessa logica di badge-mensili.js, file in frontend/public/trofei/trofeo_MM.png.
+function trofeoUrl(mese) {
+  return `/trofei/trofeo_${String(mese).padStart(2, "0")}.png`;
+}
+
+// "Atleta del mese" (assegnato automaticamente dal cron il giorno 1, vedi
+// worker/src/lib/atletaMese.ts): il mese più recente in evidenza + lo storico a tendina.
+// Sezione invisibile finché non c'è ancora nessun vincitore (niente da mostrare a vuoto).
+async function loadAlboOro(el) {
+  const box = el.querySelector("#albo-oro");
+  try {
+    const { attuale, storico } = await api.get("/atleta-mese");
+    if (!storico.length) {
+      box.remove();
+      return;
+    }
+
+    const rigaVincitore = (v) => `
+      <div style="display:flex; align-items:center; gap:8px">
+        <a href="#/atleta?id=${v.userId}" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--text); min-width:0">
+          ${avatarHtml(v)} <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.nickname || v.nome}</span>
+        </a>
+        <span class="mono" style="color:var(--mute); font-size:12px; margin-left:auto">${v.punti} PT</span>
+      </div>
+    `;
+
+    box.innerHTML = `
+      <div class="card">
+        <p class="kicker">🏆 ATLETA DEL MESE</p>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:8px">
+          <img src="${trofeoUrl(attuale.mese)}" alt="Trofeo di ${meseNome(`${attuale.anno}-${String(attuale.mese).padStart(2, "0")}`)}"
+            style="width:84px; height:84px; object-fit:contain; flex:0 0 auto" />
+          <div style="flex:1; min-width:0">
+            <p class="mono" style="color:var(--mute); font-size:12px">${meseNome(`${attuale.anno}-${String(attuale.mese).padStart(2, "0")}`)} ${attuale.anno}</p>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px">
+              ${attuale.vincitori.map(rigaVincitore).join("")}
+            </div>
+          </div>
+        </div>
+        ${storico.length > 1
+          ? `<details class="blocco-mese" style="margin-top:10px">
+               <summary>Albo d'oro · mesi precedenti</summary>
+               <div class="blocco-corpo" style="display:flex; flex-direction:column; gap:10px">
+                 ${storico
+                   .slice(1)
+                   .map(
+                     (m) => `
+                       <div style="display:flex; align-items:center; gap:10px">
+                         <img src="${trofeoUrl(m.mese)}" alt="Trofeo di ${meseNome(`${m.anno}-${String(m.mese).padStart(2, "0")}`)}"
+                           style="width:40px; height:40px; object-fit:contain; flex:0 0 auto" />
+                         <div style="flex:1; min-width:0">
+                           <p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:4px">${meseNome(`${m.anno}-${String(m.mese).padStart(2, "0")}`)} ${m.anno}</p>
+                           <div style="display:flex; flex-direction:column; gap:6px">${m.vincitori.map(rigaVincitore).join("")}</div>
+                         </div>
+                       </div>
+                     `
+                   )
+                   .join("")}
+               </div>
+             </details>`
+          : ""}
+      </div>
+    `;
   } catch {
     box.remove();
   }

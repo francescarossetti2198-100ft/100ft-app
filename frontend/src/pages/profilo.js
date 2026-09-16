@@ -405,10 +405,9 @@ function renderProfiloCoach(content, p, onFotoCaricata, opts = {}) {
     });
 
     const scheda = content.querySelector("#scheda");
-    api
-      .get(`/atleti/${userId}`)
-      .then((d) => {
-        scheda.innerHTML = schedaAtletaHtml(d);
+    Promise.all([api.get(`/atleti/${userId}`), api.get("/atleta-mese").catch(() => ({ storico: [] }))])
+      .then(([d, atletaMese]) => {
+        scheda.innerHTML = schedaAtletaHtml(d, trofeiVintiDa(atletaMese.storico, userId));
         initSchedaAzioni(scheda);
       })
       .catch((err) => {
@@ -419,7 +418,7 @@ function renderProfiloCoach(content, p, onFotoCaricata, opts = {}) {
   render();
 }
 
-function schedaAtletaHtml(d) {
+function schedaAtletaHtml(d, trofeiVinti) {
   const a = d.anagrafica;
   const dp = d.datiPrivati;
   const at = d.attivita;
@@ -584,7 +583,7 @@ function schedaAtletaHtml(d) {
 
     <div class="card" style="margin-top:12px">
       <p class="mono" style="color:var(--mute); font-size:12px">BADGE</p>
-      <div style="margin-top:10px">${badgeMensiliHtml(at.badgeMensili)}</div>
+      <div style="margin-top:10px">${badgeMensiliHtml(at.badgeMensili, trofeiVinti)}</div>
     </div>
 
     <div class="card" style="margin-top:12px">
@@ -1553,9 +1552,34 @@ function identitaCardHtml(p) {
         }
         ${livelloLinea}
         ${iscrizioneLinea}
+        <div id="badge-atleta-mese"></div>
       </div>
     </div>
   `;
+}
+
+// "Atleta del mese" — pillola in evidenza sulla card identità, visibile solo per chi detiene
+// il titolo del mese più recente (assegnato dal cron, worker/src/lib/atletaMese.ts). Il
+// trofeo dei mesi passati non sparisce: resta per sempre tra "I tuoi badge" (vedi
+// trofeiVintiDa() + badgeMensiliHtml, richiamata più sotto).
+function renderBadgeAtletaMese(content, userId, attuale) {
+  const box = content.querySelector("#badge-atleta-mese");
+  if (!box) return;
+  const vince = attuale?.vincitori.some((v) => v.userId === userId);
+  if (!vince) return;
+  box.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; margin-top:8px">
+      <img src="/trofei/trofeo_${String(attuale.mese).padStart(2, "0")}.png" alt="Trofeo Atleta del Mese"
+        style="width:64px; height:64px; object-fit:contain" />
+      <p class="mono" style="color:#F4B740; font-size:12px; margin-top:2px; font-weight:600">Atleta del Mese</p>
+    </div>`;
+}
+
+// Tutti i mesi in cui `userId` è risultato Atleta del mese, dallo storico completo.
+export function trofeiVintiDa(storico, userId) {
+  return (storico ?? [])
+    .filter((m) => m.vincitori.some((v) => v.userId === userId))
+    .map((m) => ({ mese: m.mese, anno: m.anno, punti: m.vincitori.find((v) => v.userId === userId).punti }));
 }
 
 function initIdentita(content, p, onSaved) {
@@ -1733,6 +1757,12 @@ async function loadProfilo(el) {
       return;
     }
 
+    const userId = getUser()?.userId;
+    const { attuale: atletaMeseAttuale, storico: atletaMeseStorico } = await api
+      .get("/atleta-mese")
+      .catch(() => ({ attuale: null, storico: [] }));
+    const trofeiVinti = trofeiVintiDa(atletaMeseStorico, userId);
+
     const progressiCard = `
       <div class="card" style="margin-top:12px">
         <p class="sezione-label">I tuoi progressi</p>
@@ -1762,7 +1792,7 @@ async function loadProfilo(el) {
     const badgeCard = `
       <div class="card" style="margin-top:12px">
         <p class="sezione-label">I tuoi badge</p>
-        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili)}</div>
+        <div style="margin-top:12px">${badgeMensiliHtml(p.badgeMensili, trofeiVinti)}</div>
       </div>`;
 
     content.innerHTML = `
@@ -1788,6 +1818,7 @@ async function loadProfilo(el) {
 
     attachFotoUpload(content, () => loadProfilo(el));
     initIdentita(content, p, () => loadProfilo(el));
+    renderBadgeAtletaMese(content, userId, atletaMeseAttuale);
     initDatiPersonali(content, () => loadProfilo(el));
     initPersonalizza(content, p, () => loadProfilo(el));
     initPerformance(content);

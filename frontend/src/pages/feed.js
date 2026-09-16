@@ -7,7 +7,7 @@ const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
   new_pb: { icona: "💪", azione: "ha fatto un nuovo Personal Best" },
   consistency: { icona: "🔥", azione: "ha raggiunto un traguardo di costanza" },
-  athlete_of_week: { icona: "⭐", azione: "è Atleta della Settimana" },
+  athlete_of_week: { icona: "🏆", azione: "è Atleta del Mese" },
   daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
   sfida: { icona: "🏆", azione: "ha completato una sfida" },
   badge: { icona: "🏅", azione: "ha conquistato il badge di" },
