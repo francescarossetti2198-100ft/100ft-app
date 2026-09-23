@@ -1,7 +1,7 @@
 import { adessoRoma } from "./oggi";
 
 // Orario del Daily Drop (brief, sezione 8): solo nei giorni di allenamento (lun/mer/ven),
-// ma non ogni volta — è occasionale ("non per forza tutti i giorni, è una tantum"). Quando
+// ma non ogni volta — 2 volte a settimana sui 3 giorni di allenamento. Quando
 // capita, è alla stessa ora per tutti (nessuna variazione per singolo atleta). L'orario è
 // "casuale" nel senso che sembra imprevedibile, ma è in realtà deterministico — derivato da
 // un hash della data — così l'endpoint risponde in modo coerente per tutta la giornata senza
@@ -10,10 +10,11 @@ import { adessoRoma } from "./oggi";
 const INIZIO_GIORNO_MIN = 8 * 60; // 08:00
 const FINE_GIORNO_MIN = 22 * 60; // 22:00
 
-// Probabilità che un giorno di allenamento abbia un Daily Drop — circa 1 su 3 giorni
-// idonei (grosso modo una volta a settimana). Valore scelto in assenza di indicazioni
-// più precise; andrebbe reso configurabile dal coach quando esisterà la Coach Dashboard.
-const PROBABILITA_GIORNO = 0.35;
+// Daily Drop a settimana: esattamente 2 (richiesta di Francesca, "2 volte a settimana non
+// di più") sui 3 giorni di allenamento. Ogni settimana si "salta" uno dei tre giorni, scelto
+// a caso ma in modo deterministico dalla data del lunedì. Prima era una probabilità
+// indipendente per giorno (0.35), che dava settimane da 3 e settimane da 0.
+const GIORNI_ALLENAMENTO = [1, 3, 5];
 
 // Quanto resta valida la possibilità di rispondere, da quando scatta l'orario (= da quando
 // parte la notifica push, vedi lib/dailyDropPush.ts): una finestra breve e stretta, non
@@ -60,6 +61,15 @@ function creaGeneratore(seed: number): () => number {
   };
 }
 
+// Il giorno di allenamento (1/3/5) senza Daily Drop nella settimana di `data`.
+function giornoSaltato(data: string, giornoSettimana: number): number {
+  const lunedi = new Date(`${data}T00:00:00Z`);
+  lunedi.setUTCDate(lunedi.getUTCDate() - (giornoSettimana - 1));
+  const random = creaGeneratore(seedDaData(`settimana-${lunedi.toISOString().slice(0, 10)}`));
+  random();
+  return GIORNI_ALLENAMENTO[Math.floor(random() * GIORNI_ALLENAMENTO.length)];
+}
+
 // Minuti dalla mezzanotte in cui "scatta" il Daily Drop per questa data, o null se oggi
 // non è previsto (non è un giorno di allenamento, oppure è un giorno di allenamento ma
 // questa volta "non tocca" — occasionale, non ogni sessione).
@@ -67,8 +77,10 @@ export function orarioDailyDrop(data: string, giornoSettimana: number): number |
   const fascia = fasciaAllenamento(giornoSettimana);
   if (!fascia) return null;
 
+  if (giornoSettimana === giornoSaltato(data, giornoSettimana)) return null;
+
   const random = creaGeneratore(seedDaData(data));
-  if (random() >= PROBABILITA_GIORNO) return null;
+  random(); // il primo valore serviva alla vecchia probabilità: scartarlo lascia invariati gli orari
 
   const escluse = fasceEscluse(giornoSettimana);
   const minutiEsclusi = escluse.reduce((tot, f) => tot + (f.fine - f.inizio), 0);
