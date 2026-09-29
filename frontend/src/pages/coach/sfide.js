@@ -1,5 +1,5 @@
 import { renderPaginaCoach } from "../../components/coach-shell.js";
-import { initSfida, MESI, SEL_STYLE, CRITERI_TRAGUARDO, oraCorrente } from "../coach.js";
+import { initSfida, initSfideExtra, MESI, SEL_STYLE, CRITERI_TRAGUARDO, oraCorrente } from "../coach.js";
 
 export function renderCoachSfide(appEl) {
   const { mese, anno } = oraCorrente();
@@ -73,7 +73,54 @@ export function renderCoachSfide(appEl) {
           <p class="success-text" id="sfida-success" hidden>Sfida creata ✓</p>
           <button class="btn" id="sfida-crea" style="width:100%; margin-top:4px">Crea sfida</button>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Sfide extra</h2>
+        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px; line-height:1.5">
+          Box a parte sotto le sfide del mese: sfide che danno punti in più ma non contano per
+          la coccarda. Gli atleti le leggono e basta — i punti li dai tu da «Punti extra»
+          (il bonus settimana completa arriva da solo).
+        </p>
+        <div id="extra-elenco" style="margin-top:8px">
+          <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>
+        </div>
+
+        <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+          <p class="mono" style="color:var(--mute); font-size:12px">NUOVA SFIDA EXTRA</p>
+          <div class="field" style="margin-top:10px">
+            <label>Titolo</label>
+            <input id="extra-titolo" type="text" />
+          </div>
+          <div class="field">
+            <label>Descrizione</label>
+            <input id="extra-descrizione" type="text" />
+          </div>
+          <div style="display:flex; gap:10px">
+            <div class="field" style="flex:1">
+              <label>Punti (facoltativo)</label>
+              <input id="extra-punti" type="number" min="1" max="100" placeholder="es. 10" style="${SEL_STYLE}" />
+            </div>
+            <div class="field" style="flex:1">
+              <label>Giorno (facoltativo)</label>
+              <input id="extra-data" type="date" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Mese</label>
+            <div style="display:flex; gap:8px">
+              <select id="extra-mese" style="flex:2; ${SEL_STYLE}">
+                ${MESI.map((m, i) => `<option value="${i + 1}" ${i + 1 === mese ? "selected" : ""}>${m}</option>`).join("")}
+              </select>
+              <input id="extra-anno" type="number" value="${anno}" style="flex:1; ${SEL_STYLE}" />
+            </div>
+          </div>
+          <p class="error-text" id="extra-error" hidden></p>
+          <p class="success-text" id="extra-success" hidden>Aggiunta ✓</p>
+          <button class="btn" id="extra-crea" style="width:100%; margin-top:4px">Aggiungi</button>
+        </div>
       </div>`;
     initSfida(el);
+    initSfideExtra(el);
   });
 }

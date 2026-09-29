@@ -131,6 +131,7 @@ export function renderSfide(appEl) {
 // Daily Drop non ha senso: `conDailyDrop:false`). Le sfide completate/da fare le gestisce
 // `sfidaItemHtml`, che già distingue il ruolo coach ("Come coach non partecipi").
 export function montaSfide(container, { conDailyDrop = true } = {}) {
+  sfideAperte = false;
   container.innerHTML = `
     <style>
       /* Scheda mese: dark/editoriale, un accento per mese (--mese-accento) su titolo e
@@ -170,6 +171,41 @@ export function montaSfide(container, { conDailyDrop = true } = {}) {
         opacity: 1;
         filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mese-accento, var(--accent)) 55%, transparent));
       }
+      /* Box "Sfide extra": una cosa a parte rispetto alle sfide del mese — bordo tratteggiato
+         e fondo pieno nel colore del mese, titolo con il "+" in un bollino, punti a pillola. */
+      #sfide-extra {
+        margin-top: 14px;
+        background: color-mix(in srgb, var(--mese-accento, var(--accent)) 7%, var(--surface));
+        border: 2px dashed color-mix(in srgb, var(--mese-accento, var(--accent)) 55%, transparent);
+      }
+      #sfide-extra .extra-head { display: flex; align-items: center; gap: 10px; }
+      #sfide-extra .extra-plus {
+        flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--mese-accento, var(--accent)); color: #fff;
+        font-family: var(--font-ui); font-weight: 800; font-size: 20px; line-height: 1;
+      }
+      #sfide-extra .extra-title {
+        font-family: var(--font-ui); font-weight: 800; font-size: 24px; line-height: 1;
+        letter-spacing: -0.3px; text-transform: uppercase; margin: 0;
+        color: var(--mese-accento, var(--accent));
+      }
+      #sfide-extra .extra-sub { color: var(--mute); font-size: 12px; line-height: 1.5; margin-top: 8px; }
+      #sfide-extra .extra-item {
+        margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--surface);
+        border-left: 3px solid var(--mese-accento, var(--accent));
+      }
+      #sfide-extra .extra-pill {
+        display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+        background: var(--mese-accento, var(--accent)); color: #fff; font-weight: 700; font-size: 12px;
+      }
+      /* Bottone "a tendina" (classifica e card del mese). */
+      .tendina-btn {
+        display: block; width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+        background: none; border: 1px solid var(--border); color: var(--text); cursor: pointer;
+        font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.5px;
+      }
+      #sfide-blocco .tendina-btn { color: var(--mese-accento, var(--accent)); }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
       /* Sfida completata: sembra archiviata e riuscita, senza stravolgere lo stile. */
@@ -270,6 +306,9 @@ async function loadDailyDrop(el) {
   }
 }
 
+// Classifica a tendina: si vedono i primi 5, gli altri col bottone sotto.
+const PRIMI_IN_CLASSIFICA = 5;
+
 async function loadClassifica(el, periodo) {
   const box = el.querySelector("#classifica");
   try {
@@ -300,7 +339,9 @@ async function loadClassifica(el, periodo) {
               ? classifica
                   .map(
                     (a, i) => `
-                      <div style="display:flex; align-items:center; justify-content:space-between">
+                      <div class="classifica-riga" style="display:${
+                        i >= PRIMI_IN_CLASSIFICA ? "none" : "flex"
+                      }; align-items:center; justify-content:space-between">
                         <a href="#/atleta?id=${a.userId}" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--text); min-width:0">
                           ${a.posizione ?? i + 1}. ${avatarHtml(a)} <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${a.nickname || a.nome}</span>
                         </a>
@@ -312,11 +353,26 @@ async function loadClassifica(el, periodo) {
               : `<p class="mono" style="color:var(--mute); font-size:13px">Nessun punto ancora in questo periodo.</p>`
           }
         </div>
+        ${
+          classifica.length > PRIMI_IN_CLASSIFICA
+            ? `<button type="button" class="tendina-btn classifica-altri">Vedi tutta la classifica (${classifica.length}) ▾</button>`
+            : ""
+        }
       </div>
     `;
 
     box.querySelectorAll(".periodo-btn").forEach((btn) => {
       btn.addEventListener("click", () => loadClassifica(el, btn.dataset.periodo));
+    });
+
+    const altriBtn = box.querySelector(".classifica-altri");
+    altriBtn?.addEventListener("click", () => {
+      const aperta = altriBtn.dataset.aperta !== "1";
+      altriBtn.dataset.aperta = aperta ? "1" : "";
+      box.querySelectorAll(".classifica-riga").forEach((r, i) => {
+        if (i >= PRIMI_IN_CLASSIFICA) r.style.display = aperta ? "flex" : "none";
+      });
+      altriBtn.textContent = aperta ? "Mostra solo i primi 5 ▴" : `Vedi tutta la classifica (${classifica.length}) ▾`;
     });
   } catch {
     box.remove();
@@ -481,6 +537,38 @@ function attachPartecipa(container, el, onDone) {
   });
 }
 
+// Box "Sfide extra" del mese mostrato nel carosello: solo da leggere, non contano per la
+// coccarda (le sfide del mese restano alla portata di tutti).
+function sfideExtraHtml(righe) {
+  const esc = (s) =>
+    String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const dd = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  return `
+    <div class="extra-head">
+      <span class="extra-plus" aria-hidden="true">+</span>
+      <h2 class="extra-title">Sfide extra</h2>
+    </div>
+    <p class="mono extra-sub">
+      Punti in più per la classifica. Non devi fare niente: i punti arrivano da soli, in base
+      alle tue presenze o assegnati dalla coach.
+    </p>
+    ${righe
+      .map(
+        (r) => `
+      <div class="extra-item">
+        <p style="font-weight:700">${esc(r.titolo)}</p>
+        ${r.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px; line-height:1.5">${esc(r.descrizione)}</p>` : ""}
+        ${r.punti ? `<span class="mono extra-pill">+${r.punti} PT</span>` : ""}
+        ${r.data ? `<span class="mono" style="color:var(--mute); font-size:12px; margin-left:${r.punti ? 8 : 0}px">il ${dd(r.data)}</span>` : ""}
+      </div>`
+      )
+      .join("")}`;
+}
+
+// Card del mese a tendina: chiusa all'apertura della pagina; resta aperta/chiusa quando si
+// cambia mese o si ricarica dopo aver partecipato a una sfida.
+let sfideAperte = false;
+
 // Blocco Sfide: una card che raccoglie le sfide del mese (completate e non). Swipe
 // left/right — o le frecce — per passare al mese precedente/successivo.
 async function loadSfide(el, meseVoluto) {
@@ -492,6 +580,20 @@ async function loadSfide(el, meseVoluto) {
   } catch (err) {
     list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
     return;
+  }
+
+  // Sfide extra (box sotto la card del mese). Se l'endpoint non risponde, il box
+  // semplicemente non compare.
+  const extraPerMese = new Map();
+  try {
+    const { sfideExtra } = await api.get("/sfide-extra");
+    for (const r of sfideExtra ?? []) {
+      const k = `${r.anno}-${String(r.mese).padStart(2, "0")}`;
+      if (!extraPerMese.has(k)) extraPerMese.set(k, []);
+      extraPerMese.get(k).push(r);
+    }
+  } catch {
+    /* niente box extra */
   }
 
   // Focus tematico del mese: non è più mostrato in scheda (richiesta di Francesca), ma
@@ -558,11 +660,13 @@ async function loadSfide(el, meseVoluto) {
         </div>
         <button type="button" class="mese-arrow" data-dir="1" aria-label="Mese successivo">›</button>
       </div>
-      <div class="mese-viewport">
-        <div class="mese-track"></div>
+      <button type="button" class="tendina-btn mese-toggle"></button>
+      <div class="mese-viewport"${sfideAperte ? "" : " hidden"}>
+        <div class="mese-track" style="padding-top:12px"></div>
       </div>
       <div class="mese-dots" style="display:flex; gap:5px; justify-content:center; margin-top:14px"></div>
     </div>
+    <div id="sfide-extra" class="card" hidden></div>
   `;
 
   const blocco = list.querySelector("#sfide-blocco");
@@ -572,6 +676,26 @@ async function loadSfide(el, meseVoluto) {
   const viewport = blocco.querySelector(".mese-viewport");
   const track = blocco.querySelector(".mese-track");
   const dotsBox = blocco.querySelector(".mese-dots");
+  const extraBox = list.querySelector("#sfide-extra");
+  const toggleBtn = blocco.querySelector(".mese-toggle");
+
+  // Etichetta del bottone tendina in base a stato (aperta/chiusa) e sfide del mese.
+  const aggiornaToggle = () => {
+    const n = perMese.get(mesi[idx]).length;
+    toggleBtn.textContent = sfideAperte
+      ? "Chiudi ▴"
+      : n
+        ? `Vedi ${n === 1 ? "la sfida" : `le ${n} sfide`} ▾`
+        : "Vedi il mese ▾";
+  };
+  const apriChiudi = () => {
+    sfideAperte = !sfideAperte;
+    viewport.hidden = !sfideAperte;
+    aggiornaToggle();
+  };
+  toggleBtn.addEventListener("click", apriChiudi);
+  blocco.querySelector(".mese-head").style.cursor = "pointer";
+  blocco.querySelector(".mese-head").addEventListener("click", apriChiudi);
 
   // Quante "tacche" mostrare nell'anteprima di un mese non ancora inserito.
   const TACCHE_ANTEPRIMA = 5;
@@ -631,6 +755,12 @@ async function loadSfide(el, meseVoluto) {
 
     attachPartecipa(track, el, () => loadSfide(el, mesi[idx]));
     attachFotoInput(track);
+    aggiornaToggle();
+
+    const extra = extraPerMese.get(key) ?? [];
+    extraBox.hidden = extra.length === 0;
+    extraBox.style.setProperty("--mese-accento", accento);
+    extraBox.innerHTML = extra.length ? sfideExtraHtml(extra) : "";
   };
 
   const vaiA = (nuovoIdx, dir) => {

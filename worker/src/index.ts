@@ -24,6 +24,7 @@ import suddivisioni from "./routes/suddivisioni";
 import chiusure from "./routes/chiusure";
 import diario from "./routes/diario";
 import puntiExtra from "./routes/punti-extra";
+import sfideExtra from "./routes/sfide-extra";
 import atletaMese from "./routes/atleta-mese";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
@@ -88,6 +89,7 @@ app.route("/api/suddivisioni", suddivisioni);
 app.route("/api/chiusure", chiusure);
 app.route("/api/diario", diario);
 app.route("/api/punti-extra", puntiExtra);
+app.route("/api/sfide-extra", sfideExtra);
 app.route("/api/atleta-mese", atletaMese);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,

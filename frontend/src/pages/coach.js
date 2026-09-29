@@ -986,6 +986,109 @@ export function initPiano(el) {
   carica();
 }
 
+// Card "Sfide extra" (pagina Gestione sfide): elenco per mese + aggiungi/elimina.
+export function initSfideExtra(el) {
+  const elenco = el.querySelector("#extra-elenco");
+  const errorEl = el.querySelector("#extra-error");
+  const successEl = el.querySelector("#extra-success");
+  const dd = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+
+  async function carica() {
+    let righe;
+    try {
+      ({ sfideExtra: righe } = await api.get("/sfide-extra"));
+    } catch {
+      elenco.innerHTML = `<p class="error-text">Impossibile caricare le sfide extra</p>`;
+      return;
+    }
+    if (!righe.length) {
+      elenco.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Ancora nessuna sfida extra.</p>`;
+      return;
+    }
+    const perMese = new Map();
+    for (const r of righe) {
+      const k = `${r.anno}-${String(r.mese).padStart(2, "0")}`;
+      if (!perMese.has(k)) perMese.set(k, []);
+      perMese.get(k).push(r);
+    }
+    elenco.innerHTML = [...perMese.keys()]
+      .sort()
+      .reverse()
+      .map((k) => {
+        const [anno, mm] = k.split("-");
+        return `
+          <p class="mono" style="color:var(--mute); font-size:11px; letter-spacing:1px; margin:12px 0 0">
+            ${(MESI[+mm - 1] || "").toUpperCase()} ${anno}
+          </p>
+          ${perMese
+            .get(k)
+            .map(
+              (r) => `
+            <div style="display:flex; align-items:flex-start; gap:8px; padding:8px 0; border-top:1px solid var(--border)">
+              <div style="flex:1; min-width:0">
+                <p style="font-size:14px; font-weight:600">${esc(r.titolo)}</p>
+                <p class="mono" style="color:var(--mute); font-size:11px; margin-top:2px">
+                  ${[r.punti ? `+${r.punti} punti` : "", r.data ? dd(r.data) : "", esc(r.descrizione)].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <button type="button" class="link-btn extra-del" data-id="${r.id}"
+                style="color:var(--livello-5); flex-shrink:0; text-decoration:none; font-size:16px">🗑</button>
+            </div>`
+            )
+            .join("")}`;
+      })
+      .join("");
+
+    elenco.querySelectorAll(".extra-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const r = righe.find((x) => String(x.id) === btn.dataset.id);
+        if (!r || !confirm(`Eliminare «${r.titolo}»?`)) return;
+        btn.disabled = true;
+        try {
+          await api.del(`/sfide-extra/${r.id}`);
+          await carica();
+        } catch (err) {
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  el.querySelector("#extra-crea").addEventListener("click", async (e) => {
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    const titolo = el.querySelector("#extra-titolo").value.trim();
+    if (!titolo) {
+      errorEl.textContent = "Il titolo è obbligatorio";
+      errorEl.hidden = false;
+      return;
+    }
+    const puntiVal = el.querySelector("#extra-punti").value;
+    e.target.disabled = true;
+    try {
+      await api.post("/sfide-extra", {
+        titolo,
+        descrizione: el.querySelector("#extra-descrizione").value.trim() || undefined,
+        punti: puntiVal ? Number(puntiVal) : null,
+        data: el.querySelector("#extra-data").value || null,
+        mese: Number(el.querySelector("#extra-mese").value),
+        anno: Number(el.querySelector("#extra-anno").value),
+      });
+      successEl.hidden = false;
+      ["#extra-titolo", "#extra-descrizione", "#extra-punti", "#extra-data"].forEach((s) => (el.querySelector(s).value = ""));
+      await carica();
+    } catch (err) {
+      errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+      errorEl.hidden = false;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  carica();
+}
+
 export function initSfida(el) {
   const errorEl = el.querySelector("#sfida-error");
   const successEl = el.querySelector("#sfida-success");
