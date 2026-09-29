@@ -28,6 +28,10 @@ export function renderCoachSfide(appEl) {
               <option value="presenza">Di gruppo — l'atleta conferma «fatto»</option>
             </select>
           </div>
+          <div class="field" id="sfida-foto-n-wrap">
+            <label>Quante foto servono per completarla</label>
+            <input id="sfida-foto-n" type="number" min="1" max="10" value="1" style="${SEL_STYLE}" />
+          </div>
           <div class="field" id="sfida-criterio-wrap" style="display:none">
             <label>Si completa quando l'atleta…</label>
             <select id="sfida-criterio" style="${SEL_STYLE}">

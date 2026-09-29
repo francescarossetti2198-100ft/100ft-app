@@ -132,6 +132,8 @@ sfide.get("/", requireAuth, async (c) => {
 
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.flash, s.data_inizio, s.data_fine,
+            s.foto_richieste AS fotoRichieste,
+            (SELECT COUNT(*) FROM sfide_foto f WHERE f.sfida_id = s.id AND f.user_id = ?) AS fotoCaricate,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
@@ -139,7 +141,7 @@ sfide.get("/", requireAuth, async (c) => {
        (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))`}
      ORDER BY s.data_fine DESC`
   )
-    .bind(...(isCoach ? [c.var.user.userId] : [c.var.user.userId, oggi]))
+    .bind(...(isCoach ? [c.var.user.userId, c.var.user.userId] : [c.var.user.userId, c.var.user.userId, oggi]))
     .all();
 
   return c.json({ sfide: results });
@@ -153,10 +155,13 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
 
   const sfida = await c.env.DB.prepare(
-    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine FROM sfide WHERE id = ?`
+    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste FROM sfide WHERE id = ?`
   )
     .bind(sfidaId)
-    .first<{ id: number; titolo: string; tipo: string; punti: number; flash: number; data_inizio: string; data_fine: string }>();
+    .first<{
+      id: number; titolo: string; tipo: string; punti: number; flash: number;
+      data_inizio: string; data_fine: string; foto_richieste: number;
+    }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
   if (sfida.tipo === "traguardo") {
     return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
@@ -164,6 +169,9 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
 
   const oggi = adessoRoma().toISOString().slice(0, 10);
   if (sfida.data_fine < oggi) return c.json({ error: "Sfida terminata" }, 400);
+  // Una sfida del mese si vede dal 1° (programma pubblicato), ma una "lampo" con date
+  // precise (es. Halloween 26–31 ottobre) si può completare solo dentro il suo periodo.
+  if (sfida.data_inizio > oggi) return c.json({ error: "La sfida non è ancora iniziata" }, 400);
 
   const esistente = await c.env.DB.prepare(`SELECT id FROM partecipazioni_sfide WHERE sfida_id = ? AND user_id = ?`)
     .bind(sfidaId, c.var.user.userId)
@@ -180,6 +188,21 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   }
 
   const fotoUrl = foto ? await salvaFoto(c.env.FOTO_SFIDE, "sfide", foto) : null;
+
+  // Sfida con più foto (es. "3 merende"): ogni foto si salva in sfide_foto; finché non si
+  // arriva a foto_richieste niente punti né Feed, si risponde solo col conteggio.
+  if (sfida.tipo === "foto" && sfida.foto_richieste > 1 && fotoUrl) {
+    await c.env.DB.prepare(`INSERT INTO sfide_foto (sfida_id, user_id, foto_url) VALUES (?, ?, ?)`)
+      .bind(sfidaId, c.var.user.userId, fotoUrl)
+      .run();
+    const n = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM sfide_foto WHERE sfida_id = ? AND user_id = ?`)
+      .bind(sfidaId, c.var.user.userId)
+      .first<{ n: number }>();
+    const caricate = n?.n ?? 0;
+    if (caricate < sfida.foto_richieste) {
+      return c.json({ ok: true, completata: false, fotoCaricate: caricate, fotoRichieste: sfida.foto_richieste });
+    }
+  }
 
   const prima = await snapshotProgressione(c.env.DB, c.var.user.userId);
 
@@ -216,7 +239,7 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   // Bonus se questa era l'ultima sfida mancante del mese.
   await verificaBonusMese(c.env.DB, c.var.user.userId, sfida.data_inizio.slice(0, 7));
 
-  return c.json({ ok: true });
+  return c.json({ ok: true, completata: true });
 });
 
 // Stato dei 2 trofei di stagione dell'atleta (Set–Dic / Gen–Lug) — pagina Sfide + Profilo.
@@ -232,11 +255,13 @@ sfide.post("/", requireCoach, async (c) => {
     tipo?: string;
     criterio?: string;
     flash?: boolean | number;
+    foto_richieste?: number;
     data_inizio?: string;
     data_fine?: string;
   }>();
   const { titolo, descrizione, tipo, criterio, data_inizio, data_fine } = body;
   const flash = body.flash ? 1 : 0;
+  const fotoRichieste = tipo === "foto" ? Number(body.foto_richieste ?? 1) : 1;
 
   if (!titolo || !tipo || !data_inizio || !data_fine) {
     return c.json({ error: "Titolo, tipo, data_inizio e data_fine sono obbligatori" }, 400);
@@ -250,12 +275,15 @@ sfide.post("/", requireCoach, async (c) => {
   if (data_fine < data_inizio) {
     return c.json({ error: "La data di fine è prima di quella di inizio" }, 400);
   }
+  if (!Number.isInteger(fotoRichieste) || fotoRichieste < 1 || fotoRichieste > 10) {
+    return c.json({ error: "Il numero di foto deve essere tra 1 e 10" }, 400);
+  }
 
   // Ogni sfida completata vale 10 punti fissi (sistema punti 2026-08) — non più deciso dal coach.
   const PUNTI_SFIDA = 10;
   const result = await c.env.DB.prepare(
-    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, data_inizio, data_fine)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, foto_richieste, data_inizio, data_fine)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       titolo,
@@ -264,6 +292,7 @@ sfide.post("/", requireCoach, async (c) => {
       tipo === "traguardo" ? criterio : null,
       PUNTI_SFIDA,
       flash,
+      fotoRichieste,
       data_inizio,
       data_fine
     )

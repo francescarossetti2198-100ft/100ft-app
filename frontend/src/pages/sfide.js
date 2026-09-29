@@ -13,11 +13,14 @@ const CRITERIO_TESTO = {
   profilo_completo: "Si completa da sola quando compili «Il tuo profilo» e «I tuoi dati».",
   obiettivi_completi: "Si completa da sola quando compili i tuoi obiettivi personali.",
   daily_drop: "Si completa da sola dopo il tuo primo daily drop.",
+  settimana_completa: "Si completa da sola quando ti alleni lunedì, mercoledì e venerdì della stessa settimana.",
 };
 function criterioTesto(criterio) {
   if (!criterio) return "";
   const m = String(criterio).match(/^presenze:(\d+)$/);
   if (m) return `Si completa da sola quando raggiungi ${m[1]} presenze confermate.`;
+  const dd = String(criterio).match(/^daily_drop:(\d+)$/);
+  if (dd) return `Si completa da sola quando rispondi a ${dd[1]} daily drop in questo mese.`;
   return CRITERIO_TESTO[criterio] ?? "";
 }
 
@@ -389,25 +392,45 @@ async function loadAlboOro(el) {
   }
 }
 
+// Sfida con più foto: "Foto caricate: 1 di 3" + un puntino per foto (pieno = caricata).
+function fotoProgressoHtml(s) {
+  if (!(s.fotoRichieste > 1)) return "";
+  const puntini = Array.from({ length: s.fotoRichieste }, (_, i) =>
+    `<span style="display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px;
+       background:${i < s.fotoCaricate ? "var(--accent)" : "var(--border)"}"></span>`
+  ).join("");
+  return `
+    <p class="mono" style="font-size:13px; margin-top:10px">
+      Foto caricate: <strong>${s.fotoCaricate} di ${s.fotoRichieste}</strong>
+    </p>
+    <div style="margin-top:6px">${puntini}</div>`;
+}
+
 // Una singola sfida come riga dentro la card del mese. Le completate restano visibili
 // ma "archiviate" (classe .done -> opacità ridotta + esito riuscito).
 function sfidaItemHtml(s, oggi) {
   const scaduta = s.data_fine < oggi;
+  const nonIniziata = s.data_inizio > oggi;
   const done = !!s.partecipato;
   const isCoach = getUser()?.role === "coach";
   const azione = done
     ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>`
     : scaduta
       ? `<button class="btn" style="width:100%; margin-top:10px" disabled>Sfida terminata</button>`
+      : nonIniziata && s.tipo !== "traguardo"
+      ? `<button class="btn" style="width:100%; margin-top:10px" disabled>Si apre il ${s.data_inizio.slice(8, 10)}/${s.data_inizio.slice(5, 7)}</button>`
       : s.tipo === "traguardo"
         ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">${criterioTesto(s.criterio)}</p>`
         : isCoach
           ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">Come coach non partecipi alle sfide.</p>`
           : s.tipo === "foto"
             ? `
+          ${fotoProgressoHtml(s)}
           ${fotoInputHtml("foto-input", { galleria: true })}
           <p class="error-text foto-error" hidden style="margin-top:6px"></p>
-          <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
+          <button class="btn partecipa-btn" style="width:100%; margin-top:10px">${
+            s.fotoRichieste > 1 ? `Carica la foto ${s.fotoCaricate + 1} di ${s.fotoRichieste}` : "Carica foto e partecipa"
+          }</button>
         `
             : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
 

@@ -22,9 +22,9 @@ function etichettaMese(meseKey: string): string {
 }
 
 // Criteri ammessi per tipo = 'traguardo'.
-export const CRITERI_TRAGUARDO = ["profilo_completo", "obiettivi_completi", "daily_drop"] as const;
+export const CRITERI_TRAGUARDO = ["profilo_completo", "obiettivi_completi", "daily_drop", "settimana_completa"] as const;
 export function criterioValido(criterio: string): boolean {
-  return (CRITERI_TRAGUARDO as readonly string[]).includes(criterio) || /^presenze:([1-9]\d?)$/.test(criterio);
+  return (CRITERI_TRAGUARDO as readonly string[]).includes(criterio) || /^(presenze|daily_drop):([1-9]\d?)$/.test(criterio);
 }
 
 type SfidaTraguardo = {
@@ -64,6 +64,38 @@ async function criterioSoddisfatto(db: D1Database, userId: number, s: SfidaTragu
     const r = await db
       .prepare(`SELECT 1 FROM post_feed WHERE user_id = ? AND tipo = 'daily_drop' LIMIT 1`)
       .bind(userId)
+      .first();
+    return !!r;
+  }
+
+  // N Daily Drop nel periodo della sfida (es. "Fai 7 daily drop a ottobre"). A differenza
+  // di "daily_drop", qui contano solo le risposte date tra data_inizio e data_fine.
+  const dd = criterio.match(/^daily_drop:(\d+)$/);
+  if (dd) {
+    const r = await db
+      .prepare(
+        `SELECT COUNT(DISTINCT date(data)) AS c FROM post_feed
+         WHERE user_id = ? AND tipo = 'daily_drop' AND date(data) BETWEEN ? AND ?`
+      )
+      .bind(userId, s.data_inizio, s.data_fine)
+      .first<{ c: number }>();
+    return (r?.c ?? 0) >= Number(dd[1]);
+  }
+
+  // Almeno una settimana con lunedì, mercoledì e venerdì tutti confermati, dentro il
+  // periodo della sfida ("Fai almeno 3 allenamenti in una settimana").
+  if (criterio === "settimana_completa") {
+    const r = await db
+      .prepare(
+        `SELECT 1 FROM presenze pr
+         JOIN sessioni_gruppo sg ON sg.id = pr.sessione_id
+         WHERE pr.user_id = ? AND pr.confermata = 1 AND pr.data BETWEEN ? AND ?
+           AND sg.giorno_settimana IN (1, 3, 5)
+         GROUP BY date(pr.data, '-' || ((CAST(strftime('%w', pr.data) AS INTEGER) + 6) % 7) || ' days')
+         HAVING COUNT(DISTINCT pr.data) >= 3
+         LIMIT 1`
+      )
+      .bind(userId, s.data_inizio, s.data_fine)
       .first();
     return !!r;
   }

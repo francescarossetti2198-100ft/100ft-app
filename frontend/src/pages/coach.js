@@ -18,7 +18,9 @@ export const CRITERI_TRAGUARDO = [
   { v: "profilo_completo", label: "ha completato profilo + «I tuoi dati»" },
   { v: "obiettivi_completi", label: "ha compilato gli obiettivi personali" },
   { v: "daily_drop", label: "ha fatto almeno un daily drop" },
+  { v: "daily_drop_n", label: "fa N daily drop nel periodo" },
   { v: "presenze", label: "raggiunge N presenze confermate" },
+  { v: "settimana_completa", label: "fa lunedì, mercoledì e venerdì in una stessa settimana" },
 ];
 
 export const esc = (s) =>
@@ -26,12 +28,15 @@ export const esc = (s) =>
 
 // Riga leggibile per una sfida nell'elenco della dashboard.
 export function descriviSfida(s) {
-  if (s.tipo === "foto") return "📸 Foto";
+  if (s.tipo === "foto") return s.fotoRichieste > 1 ? `📸 ${s.fotoRichieste} foto` : "📸 Foto";
   if (s.tipo !== "traguardo") return "👋 Di gruppo";
   const c = s.criterio || "";
   if (c === "profilo_completo") return "🏅 Automatica — profilo completo";
   if (c === "obiettivi_completi") return "🏅 Automatica — obiettivi compilati";
   if (c === "daily_drop") return "🏅 Automatica — un daily drop";
+  if (c === "settimana_completa") return "🏅 Automatica — 3 allenamenti in una settimana";
+  const dd = c.match(/^daily_drop:(\d+)$/);
+  if (dd) return `🏅 Automatica — ${dd[1]} daily drop`;
   const m = c.match(/^presenze:(\d+)$/);
   if (m) return `🏅 Automatica — ${m[1]} presenze`;
   return "🏅 Automatica";
@@ -988,6 +993,8 @@ export function initSfida(el) {
   const criterioWrap = el.querySelector("#sfida-criterio-wrap");
   const criterioSel = el.querySelector("#sfida-criterio");
   const criterioN = el.querySelector("#sfida-criterio-n");
+  const fotoNWrap = el.querySelector("#sfida-foto-n-wrap");
+  const fotoN = el.querySelector("#sfida-foto-n");
   const flashChk = el.querySelector("#sfida-flash");
   const meseSel = el.querySelector("#sfida-mese");
   const annoInput = el.querySelector("#sfida-anno");
@@ -1074,7 +1081,8 @@ export function initSfida(el) {
   const aggiornaCriterio = () => {
     // `.field` ha display:flex, che vince su [hidden] -> uso style.display.
     criterioWrap.style.display = tipoSel.value === "traguardo" ? "" : "none";
-    criterioN.hidden = !(tipoSel.value === "traguardo" && criterioSel.value === "presenze");
+    fotoNWrap.style.display = tipoSel.value === "foto" ? "" : "none";
+    criterioN.hidden = !(tipoSel.value === "traguardo" && ["presenze", "daily_drop_n"].includes(criterioSel.value));
   };
   tipoSel.addEventListener("change", aggiornaCriterio);
   criterioSel.addEventListener("change", aggiornaCriterio);
@@ -1112,7 +1120,11 @@ export function initSfida(el) {
     const { inizio: dataInizio, fine: dataFine } = periodoSfida();
     let criterio;
     if (tipo === "traguardo") {
-      criterio = criterioSel.value === "presenze" ? `presenze:${Number(criterioN.value) || 1}` : criterioSel.value;
+      const n = Number(criterioN.value) || 1;
+      criterio =
+        criterioSel.value === "presenze" ? `presenze:${n}`
+        : criterioSel.value === "daily_drop_n" ? `daily_drop:${n}`
+        : criterioSel.value;
     }
 
     if (!titolo || !dataInizio || !dataFine) {
@@ -1134,6 +1146,7 @@ export function initSfida(el) {
         tipo,
         criterio,
         flash: flashChk.checked ? 1 : 0,
+        foto_richieste: tipo === "foto" ? Number(fotoN.value) || 1 : undefined,
         data_inizio: dataInizio,
         data_fine: dataFine,
       });
@@ -1141,6 +1154,7 @@ export function initSfida(el) {
       el.querySelector("#sfida-titolo").value = "";
       el.querySelector("#sfida-descrizione").value = "";
       flashChk.checked = false;
+      fotoN.value = "1";
       inizioInput.value = "";
       fineInput.value = "";
       datePrecise.open = false;
