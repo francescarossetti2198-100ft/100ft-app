@@ -9,7 +9,7 @@ import { api, ApiError } from "../api.js";
 import { currentQuery, navigate } from "../router.js";
 import { getUser } from "../auth.js";
 import { fotoProfiloHtml, formatDataNascita, trofeiVintiDa } from "./profilo.js";
-import { badgeMensiliHtml } from "../badge-mensili.js";
+import { badgeMensiliHtml, apriDettaglioBadge, trofeoUrl } from "../badge-mensili.js";
 import { montaFeed } from "./feed.js";
 
 const esc = (s) =>
@@ -119,13 +119,22 @@ async function caricaAtleta(el) {
     // mese più recente. Il trofeo dei mesi passati resta comunque tra "I badge di" sopra.
     const vinceAttuale = atletaMese.attuale?.vincitori.some((v) => v.userId === userId);
     if (vinceAttuale) {
+      const a = atletaMese.attuale;
+      const punti = a.vincitori.find((v) => v.userId === userId).punti;
       content.querySelector("#atleta-badge-mese").innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; margin-top:8px">
-          <img src="/trofei/trofeo_${String(atletaMese.attuale.mese).padStart(2, "0")}.png" alt="Trofeo Atleta del Mese"
+        <button type="button" class="badge-tile" data-badge-tipo="trofeo" data-mese="${a.mese}" data-anno="${a.anno}" data-punti="${punti}"
+          style="display:flex; flex-direction:column; align-items:center; margin:8px auto 0; background:none; border:none; padding:0; color:inherit; cursor:pointer">
+          <img src="${trofeoUrl(a.mese)}" alt="Trofeo Atleta del Mese"
             style="width:64px; height:64px; object-fit:contain" />
           <p class="mono" style="color:#F4B740; font-size:12px; margin-top:2px; font-weight:600">Atleta del Mese</p>
-        </div>`;
+        </button>`;
     }
+
+    // Dal post del Feed "è l'Atleta del Mese" si arriva con ?trofeo=YYYY-MM: apre subito il
+    // trofeo vinto in quel mese.
+    const trofeoRichiesto = currentQuery().get("trofeo");
+    const t = trofeoRichiesto && trofeiVinti.find((x) => `${x.anno}-${String(x.mese).padStart(2, "0")}` === trofeoRichiesto);
+    if (t) apriDettaglioBadge({ tipo: "trofeo", ...t });
   } catch (err) {
     content.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Atleta non trovato"}</p>`;
   }

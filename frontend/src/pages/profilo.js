@@ -1573,12 +1573,14 @@ function renderBadgeAtletaMese(content, userId, attuale) {
   if (!box) return;
   const vince = attuale?.vincitori.some((v) => v.userId === userId);
   if (!vince) return;
+  const punti = attuale.vincitori.find((v) => v.userId === userId).punti;
   box.innerHTML = `
-    <div style="display:flex; flex-direction:column; align-items:center; margin-top:8px">
+    <button type="button" class="badge-tile" data-badge-tipo="trofeo" data-mese="${attuale.mese}" data-anno="${attuale.anno}" data-punti="${punti}"
+      style="display:flex; flex-direction:column; align-items:center; margin:8px auto 0; background:none; border:none; padding:0; color:inherit; cursor:pointer">
       <img src="/trofei/trofeo_${String(attuale.mese).padStart(2, "0")}.png" alt="Trofeo Atleta del Mese"
         style="width:64px; height:64px; object-fit:contain" />
       <p class="mono" style="color:#F4B740; font-size:12px; margin-top:2px; font-weight:600">Atleta del Mese</p>
-    </div>`;
+    </button>`;
 }
 
 // Tutti i mesi in cui `userId` è risultato Atleta del mese, dallo storico completo.

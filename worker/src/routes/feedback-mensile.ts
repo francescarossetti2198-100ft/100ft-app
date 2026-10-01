@@ -8,9 +8,14 @@ import { awardXp } from "../lib/xp";
 // Punti classifica per aver compilato il feedback del mese.
 const XP_FEEDBACK_MENSILE = 15;
 
-// Si compila solo la prima settimana del mese (giorni 1–7), sul mese appena concluso.
+// Si compila solo la prima settimana del mese (giorni 1–7), sul mese appena concluso. Il
+// giorno 1 apre alle 09:00 (ora di Roma), non a mezzanotte: prima, alle 08:00, si chiude il
+// mese con l'Atleta del mese (lib/atletaMese.ts) — scelta di Francesca, ott 2026.
 function nellaFinestra(): boolean {
-  return adessoRoma().getUTCDate() <= 7;
+  const r = adessoRoma();
+  const giorno = r.getUTCDate();
+  if (giorno === 1) return r.getUTCHours() >= 9;
+  return giorno <= 7;
 }
 
 type Variables = { user: SessionUser };

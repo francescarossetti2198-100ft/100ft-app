@@ -142,9 +142,18 @@ sfide.get("/", requireAuth, async (c) => {
      ORDER BY s.data_fine DESC`
   )
     .bind(...(isCoach ? [c.var.user.userId, c.var.user.userId] : [c.var.user.userId, c.var.user.userId, oggi]))
-    .all();
+    .all<Record<string, unknown> & { flash: number; data_inizio: string }>();
 
-  return c.json({ sfide: results });
+  // Sfida flash non ancora iniziata (es. Halloween, dal 26/10): l'atleta vede che c'è, ma
+  // titolo e descrizione restano segreti fino a data_inizio — tolti qui, non solo nascosti
+  // dalla UI, così non si leggono nemmeno dalla risposta. Scelta di Francesca, ott 2026.
+  const sfideVisibili = isCoach
+    ? results
+    : results.map((s) =>
+        s.flash && s.data_inizio > oggi ? { ...s, titolo: null, descrizione: null, nascosta: 1 } : s
+      );
+
+  return c.json({ sfide: sfideVisibili });
 });
 
 sfide.post("/:id/partecipa", requireAuth, async (c) => {

@@ -410,8 +410,11 @@ async function loadAlboOro(el) {
       <div class="card">
         <p class="kicker">🏆 ATLETA DEL MESE</p>
         <div style="display:flex; align-items:center; gap:14px; margin-top:8px">
-          <img src="${trofeoUrl(attuale.mese)}" alt="Trofeo di ${meseNome(`${attuale.anno}-${String(attuale.mese).padStart(2, "0")}`)}"
-            style="width:84px; height:84px; object-fit:contain; flex:0 0 auto" />
+          <button type="button" class="badge-tile" data-badge-tipo="trofeo" data-mese="${attuale.mese}" data-anno="${attuale.anno}"
+            data-punti="${attuale.vincitori[0].punti}" style="flex:0 0 auto; background:none; border:none; padding:0; cursor:pointer; line-height:0">
+            <img src="${trofeoUrl(attuale.mese)}" alt="Trofeo di ${meseNome(`${attuale.anno}-${String(attuale.mese).padStart(2, "0")}`)}"
+              style="width:84px; height:84px; object-fit:contain" />
+          </button>
           <div style="flex:1; min-width:0">
             <p class="mono" style="color:var(--mute); font-size:12px">${meseNome(`${attuale.anno}-${String(attuale.mese).padStart(2, "0")}`)} ${attuale.anno}</p>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px">
@@ -428,8 +431,11 @@ async function loadAlboOro(el) {
                    .map(
                      (m) => `
                        <div style="display:flex; align-items:center; gap:10px">
-                         <img src="${trofeoUrl(m.mese)}" alt="Trofeo di ${meseNome(`${m.anno}-${String(m.mese).padStart(2, "0")}`)}"
-                           style="width:40px; height:40px; object-fit:contain; flex:0 0 auto" />
+                         <button type="button" class="badge-tile" data-badge-tipo="trofeo" data-mese="${m.mese}" data-anno="${m.anno}"
+                           data-punti="${m.vincitori[0].punti}" style="flex:0 0 auto; background:none; border:none; padding:0; cursor:pointer; line-height:0">
+                           <img src="${trofeoUrl(m.mese)}" alt="Trofeo di ${meseNome(`${m.anno}-${String(m.mese).padStart(2, "0")}`)}"
+                             style="width:40px; height:40px; object-fit:contain" />
+                         </button>
                          <div style="flex:1; min-width:0">
                            <p class="mono" style="color:var(--mute); font-size:11px; margin-bottom:4px">${meseNome(`${m.anno}-${String(m.mese).padStart(2, "0")}`)} ${m.anno}</p>
                            <div style="display:flex; flex-direction:column; gap:6px">${m.vincitori.map(rigaVincitore).join("")}</div>
@@ -465,6 +471,20 @@ function fotoProgressoHtml(s) {
 // Una singola sfida come riga dentro la card del mese. Le completate restano visibili
 // ma "archiviate" (classe .done -> opacità ridotta + esito riuscito).
 function sfidaItemHtml(s, oggi) {
+  // Sfida flash segreta (il worker manda titolo/descrizione null fino a data_inizio): si vede
+  // che c'è, ma "glitchata", senza nome né contenuto.
+  if (s.nascosta) {
+    const giorno = `${s.data_inizio.slice(8, 10)}/${s.data_inizio.slice(5, 7)}`;
+    return `
+      <div class="sfida-item sfida-glitch" data-id="${s.id}">
+        <p class="mono" style="font-size:11px"><span style="color:var(--sessione-b)">⚡ SFIDA FLASH</span></p>
+        <p class="glitch-testo" data-testo="▓█▒░ ▒▓█░▒▓" aria-label="Sfida segreta">▓█▒░ ▒▓█░▒▓</p>
+        <p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">██▒ ░▓█▒ ▒░█ ▓▒░█ ░▒▓ █▒░▓▒</p>
+        <p class="mono" style="color:var(--accent); font-size:13px; margin-top:8px">+${s.punti} PT · ??? partecipanti</p>
+        <button class="btn" style="width:100%; margin-top:10px" disabled>Si svela il ${giorno}</button>
+      </div>
+    `;
+  }
   const scaduta = s.data_fine < oggi;
   const nonIniziata = s.data_inizio > oggi;
   const done = !!s.partecipato;

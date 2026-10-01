@@ -21,12 +21,12 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
   return { giorno: Number(get("day")), oraMinuti: `${get("hour")}:${get("minute")}` };
 }
 
-// Promemoria del questionario mensile — il giorno 1 di ogni mese alle 10:00 (ora di Roma),
+// Promemoria del questionario mensile — il giorno 1 di ogni mese alle 09:00 (ora di Roma),
 // a chi non ha ancora risposto per il mese appena concluso. Una sola volta
 // (feedback_mensile_notifiche evita di rispedirlo ai tick successivi).
 export async function inviaFeedbackMensileSeAttivo(env: Env): Promise<void> {
   const { giorno, oraMinuti } = oraRoma();
-  if (giorno !== 1 || oraMinuti !== "10:00") return;
+  if (giorno !== 1 || oraMinuti !== "09:00") return;
 
   const { mese, anno } = mesePrecedente();
   if (!meseFeedbackValido(mese, anno)) return; // fuori stagione: nessun feedback da chiedere

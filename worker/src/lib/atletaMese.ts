@@ -1,5 +1,5 @@
 import type { Env } from "../types";
-import { mesePrecedente } from "./oggi";
+import { adessoRoma, mesePrecedente } from "./oggi";
 import { sendWebPush } from "./webPush";
 
 const MESI = [
@@ -7,8 +7,8 @@ const MESI = [
   "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
 ];
 
-// Stesso orario-check delle altre notifiche mensili (feedbackMensilePush.ts) — giorno 1,
-// un orario diverso (09:00) per non ammucchiare tutto alle 10:00.
+// Stesso orario-check delle altre notifiche mensili (feedbackMensilePush.ts) — giorno 1 alle
+// 08:00: prima si chiude il mese con il vincitore, alle 09:00 si apre il questionario.
 function oraRoma(): { giorno: number; oraMinuti: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Rome",
@@ -19,6 +19,15 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
   }).formatToParts(new Date());
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return { giorno: Number(get("day")), oraMinuti: `${get("hour")}:${get("minute")}` };
+}
+
+// Istante UTC ("YYYY-MM-DD HH:MM:SS", stesso formato di xp_log.data) della mezzanotte di Roma
+// del giorno 1 di `mese`/`anno`. Il cambio d'ora in Italia avviene alle 02:00/03:00, mai a
+// mezzanotte, quindi l'offset letto a mezzanotte UTC dello stesso giorno è quello giusto.
+function mezzanotteRomaUtc(anno: number, mese: number): string {
+  const utc = Date.UTC(anno, mese - 1, 1);
+  const offset = adessoRoma(new Date(utc)).getTime() - utc; // +1h o +2h
+  return new Date(utc - offset).toISOString().slice(0, 19).replace("T", " ");
 }
 
 // Assegna "Atleta del mese" per il mese appena concluso — automatico, sui punti xp_log
@@ -34,7 +43,7 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
 // prima del 1° ottobre, quindi la prima assegnazione avviene naturalmente in quel momento.
 export async function assegnaAtletaDelMeseSeAttivo(env: Env): Promise<void> {
   const { giorno, oraMinuti } = oraRoma();
-  if (giorno !== 1 || oraMinuti !== "09:00") return;
+  if (giorno !== 1 || oraMinuti !== "08:00") return;
 
   const { mese, anno } = mesePrecedente();
 
@@ -43,13 +52,16 @@ export async function assegnaAtletaDelMeseSeAttivo(env: Env): Promise<void> {
     .first();
   if (gia) return; // già assegnato per questo mese
 
-  const inizio = `${anno}-${String(mese).padStart(2, "0")}-01`;
-  const fine = `${anno}-${String(mese).padStart(2, "0")}-31`;
+  // xp_log.data è in UTC (datetime('now')): il mese va misurato in ora di ROMA, altrimenti
+  // i punti fatti dopo la mezzanotte italiana del 1° (es. il questionario mensile compilato
+  // alle 00:41 del 1° ottobre = 22:41 UTC del 30 settembre) finiscono nel mese sbagliato.
+  const inizio = mezzanotteRomaUtc(anno, mese);
+  const fine = mese === 12 ? mezzanotteRomaUtc(anno + 1, 1) : mezzanotteRomaUtc(anno, mese + 1);
 
   const { results: classifica } = await env.DB.prepare(
     `SELECT u.id AS userId, COALESCE(SUM(x.xp_assegnati), 0) AS punti
      FROM users u
-     LEFT JOIN xp_log x ON x.user_id = u.id AND x.data >= ? AND x.data <= ?
+     LEFT JOIN xp_log x ON x.user_id = u.id AND x.data >= ? AND x.data < ?
      WHERE u.role = 'atleta' AND u.status = 'attivo'
      GROUP BY u.id
      ORDER BY punti DESC`

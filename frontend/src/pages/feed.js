@@ -2,6 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { fotoProfiloHtml } from "./profilo.js";
 import { getUser } from "../auth.js";
+import { trofeoUrl } from "../badge-mensili.js";
 
 const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
@@ -15,6 +16,40 @@ const TIPO_INFO = {
   allenamento: { icona: "🏋️", azione: "" },
   merenda: { icona: "🍎", azione: "merenda di oggi" },
 };
+
+// Post "Atleta del Mese" (scritto dal cron in worker/src/lib/atletaMese.ts con testo
+// "<punti> punti in <mese>", il giorno 1 del mese dopo): invece del testo semplice mostra il
+// trofeo del mese in grande + un bottone che apre il trofeo sul profilo del vincitore.
+const MESI_FEED = [
+  "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+  "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+];
+function datiVittoria(p) {
+  const m = /(\d+)\s+punti\s+in\s+([a-zà]+)/i.exec(p.testo ?? "");
+  const idx = m ? MESI_FEED.indexOf(m[2].toLowerCase()) : -1;
+  if (idx < 0) return null;
+  const mese = idx + 1;
+  const dataPost = new Date(String(p.data).replace(" ", "T") + "Z");
+  // Il post esce a inizio del mese dopo: un trofeo di dicembre pubblicato a gennaio è dell'anno prima.
+  const anno = mese > dataPost.getMonth() + 1 ? dataPost.getFullYear() - 1 : dataPost.getFullYear();
+  return { mese, anno, punti: Number(m[1]), nomeMese: MESI_FEED[idx] };
+}
+function vittoriaHtml(p, v) {
+  const chiave = `${v.anno}-${String(v.mese).padStart(2, "0")}`;
+  return `
+    <div style="margin-top:12px; text-align:center; border-radius:14px; padding:18px 12px 16px;
+                background:radial-gradient(circle at 50% 35%, color-mix(in srgb, #F4B740 22%, transparent), transparent 70%)">
+      <img src="${trofeoUrl(v.mese)}" alt="Trofeo Atleta del Mese di ${v.nomeMese}"
+        style="width:150px; height:150px; object-fit:contain; display:block; margin:0 auto" />
+      <p class="kicker" style="color:#F4B740; margin-top:8px">🏆 Atleta del Mese · ${v.nomeMese} ${v.anno}</p>
+      <p style="font-family:var(--font-ui); font-weight:800; font-size:22px; margin-top:4px">${v.punti} punti</p>
+      ${p.userId
+        ? `<a href="#/atleta?id=${p.userId}&trofeo=${chiave}" class="mono"
+             style="display:inline-block; margin-top:12px; padding:9px 16px; border-radius:999px; text-decoration:none;
+                    background:#F4B740; color:#16161A; font-size:13px; font-weight:700">Vedi il trofeo sul profilo →</a>`
+        : ""}
+    </div>`;
+}
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -209,7 +244,9 @@ export async function montaFeed(list, opts = {}) {
 
     list.innerHTML = posts
       .map((p) => {
-        const info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
+        let info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
+        const vittoria = p.tipo === "athlete_of_week" ? datiVittoria(p) : null;
+        if (vittoria) info = { ...info, azione: `è l'Atleta del Mese di ${vittoria.nomeMese}` };
         const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento" || p.tipo === "merenda";
         const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
 
@@ -253,7 +290,9 @@ export async function montaFeed(list, opts = {}) {
                             font-size:16px; line-height:1; padding:0 0 0 8px; cursor:pointer">✕</button>`
                 : ""}
             </div>
-            <p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>
+            ${vittoria
+              ? vittoriaHtml(p, vittoria)
+              : `<p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>`}
             ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
                  class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
