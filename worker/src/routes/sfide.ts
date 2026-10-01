@@ -126,6 +126,10 @@ sfide.get("/", requireAuth, async (c) => {
   // già applicato al Programma mensile.
   const isCoach = c.var.user.role === "coach";
   const oggi = adessoRoma().toISOString().slice(0, 10);
+  // `?vista=atleta`: la pagina Sfide della coach mostra esattamente quello che vedono gli
+  // atleti (stesse sfide, flash segrete glitchate). La dashboard "Gestione sfide" non lo
+  // passa e vede tutto in chiaro. Richiesta di Francesca, ott 2026.
+  const comeAtleta = !isCoach || c.req.query("vista") === "atleta";
 
   // Aprendo le Sfide l'atleta fa scattare le "traguardo" già maturate.
   if (!isCoach) await verificaTraguardi(c.env.DB, c.var.user.userId);
@@ -137,17 +141,17 @@ sfide.get("/", requireAuth, async (c) => {
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
-     ${isCoach ? "" : `WHERE (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
+     ${!comeAtleta ? "" : `WHERE (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
        (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))`}
      ORDER BY s.data_fine DESC`
   )
-    .bind(...(isCoach ? [c.var.user.userId, c.var.user.userId] : [c.var.user.userId, c.var.user.userId, oggi]))
+    .bind(...(!comeAtleta ? [c.var.user.userId, c.var.user.userId] : [c.var.user.userId, c.var.user.userId, oggi]))
     .all<Record<string, unknown> & { flash: number; data_inizio: string }>();
 
   // Sfida flash non ancora iniziata (es. Halloween, dal 26/10): l'atleta vede che c'è, ma
   // titolo e descrizione restano segreti fino a data_inizio — tolti qui, non solo nascosti
   // dalla UI, così non si leggono nemmeno dalla risposta. Scelta di Francesca, ott 2026.
-  const sfideVisibili = isCoach
+  const sfideVisibili = !comeAtleta
     ? results
     : results.map((s) =>
         s.flash && s.data_inizio > oggi ? { ...s, titolo: null, descrizione: null, nascosta: 1 } : s

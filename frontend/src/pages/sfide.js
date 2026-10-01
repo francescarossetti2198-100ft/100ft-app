@@ -596,7 +596,7 @@ async function loadSfide(el, meseVoluto) {
 
   let sfide;
   try {
-    ({ sfide } = await api.get("/sfide"));
+    ({ sfide } = await api.get("/sfide?vista=atleta"));
   } catch (err) {
     list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
     return;
