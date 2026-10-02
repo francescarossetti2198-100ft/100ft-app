@@ -580,7 +580,13 @@ async function loadCoach(el) {
   const box = el.querySelector("#ao-coach");
   try {
     const { testo } = await api.get("/nota-coach");
-    box.innerHTML = testo ? `<p style="font-style:italic">"${esc(testo)}"</p>` : "";
+    // pre-line: gli "a capo" scritti dalla coach restano, invece di diventare un blocco unico.
+    box.innerHTML = testo
+      ? `<div style="border-left:3px solid var(--accent); padding-left:12px">
+           <p class="mono" style="color:var(--accent); font-size:11px; letter-spacing:1px; margin-bottom:6px">💬 DALLA COACH</p>
+           <p style="white-space:pre-line; font-size:15px; line-height:1.5">${esc(testo.trim())}</p>
+         </div>`
+      : "";
   } catch {
     box.innerHTML = "";
   }

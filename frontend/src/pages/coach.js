@@ -663,8 +663,11 @@ export function initNota(el) {
       .get(`/nota-coach?data=${dataInput.value}`)
       .then((r) => {
         status.innerHTML = r.testo
-          ? `<p class="mono" style="color:var(--mute); font-size:13px">Nota attuale: “${r.testo}”</p>`
+          ? `<p class="mono" style="color:var(--mute); font-size:13px">Nota attuale:</p>
+             <p class="nota-attuale" style="color:var(--mute); font-size:13px; white-space:pre-line; margin-top:4px"></p>`
           : `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna nota per ${oggi ? "oggi" : "questa data"}.</p>`;
+        // textContent: il testo della coach va mostrato così com'è, a capo compresi.
+        if (r.testo) status.querySelector(".nota-attuale").textContent = r.testo;
         if (r.testo) testo.value = r.testo;
       })
       .catch(() => {
