@@ -1,5 +1,5 @@
 import type { Env } from "../types";
-import { adessoRoma, mesePrecedente } from "./oggi";
+import { mesePrecedente, mezzanotteRomaUtc } from "./oggi";
 import { sendWebPush } from "./webPush";
 
 const MESI = [
@@ -19,15 +19,6 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
   }).formatToParts(new Date());
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return { giorno: Number(get("day")), oraMinuti: `${get("hour")}:${get("minute")}` };
-}
-
-// Istante UTC ("YYYY-MM-DD HH:MM:SS", stesso formato di xp_log.data) della mezzanotte di Roma
-// del giorno 1 di `mese`/`anno`. Il cambio d'ora in Italia avviene alle 02:00/03:00, mai a
-// mezzanotte, quindi l'offset letto a mezzanotte UTC dello stesso giorno è quello giusto.
-function mezzanotteRomaUtc(anno: number, mese: number): string {
-  const utc = Date.UTC(anno, mese - 1, 1);
-  const offset = adessoRoma(new Date(utc)).getTime() - utc; // +1h o +2h
-  return new Date(utc - offset).toISOString().slice(0, 19).replace("T", " ");
 }
 
 // Assegna "Atleta del mese" per il mese appena concluso — automatico, sui punti xp_log

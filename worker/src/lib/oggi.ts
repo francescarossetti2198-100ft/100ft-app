@@ -20,6 +20,17 @@ export function adessoRoma(now: Date = new Date()): Date {
   return new Date(Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")));
 }
 
+// Istante UTC ("YYYY-MM-DD HH:MM:SS", stesso formato di xp_log.data, che è UTC) della
+// mezzanotte di Roma del giorno indicato. Serve per filtrare xp_log per mese/settimana in
+// ora italiana: altrimenti i punti fatti tra le 00:00 e le 02:00 di Roma finiscono nel
+// giorno (o mese) prima. Il cambio d'ora in Italia avviene alle 02:00/03:00, mai a
+// mezzanotte, quindi l'offset letto a mezzanotte UTC dello stesso giorno è quello giusto.
+export function mezzanotteRomaUtc(anno: number, mese: number, giorno = 1): string {
+  const utc = Date.UTC(anno, mese - 1, giorno);
+  const offset = adessoRoma(new Date(utc)).getTime() - utc; // +1h o +2h
+  return new Date(utc - offset).toISOString().slice(0, 19).replace("T", " ");
+}
+
 export function oggi(): { data: string; giornoSettimana: number } {
   const now = adessoRoma();
   const data = now.toISOString().slice(0, 10);

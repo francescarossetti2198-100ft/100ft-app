@@ -7,7 +7,7 @@ import { inizioSettimana } from "../lib/settimana";
 import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { stagioneDi, verificaEAssegnaTrofeo, statoTrofei } from "../lib/trofei";
 import { verificaTraguardi, verificaBonusMese, criterioValido } from "../lib/traguardi";
-import { adessoRoma } from "../lib/oggi";
+import { adessoRoma, mezzanotteRomaUtc } from "../lib/oggi";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -29,15 +29,18 @@ sfide.get("/classifica", requireAuth, async (c) => {
   const periodo: Periodo = PERIODI.includes(richiesto as Periodo) ? (richiesto as Periodo) : "mese";
 
   const oggi = adessoRoma();
-  const primoDelMese = (d: Date) =>
-    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
-  // Da quando contano i punti per questo periodo ("totale" = da sempre).
+  // Da quando contano i punti per questo periodo ("totale" = da sempre). xp_log.data è UTC:
+  // il confine va calcolato sulla mezzanotte di ROMA, altrimenti i punti fatti dopo la
+  // mezzanotte italiana del 1° (es. il questionario mensile alle 00:41 del 1° ottobre =
+  // 22:41 UTC del 30 settembre) finiscono nel periodo prima. Stesso confine dell'Atleta
+  // del mese (lib/atletaMese.ts).
   let minCorr: string | null = null;
   if (periodo === "settimana") {
-    minCorr = inizioSettimana(oggi).toISOString().slice(0, 10);
+    const lun = inizioSettimana(oggi);
+    minCorr = mezzanotteRomaUtc(lun.getUTCFullYear(), lun.getUTCMonth() + 1, lun.getUTCDate());
   } else if (periodo === "mese") {
-    minCorr = primoDelMese(oggi);
+    minCorr = mezzanotteRomaUtc(oggi.getUTCFullYear(), oggi.getUTCMonth() + 1);
   }
 
   const filtro = minCorr ? "AND x.data >= ?" : "";
