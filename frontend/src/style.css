@@ -195,7 +195,10 @@ input {
 
 .btn {
   background: var(--accent);
-  color: #fff;
+  /* --on-accent: testo sopra l'accento. Bianco di default; il Profilo lo fa diventare scuro
+     quando il colore scelto dall'atleta è chiaro (Bianco, Giallo), altrimenti la scritta
+     sparisce (bianco su bianco). */
+  color: var(--on-accent, #fff);
   border: none;
   border-radius: 10px;
   padding: 12px 20px;

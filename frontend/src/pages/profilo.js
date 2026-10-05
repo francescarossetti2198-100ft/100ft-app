@@ -148,6 +148,9 @@ export function renderProfilo(appEl) {
     <style>
       /* Colore scelto per l'anello della foto: tinge in modo tenue anche lo sfondo e il
          bordo di tutte le schede del profilo (--accent è impostato in loadProfilo). */
+      /* Bianco nel tema chiaro: il bottone bianco sparirebbe sullo sfondo chiaro della card,
+         gli si dà un bordo. */
+      :root[data-theme="light"] #profilo-content.colore-chiaro .btn { box-shadow: inset 0 0 0 1px var(--border); }
       #profilo-content.ha-colore .card {
         background-color: color-mix(in srgb, var(--accent) 8%, var(--surface));
         border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
@@ -1820,6 +1823,11 @@ async function loadProfilo(el) {
     if (coloreScelto) content.style.setProperty("--accent", coloreScelto);
     else content.style.removeProperty("--accent");
     content.classList.toggle("ha-colore", !!coloreScelto);
+    // Su Bianco e Giallo il testo bianco dei bottoni non si legge: lì va scuro.
+    const coloreChiaro = ["bianco", "giallo"].includes(p.fotoPersonalizzazione?.colore);
+    if (coloreChiaro) content.style.setProperty("--on-accent", "#0a0a0a");
+    else content.style.removeProperty("--on-accent");
+    content.classList.toggle("colore-chiaro", coloreChiaro);
 
     // L'atleta ha "Esci" dentro Impostazioni — via il pulsante di primo livello
     // (resta solo per la coach, che non ha la card Impostazioni).
