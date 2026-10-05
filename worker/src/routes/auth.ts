@@ -5,11 +5,13 @@ import { hashPassword, verifyPassword } from "../lib/password";
 import { createSession, deleteSession, SESSION_COOKIE_NAME } from "../lib/session";
 import { sessionCookieOptions } from "../lib/cookies";
 import { sendResetPasswordEmail } from "../lib/email";
+import { requireAuth } from "../middleware/auth";
 
 type Variables = { user: SessionUser };
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Registrazione atleta — email + password scelta in fase di registrazione (brief, sezione 2).
+// Il ruolo è sempre "atleta": un account coach si crea a parte (vedi worker/scripts/create-coach-account.mjs).
 auth.post("/register", async (c) => {
   const body = await c.req.json<{
     nome?: string;
@@ -24,65 +26,60 @@ auth.post("/register", async (c) => {
   if (!nome || !cognome || !email || !password) {
     return c.json({ error: "Nome, cognome, email e password sono obbligatori" }, 400);
   }
+  // Data di nascita richiesta per creare l'account (il frontend non la etichetta come
+  // "obbligatoria", ma senza non si prosegue).
+  if (!body.data_nascita) {
+    return c.json({ error: "Inserisci la tua data di nascita" }, 400);
+  }
   if (password.length < 8) {
     return c.json({ error: "La password deve avere almeno 8 caratteri" }, 400);
   }
 
-  const existing = await c.env.DB.prepare(`SELECT id FROM atleti WHERE email = ?`).bind(email).first();
+  const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`).bind(email).first();
   if (existing) return c.json({ error: "Email già registrata" }, 409);
 
   const passwordHash = await hashPassword(password);
-  const result = await c.env.DB.prepare(
-    `INSERT INTO atleti (nome, cognome, nickname, email, password_hash, data_nascita)
-     VALUES (?, ?, ?, ?, ?, ?)`
+  const userResult = await c.env.DB.prepare(
+    `INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'atleta')`
   )
-    .bind(nome, cognome, body.nickname ?? null, email, passwordHash, body.data_nascita ?? null)
+    .bind(email, passwordHash)
     .run();
 
-  const atletaId = result.meta.last_row_id as number;
-  const user: SessionUser = { isCoach: false, atletaId };
+  const userId = userResult.meta.last_row_id as number;
+  await c.env.DB.prepare(
+    `INSERT INTO athlete_profile (user_id, nome, cognome, nickname, data_nascita)
+     VALUES (?, ?, ?, ?, ?)`
+  )
+    .bind(userId, nome, cognome, body.nickname ?? null, body.data_nascita ?? null)
+    .run();
+
+  const user: SessionUser = { userId, role: "atleta" };
   const { token, expiresAt } = await createSession(c.env.DB, user, c.req.header("User-Agent") ?? null);
   setCookie(c, SESSION_COOKIE_NAME, token, sessionCookieOptions(c, expiresAt));
 
-  return c.json({ id: atletaId, nome, cognome, email }, 201);
+  return c.json({ id: userId, role: "atleta", nome, cognome, email }, 201);
 });
 
-// Login atleta.
+// Login — unico per atleti e coach, il ruolo determina i permessi (brief, sezione 2).
 auth.post("/login", async (c) => {
   const { email, password } = await c.req.json<{ email?: string; password?: string }>();
   if (!email || !password) return c.json({ error: "Email e password sono obbligatori" }, 400);
 
-  const atleta = await c.env.DB.prepare(
-    `SELECT id, password_hash, attivo FROM atleti WHERE email = ?`
+  const user = await c.env.DB.prepare(
+    `SELECT id, password_hash, role, status FROM users WHERE email = ?`
   )
     .bind(email)
-    .first<{ id: number; password_hash: string; attivo: number }>();
+    .first<{ id: number; password_hash: string; role: "atleta" | "coach"; status: string }>();
 
-  if (!atleta || !atleta.attivo || !(await verifyPassword(password, atleta.password_hash))) {
+  if (!user || user.status !== "attivo" || !(await verifyPassword(password, user.password_hash))) {
     return c.json({ error: "Email o password non corretti" }, 401);
   }
 
-  const user: SessionUser = { isCoach: false, atletaId: atleta.id };
-  const { token, expiresAt } = await createSession(c.env.DB, user, c.req.header("User-Agent") ?? null);
+  const sessionUser: SessionUser = { userId: user.id, role: user.role };
+  const { token, expiresAt } = await createSession(c.env.DB, sessionUser, c.req.header("User-Agent") ?? null);
   setCookie(c, SESSION_COOKIE_NAME, token, sessionCookieOptions(c, expiresAt));
 
-  return c.json({ id: atleta.id });
-});
-
-// Login coach — password separata (secret COACH_PASSWORD_HASH), nessun account nella tabella atleti.
-auth.post("/login-coach", async (c) => {
-  const { password } = await c.req.json<{ password?: string }>();
-  if (!password) return c.json({ error: "Password obbligatoria" }, 400);
-
-  if (!c.env.COACH_PASSWORD_HASH || !(await verifyPassword(password, c.env.COACH_PASSWORD_HASH))) {
-    return c.json({ error: "Password non corretta" }, 401);
-  }
-
-  const user: SessionUser = { isCoach: true, atletaId: null };
-  const { token, expiresAt } = await createSession(c.env.DB, user, c.req.header("User-Agent") ?? null);
-  setCookie(c, SESSION_COOKIE_NAME, token, sessionCookieOptions(c, expiresAt));
-
-  return c.json({ isCoach: true });
+  return c.json({ id: user.id, role: user.role });
 });
 
 auth.post("/logout", async (c) => {
@@ -97,27 +94,54 @@ auth.get("/me", async (c) => {
   return c.json(c.var.user);
 });
 
-// Recupero password (atleti) via email Resend.
+// Recupero password via email Resend.
 auth.post("/forgot-password", async (c) => {
   const { email } = await c.req.json<{ email?: string }>();
   if (!email) return c.json({ error: "Email obbligatoria" }, 400);
 
-  const atleta = await c.env.DB.prepare(`SELECT id FROM atleti WHERE email = ?`).bind(email).first<{ id: number }>();
+  const user = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`).bind(email).first<{ id: number }>();
 
   // Risposta identica sia che l'email esista o no, per non rivelare quali email sono registrate.
-  if (atleta) {
+  if (user) {
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    await c.env.DB.prepare(
-      `INSERT INTO reset_password_token (token, atleta_id, scade_il) VALUES (?, ?, ?)`
-    )
-      .bind(token, atleta.id, expiresAt)
+    await c.env.DB.prepare(`INSERT INTO reset_password_token (token, user_id, scade_il) VALUES (?, ?, ?)`)
+      .bind(token, user.id, expiresAt)
       .run();
 
     // Router del frontend è hash-based (SPA su Cloudflare Pages, niente rotte server-side).
     const resetUrl = `${c.env.FRONTEND_ORIGIN}/#/reset-password?token=${token}`;
-    await sendResetPasswordEmail(c.env, email, resetUrl);
+    try {
+      await sendResetPasswordEmail(c.env, email, resetUrl);
+    } catch (err) {
+      // Finché non c'è un dominio mittente verificato su Resend l'invio fallisce: non deve
+      // far crashare la richiesta (l'utente vedrebbe un errore). In quel caso il recupero
+      // passa dalla coach (POST /api/atleti/:id/reset-password).
+      console.error("Invio email di reset password fallito:", err);
+    }
   }
+
+  return c.json({ ok: true });
+});
+
+// Cambio password da loggati (l'utente conosce quella attuale) — vale per atleti e coach.
+auth.post("/change-password", requireAuth, async (c) => {
+  const { attuale, nuova } = await c.req.json<{ attuale?: string; nuova?: string }>();
+  if (!attuale || !nuova) return c.json({ error: "Password attuale e nuova sono obbligatorie" }, 400);
+  if (nuova.length < 8) return c.json({ error: "La nuova password deve avere almeno 8 caratteri" }, 400);
+
+  const row = await c.env.DB.prepare(`SELECT password_hash FROM users WHERE id = ?`)
+    .bind(c.var.user.userId)
+    .first<{ password_hash: string }>();
+
+  if (!row || !(await verifyPassword(attuale, row.password_hash))) {
+    return c.json({ error: "La password attuale non è corretta" }, 400);
+  }
+
+  const passwordHash = await hashPassword(nuova);
+  await c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`)
+    .bind(passwordHash, c.var.user.userId)
+    .run();
 
   return c.json({ ok: true });
 });
@@ -128,17 +152,17 @@ auth.post("/reset-password", async (c) => {
   if (password.length < 8) return c.json({ error: "La password deve avere almeno 8 caratteri" }, 400);
 
   const row = await c.env.DB.prepare(
-    `SELECT atleta_id AS atletaId FROM reset_password_token
+    `SELECT user_id AS userId FROM reset_password_token
      WHERE token = ? AND usato = 0 AND scade_il > datetime('now')`
   )
     .bind(token)
-    .first<{ atletaId: number }>();
+    .first<{ userId: number }>();
 
   if (!row) return c.json({ error: "Link non valido o scaduto" }, 400);
 
   const passwordHash = await hashPassword(password);
   await c.env.DB.batch([
-    c.env.DB.prepare(`UPDATE atleti SET password_hash = ? WHERE id = ?`).bind(passwordHash, row.atletaId),
+    c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).bind(passwordHash, row.userId),
     c.env.DB.prepare(`UPDATE reset_password_token SET usato = 1 WHERE token = ?`).bind(token),
   ]);
 

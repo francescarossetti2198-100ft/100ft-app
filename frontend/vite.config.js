@@ -1,7 +1,14 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Timbro di build (data+ora) mostrato in fondo alla dashboard coach: serve a capire
+// al volo se un device sta ancora usando una versione vecchia in cache.
+const BUILD_STAMP = new Date().toISOString().slice(0, 16).replace("T", " ");
+
 export default defineConfig({
+  define: {
+    __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
+  },
   server: {
     proxy: {
       // In sviluppo il browser parla solo con Vite: le richieste /api vengono
@@ -16,6 +23,26 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
+      // Registriamo il SW a mano in main.js (con updateViaCache:"none") invece del
+      // registerSW.js generato: sul dominio custom Cloudflare serve /sw.js con
+      // Cache-Control: max-age=14400, quindi senza "none" il browser non si accorge
+      // di un nuovo SW per 4 ore dopo un deploy.
+      injectRegister: false,
+      // Service worker scritto a mano (src/sw.js) invece che generato — serve per gestire
+      // gli eventi "push"/"notificationclick" delle notifiche reali, non solo la cache offline.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      injectManifest: {
+        injectionPoint: "self.__WB_MANIFEST",
+      },
+      // Di default il service worker non viene servito affatto durante `vite dev` (solo nella
+      // build) — le notifiche push, che dipendono dal SW, non potrebbero mai registrarsi in
+      // sviluppo senza questo. "module" perché src/sw.js usa import ES (workbox-precaching).
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
       manifest: {
         name: "100FT Functional Training",
         short_name: "100FT",

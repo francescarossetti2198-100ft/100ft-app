@@ -1,16 +1,502 @@
 import { renderTabbar } from "../components/tabbar.js";
+import { api, ApiError, mediaUrl } from "../api.js";
+import { fotoProfiloHtml } from "./profilo.js";
+import { getUser } from "../auth.js";
+import { trofeoUrl } from "../badge-mensili.js";
 
-// TODO: post misti (foto sfide, presenze/streak, traguardi, annunci coach),
-// filtri per categoria, reazioni emoji (brief, sezione 8.5).
+const TIPO_INFO = {
+  level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
+  new_pb: { icona: "💪", azione: "ha fatto un nuovo Personal Best" },
+  consistency: { icona: "🔥", azione: "ha raggiunto un traguardo di costanza" },
+  athlete_of_week: { icona: "🏆", azione: "è Atleta del Mese" },
+  daily_drop: { icona: "💧", azione: "ha risposto al Daily Drop" },
+  sfida: { icona: "🏆", azione: "ha completato una sfida" },
+  badge: { icona: "🏅", azione: "ha conquistato il badge di" },
+  annuncio_coach: { icona: "📣", azione: "annuncio" },
+  allenamento: { icona: "🏋️", azione: "" },
+  merenda: { icona: "🍎", azione: "merenda di oggi" },
+};
+
+// Post "Atleta del Mese" (scritto dal cron in worker/src/lib/atletaMese.ts con testo
+// "<punti> punti in <mese>", il giorno 1 del mese dopo): invece del testo semplice mostra il
+// trofeo del mese in grande + un bottone che apre il trofeo sul profilo del vincitore.
+const MESI_FEED = [
+  "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+  "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+];
+function datiVittoria(p) {
+  const m = /(\d+)\s+punti\s+in\s+([a-zà]+)/i.exec(p.testo ?? "");
+  const idx = m ? MESI_FEED.indexOf(m[2].toLowerCase()) : -1;
+  if (idx < 0) return null;
+  const mese = idx + 1;
+  const dataPost = new Date(String(p.data).replace(" ", "T") + "Z");
+  // Il post esce a inizio del mese dopo: un trofeo di dicembre pubblicato a gennaio è dell'anno prima.
+  const anno = mese > dataPost.getMonth() + 1 ? dataPost.getFullYear() - 1 : dataPost.getFullYear();
+  return { mese, anno, punti: Number(m[1]), nomeMese: MESI_FEED[idx] };
+}
+function vittoriaHtml(p, v) {
+  const chiave = `${v.anno}-${String(v.mese).padStart(2, "0")}`;
+  return `
+    <div style="margin-top:12px; text-align:center; border-radius:14px; padding:18px 12px 16px;
+                background:radial-gradient(circle at 50% 35%, color-mix(in srgb, #F4B740 22%, transparent), transparent 70%)">
+      <img src="${trofeoUrl(v.mese)}" alt="Trofeo Atleta del Mese di ${v.nomeMese}"
+        style="width:150px; height:150px; object-fit:contain; display:block; margin:0 auto" />
+      <p class="kicker" style="color:#F4B740; margin-top:8px">🏆 Atleta del Mese · ${v.nomeMese} ${v.anno}</p>
+      <p style="font-family:var(--font-ui); font-weight:800; font-size:22px; margin-top:4px">${v.punti} punti</p>
+      ${p.userId
+        ? `<a href="#/atleta?id=${p.userId}&trofeo=${chiave}" class="mono"
+             style="display:inline-block; margin-top:12px; padding:9px 16px; border-radius:999px; text-decoration:none;
+                    background:#F4B740; color:#16161A; font-size:13px; font-weight:700">Vedi il trofeo sul profilo →</a>`
+        : ""}
+    </div>`;
+}
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// Testo di post/commenti: escapato per sicurezza, poi i link (es. una ricetta, un post
+// Instagram) diventano cliccabili — prima restavano testo semplice, non aprivano nulla.
+const URL_RE = /(https?:\/\/[^\s]+)/g;
+const linkify = (s) =>
+  esc(s).replace(URL_RE, (url) => {
+    const trailing = url.match(/[.,:;!?)\]'"]+$/)?.[0] ?? "";
+    const href = trailing ? url.slice(0, -trailing.length) : url;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:var(--accent); word-break:break-all">${href}</a>${trailing}`;
+  });
+
+const EMOJI = ["👍", "🔥", "💪", "🎉", "🖕"];
+
+// Playlist ufficiale di 100FT su Spotify — mini-banner stretto in fondo al Feed.
+const SPOTIFY_PLAYLIST_URL = "https://open.spotify.com/playlist/3Qw3Mw1PuhB8H1BslDyWaw";
+
+// Logo Spotify (SVG inline, path ufficiale monopath) — niente asset esterni, niente embed.
+const SPOTIFY_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" style="width:26px;height:26px;flex:0 0 auto;display:block"><path fill="#1ED760" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.56-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`;
+
+function bannerSpotifyHtml() {
+  return `
+    <a class="card" href="${SPOTIFY_PLAYLIST_URL}" target="_blank" rel="noopener"
+       style="display:flex; align-items:center; gap:10px; text-decoration:none;
+              margin:10px 0 0; padding:10px 14px">
+      ${SPOTIFY_LOGO}
+      <span class="mono" style="color:var(--mute); font-size:12px; line-height:1.4">
+        La nostra <strong style="color:var(--text)">playlist di Spotify</strong> per allenarti con la carica ↗
+      </span>
+    </a>
+  `;
+}
+
+// Link per inoltrare un post su WhatsApp: apre WhatsApp col testo già pronto, poi è
+// l'utente a scegliere la chat (il gruppo palestra). wa.me non permette di postare
+// direttamente in un gruppo specifico. In fondo al messaggio c'è il link al Feed: WhatsApp
+// ne mostra l'anteprima (meta OG in index.html) e chi legge può aprirlo per vedere il post.
+function linkWhatsApp(testoPost, autore, azione) {
+  const righe = [`${autore}${azione ? ` ${azione}` : ""} — 100FT`];
+  const testo = String(testoPost ?? "").replace(/<[^>]*>/g, "").trim();
+  if (testo) righe.push("", testo);
+  righe.push("", `Guarda nel Feed 👉 ${location.origin}/#/feed`);
+  return `https://wa.me/?text=${encodeURIComponent(righe.join("\n"))}`;
+}
+
+function tempoFa(dataIso) {
+  const diffMs = Date.now() - new Date(dataIso + "Z").getTime();
+  const minuti = Math.floor(diffMs / 60000);
+  if (minuti < 1) return "adesso";
+  if (minuti < 60) return `${minuti} min`;
+  const ore = Math.floor(minuti / 60);
+  if (ore < 24) return `${ore} h`;
+  return `${Math.floor(ore / 24)} g`;
+}
+
+// TODO: filtri per tipo.
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
+  // Testata fissa: "Feed" + ricerca + banner Spotify restano in cima mentre la lista scorre
+  // sotto. I margini negativi allargano lo sfondo fino ai bordi (la .screen ha padding 20/16).
   el.innerHTML = `
-    <h1>Feed</h1>
-    <div class="card">
-      <p class="mono" style="color:var(--mute)">I post del gruppo arrivano qui.</p>
+    <style>
+      /* Piccola animazione dell'emoji quando si mette (o toglie) una reazione. */
+      .rz-emoji { display:inline-block; }
+      .reazione-btn.rz-animate .rz-emoji { animation: rz-pop .45s ease-out; }
+      @keyframes rz-pop {
+        0%   { transform: scale(1); }
+        30%  { transform: scale(1.45) rotate(-6deg); }
+        55%  { transform: scale(.9) rotate(4deg); }
+        75%  { transform: scale(1.12) rotate(-2deg); }
+        100% { transform: scale(1) rotate(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reazione-btn.rz-animate .rz-emoji { animation: none; }
+      }
+      #feed-cerca-wrap { position:relative; margin-top:10px }
+      #feed-cerca {
+        width:100%; box-sizing:border-box; padding:9px 34px 9px 34px; border-radius:9px;
+        border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+        font-size:14px; font-family:inherit;
+      }
+      #feed-cerca::placeholder { color:var(--mute) }
+      #feed-cerca-wrap .fc-lente { position:absolute; left:11px; top:50%; transform:translateY(-50%);
+        color:var(--mute); pointer-events:none; line-height:0 }
+      #feed-cerca-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%);
+        border:none; background:none; color:var(--mute); font-size:18px; cursor:pointer;
+        padding:4px 8px; line-height:1 }
+    </style>
+    <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
+      <h1 style="margin:0; padding-right:48px">Feed</h1>
+      <div id="feed-cerca-wrap">
+        <span class="fc-lente">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </span>
+        <input id="feed-cerca" type="search" autocomplete="off" enterkeyhint="search"
+          placeholder="Cerca persone, sfide, parole nel feed…" aria-label="Cerca nel Feed" />
+        <button type="button" id="feed-cerca-clear" aria-label="Cancella ricerca" hidden>&times;</button>
+      </div>
+      <div id="feed-persone"></div>
+      ${bannerSpotifyHtml()}
     </div>
+    <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
   appEl.appendChild(el);
   appEl.appendChild(renderTabbar());
+
+  const list = el.querySelector("#feed-list");
+  const input = el.querySelector("#feed-cerca");
+  const clear = el.querySelector("#feed-cerca-clear");
+  const personeBox = el.querySelector("#feed-persone");
+
+  montaFeed(list);
+
+  let timer;
+  const esegui = async () => {
+    const q = input.value.trim();
+    clear.hidden = q.length === 0;
+    if (q.length < 2) {
+      personeBox.innerHTML = "";
+      montaFeed(list);
+      return;
+    }
+    montaFeed(list, { q });
+    try {
+      const { atleti } = await api.get(`/atleti/cerca?q=${encodeURIComponent(q)}`);
+      personeBox.innerHTML = atleti.length ? personeHtml(atleti) : "";
+    } catch {
+      personeBox.innerHTML = "";
+    }
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(esegui, 220);
+  });
+  clear.addEventListener("click", () => {
+    input.value = "";
+    clear.hidden = true;
+    personeBox.innerHTML = "";
+    montaFeed(list);
+    input.focus();
+  });
+}
+
+// Striscia orizzontale dei profili che corrispondono alla ricerca — tap = scheda pubblica.
+function personeHtml(atleti) {
+  return `
+    <div style="display:flex; gap:10px; overflow-x:auto; padding:10px 2px 4px">
+      ${atleti
+        .map((a) => {
+          const nomeCompleto = `${a.nome ?? ""} ${a.cognome ?? ""}`.trim();
+          const etichetta = a.nickname || nomeCompleto || "Atleta";
+          const iniziale = (etichetta[0] || "?").toUpperCase();
+          return `
+            <a href="#/atleta?id=${a.userId}" style="flex:0 0 auto; width:76px; text-align:center;
+               text-decoration:none; color:var(--text)">
+              ${fotoProfiloHtml(a.fotoUrl, iniziale, false, a.fotoPersonalizzazione, 52)}
+              <p class="mono" style="font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden;
+                 text-overflow:ellipsis">${esc(etichetta)}</p>
+            </a>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+// Disegna la lista del Feed dentro `list` (un contenitore già nel DOM). Riusata dalla
+// pagina Feed dell'atleta e da quella della coach (dentro lo shell, senza tabbar), e dalla
+// scheda pubblica di un atleta (`opts.userId` = solo i suoi post). `opts.q` = ricerca.
+export async function montaFeed(list, opts = {}) {
+  try {
+    const params = new URLSearchParams();
+    if (opts.userId) params.set("userId", String(opts.userId));
+    if (opts.q) params.set("q", opts.q);
+    const qs = params.toString();
+    const { posts } = await api.get(qs ? `/feed?${qs}` : "/feed");
+
+    if (!posts.length) {
+      const vuoto = opts.q
+        ? "Nessun risultato per questa ricerca."
+        : opts.userId
+          ? "Ancora nessun post."
+          : "Ancora nessun post.";
+      list.innerHTML = `<p class="mono" style="color:var(--mute)">${vuoto}</p>`;
+      return;
+    }
+
+    list.innerHTML = posts
+      .map((p) => {
+        let info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
+        const vittoria = p.tipo === "athlete_of_week" ? datiVittoria(p) : null;
+        if (vittoria) info = { ...info, azione: `è l'Atleta del Mese di ${vittoria.nomeMese}` };
+        const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento" || p.tipo === "merenda";
+        const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
+
+        // Cerchio della foto prima del nome: per gli atleti apre la loro scheda pubblica
+        // (/atleta?id=...), per i post della coach (userId assente) resta solo visivo.
+        const iniziale = (autore[0] || "?").toUpperCase();
+        const avatarHtml = fotoProfiloHtml(p.fotoUrl, iniziale, false, p.fotoPersonalizzazione, 34);
+        const avatarBlock = p.userId
+          ? `<a href="#/atleta?id=${p.userId}" style="flex:0 0 auto; line-height:0">${avatarHtml}</a>`
+          : `<span style="flex:0 0 auto; line-height:0">${avatarHtml}</span>`;
+
+        // Solo la coach, e solo sui SUOI post (annuncio/diario/merenda, userId assente) —
+        // i post degli atleti non si cancellano da qui.
+        const puoiCancellare = getUser()?.role === "coach" && !p.userId;
+
+        const reazioniHtml = EMOJI.map((e) => {
+          const r = p.reazioni.find((x) => x.emoji === e);
+          const attiva = r?.mia;
+          return `
+            <button type="button" class="reazione-btn" data-post="${p.id}" data-emoji="${e}"
+              style="background:${attiva ? "var(--accent)" : "var(--surface-2)"}; border:none; border-radius:6px;
+                     padding:4px 8px; font-size:13px; color:var(--text); cursor:pointer">
+              <span class="rz-emoji">${e}</span> ${r?.n ?? ""}
+            </button>
+          `;
+        }).join("");
+        const totReazioni = p.reazioni.reduce((s, r) => s + r.n, 0);
+
+        return `
+          <div class="card" style="margin-bottom:12px">
+            <div style="display:flex; align-items:center; gap:10px">
+              ${avatarBlock}
+              <p style="font-size:14px; flex:1; min-width:0; margin:0; line-height:1.35">
+                <strong>${autore}</strong>
+                ${info.icona}${info.azione ? ` <span class="mono" style="color:var(--mute); font-size:13px">${info.azione}</span>` : ""}
+              </p>
+              <span class="mono" style="color:var(--mute); font-size:12px; flex:0 0 auto; white-space:nowrap; align-self:flex-start">${tempoFa(p.data)}</span>
+              ${puoiCancellare
+                ? `<button type="button" class="feed-cancella-btn" data-post="${p.id}" aria-label="Cancella il post"
+                     style="flex:0 0 auto; align-self:flex-start; border:none; background:none; color:var(--mute);
+                            font-size:16px; line-height:1; padding:0 0 0 8px; cursor:pointer">✕</button>`
+                : ""}
+            </div>
+            ${vittoria
+              ? vittoriaHtml(p, vittoria)
+              : `<p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>`}
+            ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
+            ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
+                 class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+                        background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                        padding:8px 12px; color:var(--text); font-size:13px; text-decoration:none">
+                 ⬇ ${esc(p.allegatoNome) || "Scarica la scheda"}
+               </a>` : ""}
+            <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap">
+              ${reazioniHtml}
+              <button type="button" class="commenti-toggle-btn mono" data-post="${p.id}"
+                style="background:none; border:none; color:var(--mute); font-size:12px; cursor:pointer; padding:4px 2px">
+                💬 ${p.numeroCommenti || ""} ${p.numeroCommenti === 1 ? "commento" : "commenti"}
+              </button>
+              <a href="${linkWhatsApp(p.testo, autore, info.azione)}" target="_blank" rel="noopener"
+                 class="mono" style="margin-left:auto; color:#1ED760; font-size:12px; text-decoration:none; white-space:nowrap">
+                ↗ WhatsApp
+              </a>
+            </div>
+            ${totReazioni > 0
+              ? `<button type="button" class="reazioni-chi-btn mono" data-post="${p.id}"
+                   style="background:none; border:none; color:var(--mute); font-size:11px; cursor:pointer; padding:4px 2px; text-align:left">
+                   ${totReazioni} ${totReazioni === 1 ? "reazione" : "reazioni"} · vedi chi
+                 </button>
+                 <div class="reazioni-chi-box" data-post="${p.id}" hidden style="margin-top:4px"></div>`
+              : ""}
+            <div class="commenti-box" data-post="${p.id}" hidden
+              style="margin-top:10px; border-top:1px solid var(--border); padding-top:10px; flex-direction:column; gap:8px">
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    list.querySelectorAll(".reazione-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        // Fa "poppare" l'emoji; il reflow forza il riavvio dell'animazione a ogni tocco.
+        btn.classList.remove("rz-animate");
+        void btn.offsetWidth;
+        btn.classList.add("rz-animate");
+        try {
+          // Aspetta sia la risposta sia la fine dell'animazione prima di ridisegnare la lista.
+          await Promise.all([
+            api.post(`/feed/${btn.dataset.post}/reazioni`, { emoji: btn.dataset.emoji }),
+            new Promise((r) => setTimeout(r, 420)),
+          ]);
+          montaFeed(list, opts);
+        } catch {
+          // silenzioso: la reazione è un'azione a basso rischio, non serve un messaggio d'errore dedicato
+          btn.classList.remove("rz-animate");
+        }
+      });
+    });
+    list.querySelectorAll(".feed-cancella-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Cancellare questo post dal Feed?")) return;
+        btn.disabled = true;
+        try {
+          await api.del(`/feed/${btn.dataset.post}`);
+          montaFeed(list, opts);
+        } catch (err) {
+          alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // "N reazioni · vedi chi": apre/chiude un elenco testuale raggruppato per emoji, senza
+    // toccare il tap-per-reagire dei bottoni sopra (interazioni separate sullo stesso post).
+    list.querySelectorAll(".reazioni-chi-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const box = list.querySelector(`.reazioni-chi-box[data-post="${btn.dataset.post}"]`);
+        if (!box.hidden) {
+          box.hidden = true;
+          box.style.display = "none";
+          return;
+        }
+        box.hidden = false;
+        box.style.display = "block";
+        box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
+        try {
+          const { reazioni } = await api.get(`/feed/${btn.dataset.post}/reazioni`);
+          const gruppi = new Map();
+          reazioni.forEach((r) => gruppi.set(r.emoji, [...(gruppi.get(r.emoji) ?? []), r.autore]));
+          box.innerHTML = [...gruppi.entries()]
+            .map(
+              ([emoji, nomi]) =>
+                `<p class="mono" style="font-size:12px; color:var(--mute); margin:2px 0"><span style="font-size:14px">${emoji}</span> ${nomi.map(esc).join(", ")}</p>`
+            )
+            .join("");
+        } catch {
+          box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Non disponibile.</p>`;
+        }
+      });
+    });
+
+    // Commenti: caricati/postati per singolo post, senza ridisegnare tutto il Feed.
+    list.querySelectorAll(".commenti-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const box = list.querySelector(`.commenti-box[data-post="${btn.dataset.post}"]`);
+        if (!box.hidden) {
+          box.hidden = true;
+          box.style.display = "none";
+          return;
+        }
+        box.hidden = false;
+        box.style.display = "flex";
+        caricaCommenti(box, btn.dataset.post);
+      });
+    });
+
+    async function caricaCommenti(box, postId) {
+      box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
+      try {
+        const { commenti } = await api.get(`/feed/${postId}/commenti`);
+        box.innerHTML = `
+          <div class="commenti-lista" style="display:flex; flex-direction:column; gap:8px">
+            ${commenti.length
+              ? commenti.map((c) => commentoHtml(c, postId)).join("")
+              : `<p class="mono" style="color:var(--mute); font-size:12px">Ancora nessun commento.</p>`}
+          </div>
+          <div style="display:flex; gap:6px; margin-top:8px">
+            <input type="text" class="commento-input" placeholder="Scrivi un commento…" maxlength="500"
+              style="flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                     padding:8px 10px; color:var(--text); font-family:inherit; font-size:13px" />
+            <button type="button" class="commento-invia btn" style="width:auto; padding:8px 14px">Invia</button>
+          </div>
+          <p class="error-text commento-error" hidden style="font-size:12px; margin-top:4px"></p>
+        `;
+        aggiornaContatore(postId, commenti.length);
+        attachCommentoForm(box, postId);
+      } catch (err) {
+        box.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      }
+    }
+
+    function commentoHtml(c, postId) {
+      const iniziale = (c.autore[0] || "?").toUpperCase();
+      return `
+        <div class="commento-riga" style="display:flex; gap:8px; align-items:flex-start">
+          ${fotoProfiloHtml(c.fotoUrl, iniziale, false, c.fotoPersonalizzazione, 24)}
+          <div style="flex:1; min-width:0">
+            <p style="margin:0; font-size:13px">
+              <strong>${esc(c.autore)}</strong>
+              <span class="mono" style="color:var(--mute); font-size:11px">${tempoFa(c.data)}</span>
+            </p>
+            <p style="margin:2px 0 0; font-size:13px; white-space:pre-line">${linkify(c.testo)}</p>
+          </div>
+          ${c.puoiCancellare
+            ? `<button type="button" class="commento-cancella-btn" data-commento="${c.id}" data-post="${postId}"
+                 aria-label="Cancella il commento"
+                 style="flex:0 0 auto; border:none; background:none; color:var(--mute); font-size:14px; cursor:pointer; padding:0 0 0 4px">✕</button>`
+            : ""}
+        </div>
+      `;
+    }
+
+    function attachCommentoForm(box, postId) {
+      const input = box.querySelector(".commento-input");
+      const invia = box.querySelector(".commento-invia");
+      const errEl = box.querySelector(".commento-error");
+
+      const submit = async () => {
+        const testo = input.value.trim();
+        if (!testo) return;
+        errEl.hidden = true;
+        invia.disabled = true;
+        try {
+          await api.post(`/feed/${postId}/commenti`, { testo });
+          input.value = "";
+          await caricaCommenti(box, postId);
+        } catch (err) {
+          errEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+          errEl.hidden = false;
+        } finally {
+          invia.disabled = false;
+        }
+      };
+
+      invia.addEventListener("click", submit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      });
+
+      box.querySelectorAll(".commento-cancella-btn").forEach((cbtn) => {
+        cbtn.addEventListener("click", async () => {
+          if (!confirm("Cancellare questo commento?")) return;
+          try {
+            await api.del(`/feed/commenti/${cbtn.dataset.commento}`);
+            await caricaCommenti(box, postId);
+          } catch (err) {
+            alert(err instanceof ApiError ? err.message : "Errore imprevisto");
+          }
+        });
+      });
+    }
+
+    function aggiornaContatore(postId, n) {
+      const btn = list.querySelector(`.commenti-toggle-btn[data-post="${postId}"]`);
+      if (btn) btn.textContent = `💬 ${n || ""} ${n === 1 ? "commento" : "commenti"}`.trim();
+    }
+  } catch (err) {
+    list.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+  }
 }

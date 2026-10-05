@@ -18,6 +18,9 @@ export function renderPasswordDimenticata(appEl) {
       </p>
       <button class="btn" id="forgot-submit" type="submit" style="width:100%">Invia link</button>
     </form>
+    <p class="mono" style="color:var(--mute); font-size:12px; margin-top:20px">
+      Non ti arriva l'email? Scrivi alla tua coach: può reimpostarti la password e darti una password temporanea.
+    </p>
     <div style="margin-top:16px">
       <button class="link-btn" id="goto-login">Torna al login</button>
     </div>
