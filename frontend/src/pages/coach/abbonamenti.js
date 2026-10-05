@@ -4,24 +4,45 @@ import { api, ApiError } from "../../api.js";
 import { PIANI } from "../../abbonamenti.js";
 
 // Spunta veloce di chi ha pagato l'abbonamento del mese — tutti su una schermata, come
-// l'appello. Nessun bisogno di entrare nel profilo di ognuno.
+// l'appello. Nessun bisogno di entrare nel profilo di ognuno. Le frecce ‹ › portano ai mesi
+// passati per correggere i pagamenti (non oltre il mese corrente).
 function initPagamenti(el) {
   const box = el.querySelector("#pag-lista");
   const contatore = el.querySelector("#pag-contatore");
+  const prevBtn = el.querySelector("#pag-prev");
+  const nextBtn = el.querySelector("#pag-next");
+  const corrente = oraCorrente();
+  let sel = { ...corrente };
+  const chiave = (m) => m.anno * 100 + m.mese;
 
   async function carica() {
+    el.querySelector("#pag-titolo").textContent = `Pagamenti · ${MESI[sel.mese - 1]} ${sel.anno}`;
+    const alCorrente = chiave(sel) >= chiave(corrente);
+    nextBtn.disabled = alCorrente;
+    nextBtn.style.opacity = alCorrente ? "0.3" : "1";
     box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Carico...</p>`;
+    contatore.textContent = "—";
+    const richiesto = { ...sel };
     let d;
     try {
-      d = await api.get("/atleti");
+      d = await api.get(`/pagamenti?anno=${richiesto.anno}&mese=${richiesto.mese}`);
     } catch (err) {
       box.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
       return;
     }
-
-    el.querySelector("#pag-titolo").textContent = `Pagamenti · ${MESI[d.mese - 1]} ${d.anno}`;
+    if (chiave(richiesto) !== chiave(sel)) return; // nel frattempo si è cambiato mese
     disegna(d.atleti);
   }
+
+  prevBtn.addEventListener("click", () => {
+    sel = sel.mese === 1 ? { anno: sel.anno - 1, mese: 12 } : { anno: sel.anno, mese: sel.mese - 1 };
+    carica();
+  });
+  nextBtn.addEventListener("click", () => {
+    if (chiave(sel) >= chiave(corrente)) return;
+    sel = sel.mese === 12 ? { anno: sel.anno + 1, mese: 1 } : { anno: sel.anno, mese: sel.mese + 1 };
+    carica();
+  });
 
   function disegna(atleti) {
     const pagati = atleti.filter((a) => a.pagamentoMese === "pagato").length;
@@ -56,18 +77,18 @@ function initPagamenti(el) {
       })
       .join("");
 
-    box.querySelectorAll(".pag-piano").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        const piano = sel.value;
+    box.querySelectorAll(".pag-piano").forEach((selEl) => {
+      selEl.addEventListener("change", async () => {
+        const piano = selEl.value;
         if (!piano) return; // "— abbonamento —": nessuna azione
-        sel.disabled = true;
+        selEl.disabled = true;
         try {
-          await api.post("/pagamenti", { userId: Number(sel.dataset.userId), piano });
-          sel.style.color = "";
+          await api.post("/pagamenti", { userId: Number(selEl.dataset.userId), piano, anno: sel.anno, mese: sel.mese });
+          selEl.style.color = "";
         } catch (err) {
           alert(err instanceof ApiError ? err.message : "Errore imprevisto");
         } finally {
-          sel.disabled = false;
+          selEl.disabled = false;
         }
       });
     });
@@ -77,7 +98,7 @@ function initPagamenti(el) {
         const nuovo = btn.dataset.stato === "pagato" ? "non_pagato" : "pagato";
         btn.disabled = true;
         try {
-          await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovo });
+          await api.post("/pagamenti", { userId: Number(btn.dataset.userId), stato: nuovo, anno: sel.anno, mese: sel.mese });
           btn.dataset.stato = nuovo;
           const pagato = nuovo === "pagato";
           const col = pagato ? "var(--livello-1)" : "var(--livello-5)";
@@ -104,7 +125,13 @@ export function renderCoachAbbonamenti(appEl) {
   renderPaginaCoach(appEl, { titolo: "Abbonamenti" }, (el) => {
     el.innerHTML = `
       <div class="card">
-        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:0" id="pag-titolo">Pagamenti del mese</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+          <button type="button" id="pag-prev" aria-label="Mese precedente"
+            style="background:none; border:1px solid var(--border); border-radius:8px; color:var(--text); padding:4px 12px; cursor:pointer; font-size:16px">‹</button>
+          <p class="mono" style="color:var(--mute); font-size:12px; margin:0; text-align:center" id="pag-titolo">Pagamenti del mese</p>
+          <button type="button" id="pag-next" aria-label="Mese successivo"
+            style="background:none; border:1px solid var(--border); border-radius:8px; color:var(--text); padding:4px 12px; cursor:pointer; font-size:16px">›</button>
+        </div>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px" id="pag-contatore">—</p>
         <div id="pag-lista" style="margin-top:8px"></div>
       </div>

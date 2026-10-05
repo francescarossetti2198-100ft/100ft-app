@@ -1,6 +1,7 @@
 // "Saldo mese" — resoconto abbonamenti da consegnare alla palestra. Un mese: tabella con
-// tutti gli iscritti (atleta, abbonamento, dovuto a 100FT, dovuto a FITNESSDREAM), i totali
-// (solo di chi ha pagato) e la ripartizione % per abbonamento come promemoria.
+// tutti gli iscritti e i totali (solo di chi ha pagato).
+// Da settembre 2026: tabella atleta / abbonamento / quota (prezzo pieno) e i due totali,
+// senza quote per riga né promemoria delle %. Prima: quote 100FT/FITNESSDREAM per riga.
 // jsPDF è importato qui (import dinamico dal chiamante) così resta fuori dal bundle principale.
 
 const MESI_DEFAULT = [
@@ -24,10 +25,13 @@ export async function scaricaSuddivisioniPdf(dati, mesi = MESI_DEFAULT, piani = 
   const right = W - M;
   const fondo = H - 60;
 
-  // Colonne della tabella (le due quote sono allineate a destra alle rispettive ascisse).
+  // Formato semplificato da settembre 2026 in poi.
+  const semplice = dati.anno > 2026 || (dati.anno === 2026 && dati.mese >= 9);
+
+  // Colonne della tabella (le quote sono allineate a destra alle rispettive ascisse).
   const contentW = W - 2 * M;
   const cAtleta = M;
-  const cAbb = M + contentW * 0.36;
+  const cAbb = M + contentW * (semplice ? 0.45 : 0.36);
   const cCoach = M + contentW * 0.72;
   const cPal = right;
 
@@ -51,6 +55,11 @@ export async function scaricaSuddivisioniPdf(dati, mesi = MESI_DEFAULT, piani = 
     doc.setTextColor(255, 255, 255);
     doc.text("ATLETA", cAtleta + 6, y + 13);
     doc.text("ABBONAMENTO", cAbb, y + 13);
+    if (semplice) {
+      doc.text("QUOTA", cPal - 6, y + 13, { align: "right" });
+      y += 20;
+      return;
+    }
     doc.text(`QUOTA ${COACH}`, cCoach, y + 13, { align: "right" });
     doc.text(`QUOTA ${PALESTRA}`, cPal - 6, y + 13, { align: "right" });
     y += 20;
@@ -104,7 +113,14 @@ export async function scaricaSuddivisioniPdf(dati, mesi = MESI_DEFAULT, piani = 
       setColor(nero);
       doc.text(r.nome, cAtleta + 6, ty);
       doc.text(r.nomePiano ?? r.piano, cAbb, ty);
-      if (r.quotaCoach != null) {
+      if (semplice) {
+        if (r.prezzo != null) {
+          doc.text(eur(r.prezzo), cPal - 6, ty, { align: "right" });
+        } else {
+          setColor(grigio);
+          doc.text("—", cPal - 6, ty, { align: "right" });
+        }
+      } else if (r.quotaCoach != null) {
         doc.text(eur(r.quotaCoach), cCoach, ty, { align: "right" });
         doc.text(eur(r.quotaPalestra), cPal - 6, ty, { align: "right" });
       } else {
@@ -162,33 +178,37 @@ export async function scaricaSuddivisioniPdf(dati, mesi = MESI_DEFAULT, piani = 
 
   // ── Promemoria ripartizioni ─────────────────────────────────────────────
   const cfg = dati.config ?? {};
-  const vociCfg = piani.length
+  const vociCfg = semplice
+    ? []
+    : piani.length
     ? piani.map((p) => ({ nome: p.nome, prezzo: p.prezzo, pct: cfg[p.key] ?? null }))
     : Object.entries(cfg).map(([k, pct]) => ({ nome: k.toUpperCase(), prezzo: null, pct: pct ?? null }));
 
-  spazioPerRiga(40 + vociCfg.length * 15);
-  y += 12;
-  doc.setDrawColor(lineaCol[0], lineaCol[1], lineaCol[2]);
-  doc.line(M, y, right, y);
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  setColor(grigio);
-  doc.text("PROMEMORIA — RIPARTIZIONE PER ABBONAMENTO", M, y);
-  y += 16;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  for (const v of vociCfg) {
-    setColor(nero);
-    doc.text(v.prezzo != null ? `${v.nome} — ${eur(v.prezzo)}/mese` : v.nome, M, y);
+  if (vociCfg.length) {
+    spazioPerRiga(40 + vociCfg.length * 15);
+    y += 12;
+    doc.setDrawColor(lineaCol[0], lineaCol[1], lineaCol[2]);
+    doc.line(M, y, right, y);
+    y += 18;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
     setColor(grigio);
-    doc.text(
-      v.pct != null ? `${v.pct}% ${COACH} · ${100 - v.pct}% ${PALESTRA}` : "da definire",
-      right,
-      y,
-      { align: "right" }
-    );
-    y += 15;
+    doc.text("PROMEMORIA — RIPARTIZIONE PER ABBONAMENTO", M, y);
+    y += 16;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    for (const v of vociCfg) {
+      setColor(nero);
+      doc.text(v.prezzo != null ? `${v.nome} — ${eur(v.prezzo)}/mese` : v.nome, M, y);
+      setColor(grigio);
+      doc.text(
+        v.pct != null ? `${v.pct}% ${COACH} · ${100 - v.pct}% ${PALESTRA}` : "da definire",
+        right,
+        y,
+        { align: "right" }
+      );
+      y += 15;
+    }
   }
 
   // ── Footer su ogni pagina ───────────────────────────────────────────────
