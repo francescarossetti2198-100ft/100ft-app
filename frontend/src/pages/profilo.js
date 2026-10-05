@@ -2,7 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { logout, getUser } from "../auth.js";
 import { navigate } from "../router.js";
 import { api, ApiError, mediaUrl } from "../api.js";
-import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria, inviaNotificaDiProva } from "../push.js";
+import { statoNotifiche, attivaNotifiche, disattivaNotifiche, leggiPromemoria, salvaPromemoria, inviaNotificaDiProva, sincronizzaPush } from "../push.js";
 import { costruisciQuestionario, riassuntoRisposte, elencoRisposte } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
 import { PERFORMANCE_ESERCIZI } from "../performance-esercizi.js";
@@ -1154,6 +1154,10 @@ export async function initNotifiche(content, conPromemoria = false) {
          </div>`
       : "";
 
+  // "Attive" qui vuol dire che il telefono ha l'iscrizione: ci si assicura che ce l'abbia
+  // anche il server (altrimenti il Daily Drop non arriva pur risultando attive).
+  if (stato === "attive") sincronizzaPush();
+
   box.innerHTML =
     stato === "attive"
       ? `<p style="font-size:13px">Attive ✓</p>
@@ -1180,6 +1184,9 @@ export async function initNotifiche(content, conPromemoria = false) {
     e.target.disabled = true;
     e.target.textContent = "Invio…";
     try {
+      // Il telefono può dire "Attive" mentre il server ha perso l'iscrizione: la si
+      // reinvia prima della prova, così la prova (e il Daily Drop) tornano a funzionare.
+      await sincronizzaPush();
       const { inviate } = await inviaNotificaDiProva();
       esito.textContent = inviate
         ? "Inviata ✓ — dovrebbe arrivarti tra pochi secondi."
