@@ -148,7 +148,7 @@ export async function sendWebPush(
   subscription: PushSubscriptionInfo,
   vapidPublicKey: string,
   vapidPrivateKey: string,
-  payload: { title: string; body: string; url?: string },
+  payload: { title: string; body: string; url?: string; [extra: string]: unknown },
   // Per quanti secondi il servizio push (APNs/FCM) tiene la notifica se il telefono non è
   // raggiungibile subito. 60s (il vecchio default) era troppo poco: su iPhone in tasca la
   // notifica veniva scartata prima di comparire. Ogni promemoria passa un valore adatto.

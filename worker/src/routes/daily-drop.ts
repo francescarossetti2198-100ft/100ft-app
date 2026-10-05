@@ -6,6 +6,7 @@ import { salvaFoto } from "../lib/storage";
 import { oggi as oggiInfo } from "../lib/oggi";
 import { statoDailyDrop, FINESTRA_RISPOSTA_MIN } from "../lib/dailyDropOrario";
 import { sendWebPush } from "../lib/webPush";
+import { payloadDailyDrop } from "../lib/dailyDropPush";
 import { verificaTraguardi } from "../lib/traguardi";
 
 // Daily Drop (ex "Ricordati di bere", brief sezione 8) — stile BeReal, foto obbligatoria.
@@ -142,11 +143,7 @@ dailyDrop.post("/simula", requireCoach, async (c) => {
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           c.env.VAPID_PUBLIC_KEY,
           c.env.VAPID_PRIVATE_KEY,
-          {
-            title: "📸 100FT — Daily Drop!",
-            body: "È il momento: bevi un sorso e condividi SUBITO la foto. Hai 5 minuti per rispondere ⏱️",
-            url: "/",
-          },
+          payloadDailyDrop(Date.now() + FINESTRA_RISPOSTA_MIN * 60 * 1000),
           1800
         );
         if (res.status === 404 || res.status === 410) {

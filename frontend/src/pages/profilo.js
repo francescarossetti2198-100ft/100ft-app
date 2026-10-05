@@ -1046,15 +1046,16 @@ function impostazioniCardHtml() {
   `;
 }
 
-// "Ricarica l'app": disinstalla il service worker + svuota tutte le cache e ricarica —
-// stesso effetto di eliminare e reinstallare l'icona dalla Home, ma dall'interno dell'app.
-// Serve per il caso "pagina bianca bloccata" (SW/cache vecchia incastrata su iPhone dopo
-// un lungo periodo senza apire l'app) senza dover passare dalla Home del telefono.
+// "Ricarica l'app": svuota tutte le cache, chiede al service worker di aggiornarsi e
+// ricarica. Serve per il caso "pagina bianca bloccata" (cache vecchia incastrata su iPhone
+// dopo un lungo periodo senza aprire l'app). Il service worker NON va disinstallato:
+// disinstallarlo cancella anche l'iscrizione alle notifiche push, e l'atleta smetteva di
+// ricevere il Daily Drop senza accorgersene. Senza cache, il SW prende i file dalla rete.
 export async function ricaricaApp() {
   try {
     if ("serviceWorker" in navigator) {
       const registrazioni = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrazioni.map((r) => r.unregister()));
+      await Promise.all(registrazioni.map((r) => r.update().catch(() => {})));
     }
     if ("caches" in window) {
       const chiavi = await caches.keys();

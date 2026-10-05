@@ -23,6 +23,35 @@ export async function statoNotifiche() {
   return sub ? "attive" : "disattive";
 }
 
+// L'atleta ha premuto "Disattiva" nel Profilo: in quel caso sincronizzaPush non deve
+// riattivarle da sola (il permesso del telefono resta "concesso" anche dopo la disattivazione).
+const CHIAVE_DISATTIVATE = "100ft-push-disattivate";
+function segnaDisattivate(si) {
+  try {
+    if (si) localStorage.setItem(CHIAVE_DISATTIVATE, "1");
+    else localStorage.removeItem(CHIAVE_DISATTIVATE);
+  } catch {
+    // storage non disponibile: pazienza
+  }
+}
+function disattivateDallUtente() {
+  try {
+    return localStorage.getItem(CHIAVE_DISATTIVATE) === "1";
+  } catch {
+    return false;
+  }
+}
+
+async function iscriviERegistra(reg) {
+  const { publicKey } = await api.get("/push/vapid-public-key");
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: base64urlToUint8Array(publicKey),
+  });
+  const json = sub.toJSON();
+  await api.post("/push", { endpoint: json.endpoint, keys: json.keys });
+}
+
 export async function attivaNotifiche() {
   if (!supportato()) throw new Error("Le notifiche non sono supportate su questo dispositivo/browser");
 
@@ -30,14 +59,8 @@ export async function attivaNotifiche() {
   if (permesso !== "granted") throw new Error("Permesso per le notifiche negato");
 
   const reg = await navigator.serviceWorker.ready;
-  const { publicKey } = await api.get("/push/vapid-public-key");
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: base64urlToUint8Array(publicKey),
-  });
-
-  const json = sub.toJSON();
-  await api.post("/push", { endpoint: json.endpoint, keys: json.keys });
+  await iscriviERegistra(reg);
+  segnaDisattivate(false);
 }
 
 // Notifica di prova verso i propri dispositivi iscritti.
@@ -47,13 +70,18 @@ export async function inviaNotificaDiProva() {
 
 // Ri-registra sul server la sottoscrizione che il browser ha già, nel caso il server
 // l'abbia persa (endpoint scaduto lato FCM/APNs → cancellato dopo un 404/410, poi il
-// browser rinnova il token da solo). Idempotente. Da chiamare all'avvio dell'app.
+// browser rinnova il token da solo). Se invece il permesso c'è ma l'iscrizione nel telefono
+// non c'è più (persa da iOS, o da una vecchia versione di "Ricarica l'app"), la ricrea senza
+// chiedere nulla — a meno che sia stato l'atleta a disattivarle. Da chiamare all'avvio.
 export async function sincronizzaPush() {
   if (!supportato() || Notification.permission !== "granted") return;
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
+    if (!sub) {
+      if (!disattivateDallUtente()) await iscriviERegistra(reg);
+      return;
+    }
     const json = sub.toJSON();
     await api.post("/push", { endpoint: json.endpoint, keys: json.keys });
   } catch {
@@ -75,6 +103,7 @@ export async function disattivaNotifiche() {
   const sub = await reg.pushManager.getSubscription();
   if (!sub) return;
 
+  segnaDisattivate(true);
   await api.del("/push", { endpoint: sub.endpoint }).catch(() => {});
   await sub.unsubscribe();
 }
