@@ -43,12 +43,22 @@ function fotoPostHtml(p) {
     `<img src="${mediaUrl(url)}" alt="" loading="lazy" style="width:100%; border-radius:10px; display:block" />`;
   if (foto.length === 1) return `<div style="margin-top:10px">${img(foto[0])}</div>`;
   return `
-    <div class="feed-carosello" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:8px;
-         margin-top:10px; scrollbar-width:none; -webkit-overflow-scrolling:touch">
-      ${foto.map((url) => `<div style="flex:0 0 100%; scroll-snap-align:center; align-self:flex-start">${img(url)}</div>`).join("")}
-    </div>
-    <div class="feed-carosello-pallini" style="display:flex; justify-content:center; gap:6px; margin-top:8px">
-      ${foto.map((_, i) => `<span style="width:6px; height:6px; border-radius:50%; background:${i === 0 ? "var(--text)" : "var(--border)"}"></span>`).join("")}
+    <div class="feed-carosello-box" style="position:relative; margin-top:10px">
+      <div class="feed-carosello" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory;
+           scrollbar-width:none; -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y; border-radius:10px">
+        ${foto.map((url) => `<div style="flex:0 0 100%; scroll-snap-align:center; align-self:flex-start">${img(url)}</div>`).join("")}
+      </div>
+      <span class="feed-car-contatore mono" style="position:absolute; top:8px; right:8px; background:rgba(0,0,0,.6);
+            color:#fff; font-size:12px; padding:3px 8px; border-radius:10px">1/${foto.length}</span>
+      ${[["prev", "‹", "left:6px"], ["next", "›", "right:6px"]].map(([dir, simbolo, lato]) => `
+        <button type="button" class="feed-car-${dir}" aria-label="${dir === "prev" ? "Foto precedente" : "Foto successiva"}"
+          style="position:absolute; top:50%; ${lato}; transform:translateY(-50%); width:32px; height:32px; border:none;
+                 border-radius:50%; background:rgba(255,255,255,.85); color:#000; font-size:22px; line-height:1;
+                 cursor:pointer; display:${dir === "prev" ? "none" : "flex"}; align-items:center; justify-content:center;
+                 box-shadow:0 1px 4px rgba(0,0,0,.3)">${simbolo}</button>`).join("")}
+      <div class="feed-carosello-pallini" style="display:flex; justify-content:center; gap:6px; margin-top:8px">
+        ${foto.map((_, i) => `<span style="width:6px; height:6px; border-radius:50%; background:${i === 0 ? "var(--text)" : "var(--border)"}"></span>`).join("")}
+      </div>
     </div>
   `;
 }
@@ -345,12 +355,27 @@ export async function montaFeed(list, opts = {}) {
       })
       .join("");
 
-    list.querySelectorAll(".feed-carosello").forEach((car) => {
-      const pallini = [...car.nextElementSibling.children];
-      car.addEventListener("scroll", () => {
-        const i = Math.round(car.scrollLeft / car.clientWidth);
+    // Carosello stile Instagram: swipe di lato, oppure le frecce ‹ › (per chi non scorre).
+    // Contatore "1/2", pallini e frecce seguono la foto visibile.
+    list.querySelectorAll(".feed-carosello-box").forEach((box) => {
+      const car = box.querySelector(".feed-carosello");
+      const pallini = [...box.querySelector(".feed-carosello-pallini").children];
+      const contatore = box.querySelector(".feed-car-contatore");
+      const prev = box.querySelector(".feed-car-prev");
+      const next = box.querySelector(".feed-car-next");
+      const tot = pallini.length;
+      const indice = () => Math.round(car.scrollLeft / car.clientWidth);
+      const aggiorna = () => {
+        const i = indice();
         pallini.forEach((d, j) => (d.style.background = j === i ? "var(--text)" : "var(--border)"));
-      }, { passive: true });
+        contatore.textContent = `${i + 1}/${tot}`;
+        prev.style.display = i > 0 ? "flex" : "none";
+        next.style.display = i < tot - 1 ? "flex" : "none";
+      };
+      const vaiA = (i) => car.scrollTo({ left: i * car.clientWidth });
+      car.addEventListener("scroll", aggiorna, { passive: true });
+      prev.addEventListener("click", () => vaiA(Math.max(0, indice() - 1)));
+      next.addEventListener("click", () => vaiA(Math.min(tot - 1, indice() + 1)));
     });
 
     list.querySelectorAll(".reazione-btn").forEach((btn) => {
