@@ -34,6 +34,25 @@ function datiVittoria(p) {
   const anno = mese > dataPost.getMonth() + 1 ? dataPost.getFullYear() - 1 : dataPost.getFullYear();
   return { mese, anno, punti: Number(m[1]), nomeMese: MESI_FEED[idx] };
 }
+// Foto del post: una sola → immagine piena; più foto (sfide tipo "2 merende") → carosello
+// a scorrimento orizzontale con i pallini sotto (aggiornati in montaFeed allo scroll).
+function fotoPostHtml(p) {
+  const foto = p.foto?.length ? p.foto : p.contenutoUrl ? [p.contenutoUrl] : [];
+  if (!foto.length) return "";
+  const img = (url) =>
+    `<img src="${mediaUrl(url)}" alt="" loading="lazy" style="width:100%; border-radius:10px; display:block" />`;
+  if (foto.length === 1) return `<div style="margin-top:10px">${img(foto[0])}</div>`;
+  return `
+    <div class="feed-carosello" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:8px;
+         margin-top:10px; scrollbar-width:none; -webkit-overflow-scrolling:touch">
+      ${foto.map((url) => `<div style="flex:0 0 100%; scroll-snap-align:center; align-self:flex-start">${img(url)}</div>`).join("")}
+    </div>
+    <div class="feed-carosello-pallini" style="display:flex; justify-content:center; gap:6px; margin-top:8px">
+      ${foto.map((_, i) => `<span style="width:6px; height:6px; border-radius:50%; background:${i === 0 ? "var(--text)" : "var(--border)"}"></span>`).join("")}
+    </div>
+  `;
+}
+
 function vittoriaHtml(p, v) {
   const chiave = `${v.anno}-${String(v.mese).padStart(2, "0")}`;
   return `
@@ -293,7 +312,7 @@ export async function montaFeed(list, opts = {}) {
             ${vittoria
               ? vittoriaHtml(p, vittoria)
               : `<p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>`}
-            ${p.contenutoUrl ? `<img src="${mediaUrl(p.contenutoUrl)}" alt="" style="width:100%; border-radius:10px; margin-top:10px; display:block" />` : ""}
+            ${fotoPostHtml(p)}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
                  class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
                         background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
@@ -325,6 +344,14 @@ export async function montaFeed(list, opts = {}) {
         `;
       })
       .join("");
+
+    list.querySelectorAll(".feed-carosello").forEach((car) => {
+      const pallini = [...car.nextElementSibling.children];
+      car.addEventListener("scroll", () => {
+        const i = Math.round(car.scrollLeft / car.clientWidth);
+        pallini.forEach((d, j) => (d.style.background = j === i ? "var(--text)" : "var(--border)"));
+      }, { passive: true });
+    });
 
     list.querySelectorAll(".reazione-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {

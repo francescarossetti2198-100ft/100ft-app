@@ -100,11 +100,30 @@ feed.get("/", requireAuth, async (c) => {
     for (const r of commenti) commentiPerPost.set(r.postId, r.n);
   }
 
+  // Sfide con più foto (es. "2 merende"): il post nasce con l'ultima foto, quella che chiude
+  // la sfida — da lì risaliamo a tutte le foto caricate dall'atleta per quella sfida, in
+  // ordine, così il Feed le mostra a carosello. Scelta di Francesca, ott 2026.
+  const fotoPerPost = new Map<string, string[]>();
+  const urlSfide = [...new Set(posts.filter((p) => p.tipo === "sfida" && p.contenutoUrl).map((p) => p.contenutoUrl!))];
+  if (urlSfide.length) {
+    const { results: foto } = await c.env.DB.prepare(
+      `SELECT x.foto_url AS chiave, y.foto_url AS fotoUrl
+       FROM sfide_foto x
+       JOIN sfide_foto y ON y.sfida_id = x.sfida_id AND y.user_id = x.user_id
+       WHERE x.foto_url IN (${urlSfide.map(() => "?").join(",")})
+       ORDER BY y.id`
+    )
+      .bind(...urlSfide)
+      .all<{ chiave: string; fotoUrl: string }>();
+    for (const f of foto) fotoPerPost.set(f.chiave, [...(fotoPerPost.get(f.chiave) ?? []), f.fotoUrl]);
+  }
+
   return c.json({
     posts: posts.map((p) => {
       const daCoach = p.userId == null;
       return {
         ...p,
+        foto: p.contenutoUrl ? (fotoPerPost.get(p.contenutoUrl) ?? [p.contenutoUrl]) : [],
         fotoUrl: daCoach ? (coach?.fotoUrl ?? null) : p.fotoUrl,
         fotoPersonalizzazione: parseFotoPersonalizzazione(
           daCoach ? coach?.fotoPersonalizzazione : p.fotoPersonalizzazione
