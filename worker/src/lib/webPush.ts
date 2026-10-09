@@ -161,6 +161,10 @@ export async function sendWebPush(
     method: "POST",
     headers: {
       TTL: String(Math.max(0, Math.round(ttlSecondi))),
+      // Senza Urgency il servizio push usa "normal": con il telefono in risparmio energetico
+      // (Doze su Android, schermo spento su iPhone) le notifiche restavano in coda e
+      // arrivavano tutte insieme solo all'apertura dell'app. "high" le fa consegnare subito.
+      Urgency: "high",
       "Content-Type": "application/octet-stream",
       "Content-Encoding": "aes128gcm",
       Authorization: `vapid t=${jwt}, k=${vapidPublicKey}`,
