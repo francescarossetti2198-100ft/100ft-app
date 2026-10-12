@@ -47,6 +47,13 @@
   --tabbar-active-fg: #ffffff;
 }
 
+/* Logo 100 Functional Training (login, Home e menù coach): bianco sul tema scuro, nero sul chiaro. */
+.logo-100ft { margin: 0; line-height: 0; }
+.logo-100ft img { height: 64px; width: auto; }
+.logo-100ft .logo-nero { display: none; }
+:root[data-theme="light"] .logo-100ft .logo-bianco { display: none; }
+:root[data-theme="light"] .logo-100ft .logo-nero { display: inline; }
+
 /* "Il tuo allenamento di oggi": card a colori invertiti rispetto al tema corrente,
    così è la prima cosa che salta all'occhio nella Home. Ridefiniamo solo i token
    neutri dentro la card — testo, bordi, input, bottoni e sfondo (.card usa
@@ -382,6 +389,12 @@ input {
   text-transform: uppercase;
   color: var(--mute);
   padding: 0 20px 10px;
+}
+.coach-drawer-logo {
+  padding: 0 20px 12px;
+}
+.coach-drawer-logo img {
+  height: 48px;
 }
 .coach-drawer-gruppo {
   font-family: var(--font-ui);

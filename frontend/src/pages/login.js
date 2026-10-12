@@ -7,8 +7,8 @@ export function renderLogin(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
-    <h1>100FT</h1>
-    <p class="mono" style="color:var(--mute)">Functional Training — Centocelle</p>
+    <h1 class="logo-100ft"><img class="logo-bianco" src="/logo-bianco.png" alt="100 Functional Training" /><img class="logo-nero" src="/logo-nero.png" alt="100 Functional Training" /></h1>
+    <p class="mono" style="color:var(--mute); margin-top:10px">Centocelle</p>
     <form id="login-form" style="margin-top:24px">
       <div class="field">
         <label for="email">Email</label>

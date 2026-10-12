@@ -51,7 +51,8 @@ function drawerHtml() {
   return `
     <div class="coach-drawer-backdrop"></div>
     <aside class="coach-drawer">
-      <p class="coach-drawer-titolo">100FT · Coach</p>
+      <div class="coach-drawer-logo logo-100ft"><img class="logo-bianco" src="/logo-bianco.png" alt="100 Functional Training" /><img class="logo-nero" src="/logo-nero.png" alt="100 Functional Training" /></div>
+      <p class="coach-drawer-titolo">Coach</p>
       ${righe}
     </aside>`;
 }
