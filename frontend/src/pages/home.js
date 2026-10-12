@@ -134,7 +134,7 @@ export function renderHome(appEl) {
       }
     </style>
     <h1 class="logo-100ft"><img class="logo-bianco" src="/logo-bianco.png" alt="100 Functional Training" /><img class="logo-nero" src="/logo-nero.png" alt="100 Functional Training" /></h1>
-    <p id="saluto-nome" style="font-size:17px; margin-top:2px">&nbsp;</p>
+    <p id="saluto-nome" style="font-size:17px; margin-top:14px">&nbsp;</p>
     <p class="mono" style="color:var(--mute); font-size:13px; letter-spacing:1px; margin-top:6px">
       ${GIORNI[(oggi.getDay() + 6) % 7].toUpperCase()} · ${oggi.getDate()} ${MESI[oggi.getMonth()].toUpperCase()}
     </p>

@@ -49,7 +49,7 @@
 
 /* Logo 100 Functional Training (login, Home e menù coach): bianco sul tema scuro, nero sul chiaro. */
 .logo-100ft { margin: 0; line-height: 0; }
-.logo-100ft img { height: 64px; width: auto; }
+.logo-100ft img { height: 44px; width: auto; }
 .logo-100ft .logo-nero { display: none; }
 :root[data-theme="light"] .logo-100ft .logo-bianco { display: none; }
 :root[data-theme="light"] .logo-100ft .logo-nero { display: inline; }
@@ -394,7 +394,7 @@ input {
   padding: 0 20px 12px;
 }
 .coach-drawer-logo img {
-  height: 48px;
+  height: 36px;
 }
 .coach-drawer-gruppo {
   font-family: var(--font-ui);
