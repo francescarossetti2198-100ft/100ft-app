@@ -13,27 +13,30 @@ const puntiExtra = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 puntiExtra.get("/", requireCoach, async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT x.id, x.xp_assegnati AS punti, x.data,
+    `SELECT x.id, x.xp_assegnati AS punti, x.data, x.motivo,
             p.nome, p.cognome, p.nickname
      FROM xp_log x
      JOIN athlete_profile p ON p.user_id = x.user_id
      WHERE x.azione = 'punti_extra'
      ORDER BY x.id DESC
      LIMIT 30`
-  ).all<{ id: number; punti: number; data: string; nome: string; cognome: string | null; nickname: string | null }>();
+  ).all<{ id: number; punti: number; data: string; motivo: string | null; nome: string; cognome: string | null; nickname: string | null }>();
 
   return c.json({
     storico: results.map((r) => ({
       id: r.id,
       punti: r.punti,
       data: r.data,
+      motivo: r.motivo,
       nome: r.nickname || [r.nome, r.cognome].filter(Boolean).join(" ") || r.nome,
     })),
   });
 });
 
 puntiExtra.post("/", requireCoach, async (c) => {
-  const { userId, punti } = await c.req.json<{ userId?: number; punti?: number }>();
+  const { userId, punti, motivo } = await c.req.json<{ userId?: number; punti?: number; motivo?: string }>();
+  // Il "perché" è facoltativo: l'atleta lo legge nella campanella ("+5 · Hai aiutato un compagno").
+  const motivoPulito = typeof motivo === "string" ? motivo.trim().slice(0, 120) : "";
 
   if (!Number.isInteger(userId)) return c.json({ error: "Atleta non valido" }, 400);
   if (!Number.isInteger(punti) || (punti as number) < 1 || (punti as number) > 100) {
@@ -47,7 +50,7 @@ puntiExtra.post("/", requireCoach, async (c) => {
     .first();
   if (!atleta) return c.json({ error: "Atleta non trovato" }, 404);
 
-  await awardXp(c.env.DB, userId as number, "punti_extra", punti as number);
+  await awardXp(c.env.DB, userId as number, "punti_extra", punti as number, undefined, motivoPulito || undefined);
   return c.json({ ok: true }, 201);
 });
 

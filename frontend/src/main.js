@@ -1,6 +1,7 @@
 import "./style.css";
 import { registerRoute, startRouter, navigate } from "./router.js";
 import { mountThemeToggle } from "./theme.js";
+import { mountCampanella } from "./components/campanella.js";
 import { loadSession, getUser } from "./auth.js";
 import { sincronizzaPush } from "./push.js";
 import { renderLogin } from "./pages/login.js";
@@ -13,6 +14,7 @@ import { renderSfide } from "./pages/sfide.js";
 import { renderFeed } from "./pages/feed.js";
 import { renderProfilo } from "./pages/profilo.js";
 import { renderAtletaPubblico } from "./pages/atleta.js";
+import { renderNotifiche } from "./pages/notifiche.js";
 import { renderCoachOggi } from "./pages/coach/oggi.js";
 import { renderCoachDiario } from "./pages/coach/diario.js";
 import { renderCoachPresenze } from "./pages/coach/presenze.js";
@@ -42,6 +44,7 @@ registerRoute("/sfide", { render: perCoach("/coach/sfide-vista")(renderSfide) })
 registerRoute("/feed", { render: perCoach("/coach/feed")(renderFeed) });
 registerRoute("/profilo", { render: renderProfilo });
 registerRoute("/atleta", { render: renderAtletaPubblico });
+registerRoute("/notifiche", { render: perCoach("/coach")(renderNotifiche) });
 
 registerRoute("/coach", { render: renderCoachOggi });
 registerRoute("/coach/diario", { render: renderCoachDiario });
@@ -90,6 +93,7 @@ async function bootstrap() {
     // bloccare l'app per sempre senza più rispondere alla navigazione.
   }
   mountThemeToggle();
+  mountCampanella();
   startRouter(document.getElementById("app"));
 
   // Se l'utente è loggato e ha le notifiche attive nel browser, riallinea la

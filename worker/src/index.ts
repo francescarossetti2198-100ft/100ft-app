@@ -26,6 +26,7 @@ import diario from "./routes/diario";
 import puntiExtra from "./routes/punti-extra";
 import sfideExtra from "./routes/sfide-extra";
 import atletaMese from "./routes/atleta-mese";
+import notifiche from "./routes/notifiche";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
@@ -38,6 +39,7 @@ import { inviaPromemoriaPresenzaSeraSeAttivo } from "./lib/promemoriaPresenzaSer
 import { pubblicaMerendaDelGiornoSeAttivo } from "./lib/merendaFeed";
 import { assegnaAtletaDelMeseSeAttivo } from "./lib/atletaMese";
 import { pubblicaCompleanniSeAttivo } from "./lib/compleanniFeed";
+import { rilevaSorpassi } from "./lib/notifiche";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -92,6 +94,7 @@ app.route("/api/diario", diario);
 app.route("/api/punti-extra", puntiExtra);
 app.route("/api/sfide-extra", sfideExtra);
 app.route("/api/atleta-mese", atletaMese);
+app.route("/api/notifiche", notifiche);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).
@@ -122,5 +125,7 @@ export default {
     ctx.waitUntil(pubblicaMerendaDelGiornoSeAttivo(env));
     ctx.waitUntil(assegnaAtletaDelMeseSeAttivo(env));
     ctx.waitUntil(pubblicaCompleanniSeAttivo(env));
+    // Sorpassi in classifica per la campanella delle notifiche (lib/notifiche.ts).
+    ctx.waitUntil(rilevaSorpassi(env.DB));
   },
 };

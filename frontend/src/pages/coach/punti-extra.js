@@ -17,7 +17,7 @@ export function renderCoachPuntiExtra(appEl) {
     el.innerHTML = `
       <div class="card">
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:0">
-          Assegna punti a mano per le sfide fatte in palestra. Entrano in classifica, non nel Feed.
+          Assegna punti a mano per le sfide fatte in palestra. Entrano in classifica, non nel Feed. Il motivo (facoltativo) lo legge l'atleta nelle sue notifiche.
         </p>
         <div id="pe-atleti" style="margin-top:12px"><p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>
       </div>
@@ -37,7 +37,9 @@ export function renderCoachPuntiExtra(appEl) {
               .map(
                 (s) => `
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border)">
-                  <span style="font-size:13px">${esc(s.nome)} <span class="mono" style="color:var(--livello-1)">+${s.punti}</span></span>
+                  <span style="font-size:13px">${esc(s.nome)} <span class="mono" style="color:var(--livello-1)">+${s.punti}</span>${
+                    s.motivo ? `<span style="display:block; color:var(--mute); font-size:12px">${esc(s.motivo)}</span>` : ""
+                  }</span>
                   <span style="display:flex; align-items:center; gap:10px">
                     <span class="mono" style="color:var(--mute); font-size:11px">${quando(s.data)}</span>
                     <button type="button" class="link-btn pe-annulla" data-id="${s.id}" style="color:var(--livello-5); text-decoration:none; font-size:15px">🗑</button>
@@ -74,6 +76,8 @@ export function renderCoachPuntiExtra(appEl) {
           ${esc(nome)}
         </button>
         <div class="pe-pannello" hidden style="margin-top:8px; flex-wrap:wrap; align-items:center; gap:8px">
+          <input type="text" class="pe-motivo" maxlength="120" placeholder="Perché? (facoltativo, lo vede l'atleta)"
+            style="flex:1 1 100%; box-sizing:border-box; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font:inherit" />
           <button type="button" class="btn pe-quick" data-n="5" style="background:var(--surface-2); color:var(--text); padding:8px 12px">+5</button>
           <button type="button" class="btn pe-quick" data-n="10" style="background:var(--surface-2); color:var(--text); padding:8px 12px">+10</button>
           <button type="button" class="btn pe-quick" data-n="15" style="background:var(--surface-2); color:var(--text); padding:8px 12px">+15</button>
@@ -86,6 +90,7 @@ export function renderCoachPuntiExtra(appEl) {
       const toggle = row.querySelector(".pe-toggle");
       const pannello = row.querySelector(".pe-pannello");
       const nInput = row.querySelector(".pe-n");
+      const motivoInput = row.querySelector(".pe-motivo");
       const esito = row.querySelector(".pe-esito");
 
       toggle.addEventListener("click", () => {
@@ -102,10 +107,11 @@ export function renderCoachPuntiExtra(appEl) {
           return;
         }
         try {
-          await api.post("/punti-extra", { userId: a.userId, punti });
+          await api.post("/punti-extra", { userId: a.userId, punti, motivo: motivoInput.value.trim() });
           esito.textContent = `+${punti} ✓`;
           esito.style.color = "var(--livello-1)";
           nInput.value = "";
+          motivoInput.value = "";
           await caricaStorico();
         } catch (err) {
           esito.textContent = err instanceof ApiError ? err.message : "Errore";

@@ -190,9 +190,9 @@ details.blocco-mese > .blocco-corpo {
   padding: 20px 16px 90px;
 }
 
-/* Lascia spazio all'interruttore tema fisso in alto a destra */
+/* Lascia spazio all'interruttore tema (e alla campanella degli atleti) fissi in alto a destra */
 .screen > h1:first-child {
-  padding-right: 48px;
+  padding-right: 96px;
 }
 
 button,
@@ -320,6 +320,34 @@ input {
 .theme-toggle svg {
   width: 18px;
   height: 18px;
+}
+
+/* Campanella notifiche (components/campanella.js), a sinistra dell'interruttore tema */
+.campanella {
+  right: 58px;
+}
+.campanella[hidden] {
+  display: none;
+}
+.campanella-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #ff3040;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.campanella-badge[hidden] {
+  display: none;
 }
 
 /* ─── Dashboard coach: menù laterale ☰ (nessuna tabbar in basso) ─────────────── */

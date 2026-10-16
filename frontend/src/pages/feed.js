@@ -2,6 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { fotoProfiloHtml } from "./profilo.js";
 import { getUser } from "../auth.js";
+import { currentQuery } from "../router.js";
 import { trofeoUrl } from "../badge-mensili.js";
 
 const TIPO_INFO = {
@@ -198,7 +199,7 @@ export function renderFeed(appEl) {
         padding:4px 8px; line-height:1 }
     </style>
     <div style="position:sticky; top:0; z-index:5; background:var(--bg); margin:-20px -16px 0; padding:20px 16px 12px">
-      <h1 style="margin:0; padding-right:48px">Feed</h1>
+      <h1 style="margin:0; padding-right:96px">Feed</h1>
       <div id="feed-cerca-wrap">
         <span class="fc-lente">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -223,7 +224,9 @@ export function renderFeed(appEl) {
   const clear = el.querySelector("#feed-cerca-clear");
   const personeBox = el.querySelector("#feed-persone");
 
-  montaFeed(list);
+  // Arrivo da una notifica (#/feed?post=ID[&commenti=1]): porta a quel post, e se serve apre i commenti.
+  const q = currentQuery();
+  montaFeed(list, { postId: Number(q.get("post")) || null, apriCommenti: q.get("commenti") === "1" });
 
   let timer;
   const esegui = async () => {
@@ -333,7 +336,7 @@ export async function montaFeed(list, opts = {}) {
         const totReazioni = p.reazioni.reduce((s, r) => s + r.n, 0);
 
         return `
-          <div class="card" style="margin-bottom:12px">
+          <div class="card" data-post-card="${p.id}" style="margin-bottom:12px">
             <div style="display:flex; align-items:center; gap:10px">
               ${avatarBlock}
               <p style="font-size:14px; flex:1; min-width:0; margin:0; line-height:1.35">
@@ -484,6 +487,19 @@ export async function montaFeed(list, opts = {}) {
         caricaCommenti(box, btn.dataset.post);
       });
     });
+
+    // Arrivo da una notifica: scorre fino al post e lo evidenzia un attimo. Una volta sola
+    // (opts viene riusato quando il Feed si ridisegna dopo una reazione).
+    if (opts.postId) {
+      const card = list.querySelector(`[data-post-card="${opts.postId}"]`);
+      if (card) {
+        card.scrollIntoView({ block: "center" });
+        card.style.outline = "2px solid var(--accent)";
+        setTimeout(() => (card.style.outline = ""), 1800);
+        if (opts.apriCommenti) card.querySelector(".commenti-toggle-btn")?.click();
+      }
+      opts.postId = null;
+    }
 
     async function caricaCommenti(box, postId) {
       box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
