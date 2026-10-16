@@ -15,6 +15,7 @@ const TIPO_INFO = {
   annuncio_coach: { icona: "📣", azione: "annuncio" },
   allenamento: { icona: "🏋️", azione: "" },
   merenda: { icona: "🍎", azione: "merenda di oggi" },
+  compleanno: { icona: "🎂", azione: "festeggia il compleanno" },
 };
 
 // Post "Atleta del Mese" (scritto dal cron in worker/src/lib/atletaMese.ts con testo
@@ -77,6 +78,32 @@ function vittoriaHtml(p, v) {
              style="display:inline-block; margin-top:12px; padding:9px 16px; border-radius:999px; text-decoration:none;
                     background:#F4B740; color:#16161A; font-size:13px; font-weight:700">Vedi il trofeo sul profilo →</a>`
         : ""}
+    </div>`;
+}
+
+// Post di compleanno (cron worker/src/lib/compleanniFeed.ts, alle 11:00 del giorno): foto
+// profilo grande del festeggiato su uno sfondo di festa con coriandoli, e la frase d'auguri.
+const CORIANDOLI = [
+  ["🎉", "top:12px; left:14px", "-12deg"], ["🎈", "top:16px; right:16px", "10deg"],
+  ["✨", "top:66px; left:44px", "0deg"], ["✨", "top:70px; right:46px", "0deg"],
+  ["🎁", "top:118px; left:20px", "-8deg"], ["🎊", "top:114px; right:22px", "14deg"],
+];
+function compleannoHtml(p, autore) {
+  const iniziale = (autore[0] || "?").toUpperCase();
+  const foto = fotoProfiloHtml(p.fotoUrl, iniziale, false, p.fotoPersonalizzazione, 120);
+  return `
+    <div style="position:relative; margin-top:12px; text-align:center; border-radius:14px; padding:22px 14px 18px;
+                overflow:hidden; background:
+                  radial-gradient(circle at 50% 30%, color-mix(in srgb, #F4B740 26%, transparent), transparent 65%),
+                  radial-gradient(circle at 12% 85%, color-mix(in srgb, #E8505B 16%, transparent), transparent 45%),
+                  radial-gradient(circle at 88% 15%, color-mix(in srgb, #4FA3F7 16%, transparent), transparent 45%)">
+      ${CORIANDOLI.map(([e, pos, rot]) =>
+        `<span aria-hidden="true" style="position:absolute; ${pos}; font-size:22px; transform:rotate(${rot}); opacity:.9">${e}</span>`
+      ).join("")}
+      ${p.userId ? `<a href="#/atleta?id=${p.userId}" style="display:inline-block; line-height:0; text-decoration:none">${foto}</a>` : foto}
+      <p class="kicker" style="color:#F4B740; margin-top:12px">🎂 Buon compleanno</p>
+      <p style="font-family:var(--font-ui); font-weight:800; font-size:22px; margin-top:2px">${esc(autore)}</p>
+      <p style="margin-top:10px; line-height:1.45; white-space:pre-line">${linkify(p.testo)}</p>
     </div>`;
 }
 
@@ -289,7 +316,8 @@ export async function montaFeed(list, opts = {}) {
 
         // Solo la coach, e solo sui SUOI post (annuncio/diario/merenda, userId assente) —
         // i post degli atleti non si cancellano da qui.
-        const puoiCancellare = getUser()?.role === "coach" && !p.userId;
+        // (I compleanni li pubblica il cron col festeggiato come autore: la coach può toglierli.)
+        const puoiCancellare = getUser()?.role === "coach" && (!p.userId || p.tipo === "compleanno");
 
         const reazioniHtml = EMOJI.map((e) => {
           const r = p.reazioni.find((x) => x.emoji === e);
@@ -321,6 +349,8 @@ export async function montaFeed(list, opts = {}) {
             </div>
             ${vittoria
               ? vittoriaHtml(p, vittoria)
+              : p.tipo === "compleanno"
+              ? compleannoHtml(p, autore)
               : `<p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>`}
             ${fotoPostHtml(p)}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"

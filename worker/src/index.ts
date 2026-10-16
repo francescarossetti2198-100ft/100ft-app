@@ -37,6 +37,7 @@ import { inviaPromemoriaFeedbackSeAttivo } from "./lib/feedbackPromemoriaPush";
 import { inviaPromemoriaPresenzaSeraSeAttivo } from "./lib/promemoriaPresenzaSeraPush";
 import { pubblicaMerendaDelGiornoSeAttivo } from "./lib/merendaFeed";
 import { assegnaAtletaDelMeseSeAttivo } from "./lib/atletaMese";
+import { pubblicaCompleanniSeAttivo } from "./lib/compleanniFeed";
 
 type Variables = { user: SessionUser };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -120,5 +121,6 @@ export default {
     ctx.waitUntil(inviaPromemoriaPresenzaSeraSeAttivo(env));
     ctx.waitUntil(pubblicaMerendaDelGiornoSeAttivo(env));
     ctx.waitUntil(assegnaAtletaDelMeseSeAttivo(env));
+    ctx.waitUntil(pubblicaCompleanniSeAttivo(env));
   },
 };

@@ -271,14 +271,16 @@ feed.delete("/:id", requireCoach, async (c) => {
   if (!Number.isInteger(id)) return c.json({ error: "Post non valido" }, 400);
 
   const post = await c.env.DB.prepare(
-    `SELECT user_id AS userId, contenuto_url AS contenutoUrl, allegato_url AS allegatoUrl
+    `SELECT user_id AS userId, tipo, contenuto_url AS contenutoUrl, allegato_url AS allegatoUrl
      FROM post_feed WHERE id = ?`
   )
     .bind(id)
-    .first<{ userId: number | null; contenutoUrl: string | null; allegatoUrl: string | null }>();
+    .first<{ userId: number | null; tipo: string; contenutoUrl: string | null; allegatoUrl: string | null }>();
 
   if (!post) return c.json({ error: "Post non trovato" }, 404);
-  if (post.userId != null) {
+  // I post di compleanno li pubblica il cron col festeggiato come autore, ma restano "della
+  // coach": può toglierli se serve (es. data di nascita sbagliata).
+  if (post.userId != null && post.tipo !== "compleanno") {
     return c.json({ error: "Puoi cancellare solo i post pubblicati da te" }, 403);
   }
 
