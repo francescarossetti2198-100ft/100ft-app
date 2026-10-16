@@ -14,7 +14,10 @@ feed.get("/", requireAuth, async (c) => {
   //  ?userId=N -> solo i post di quell'atleta (feed della sua scheda pubblica)
   //  ?q=testo  -> ricerca: testo del post, nome/nickname dell'autore, o "coach" per i
   //               post della coach (annunci + diario, che hanno user_id NULL)
+  //  ?finoA=ID -> arrivo da una notifica: oltre ai soliti 50, carica tutti i post fino a
+  //               quello (anche se è più vecchio), così il Feed può portarci sopra
   const userIdFiltro = c.req.query("userId");
+  const finoA = Number(c.req.query("finoA")) || 0;
   const q = (c.req.query("q") ?? "").trim();
 
   const condizioni: string[] = [];
@@ -34,6 +37,16 @@ feed.get("/", requireAuth, async (c) => {
 
   const whereSql = condizioni.length ? `WHERE ${condizioni.join(" AND ")}` : "";
 
+  let limite = 50;
+  if (finoA) {
+    const r = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM post_feed WHERE data >= (SELECT data FROM post_feed WHERE id = ?)`
+    )
+      .bind(finoA)
+      .first<{ n: number }>();
+    limite = Math.min(Math.max(limite, (r?.n ?? 0) + 2), 400);
+  }
+
   const { results: posts } = await c.env.DB.prepare(
     `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
             p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
@@ -43,9 +56,9 @@ feed.get("/", requireAuth, async (c) => {
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
      ${whereSql}
      ORDER BY p.data DESC
-     LIMIT 50`
+     LIMIT ?`
   )
-    .bind(...parametri)
+    .bind(...parametri, limite)
     .all<{
       id: number;
       tipo: string;

@@ -42,7 +42,7 @@ function fotoPostHtml(p) {
   const foto = p.foto?.length ? p.foto : p.contenutoUrl ? [p.contenutoUrl] : [];
   if (!foto.length) return "";
   const img = (url) =>
-    `<img src="${mediaUrl(url)}" alt="" loading="lazy" style="width:100%; border-radius:10px; display:block" />`;
+    `<img src="${mediaUrl(url)}" alt="" loading="lazy" decoding="async" style="width:100%; border-radius:10px; display:block" />`;
   if (foto.length === 1) return `<div style="margin-top:10px">${img(foto[0])}</div>`;
   return `
     <div class="feed-carosello-box" style="position:relative; margin-top:10px">
@@ -162,6 +162,34 @@ function tempoFa(dataIso) {
   const ore = Math.floor(minuti / 60);
   if (ore < 24) return `${ore} h`;
   return `${Math.floor(ore / 24)} g`;
+}
+
+// Arrivo da una notifica: porta il post in vista e lo evidenzia. Le foto dei post sopra si
+// caricano dopo e spingono giù la pagina (non hanno un'altezza prima di arrivare): finché
+// la persona non tocca o scorre lo schermo, a ogni foto caricata si ri-centra sul post.
+// Senza questo, toccando una notifica si finiva su un post qualsiasi più in alto.
+function portaAlPost(card, apriCommenti) {
+  const centra = () => card.scrollIntoView({ block: apriCommenti ? "start" : "center" });
+  centra();
+  card.style.outline = "2px solid var(--accent)";
+  setTimeout(() => (card.style.outline = ""), 2500);
+  if (apriCommenti) card.querySelector(".commenti-toggle-btn")?.click();
+
+  let attivo = true;
+  const stop = () => {
+    attivo = false;
+    ["touchstart", "wheel", "keydown"].forEach((ev) => window.removeEventListener(ev, stop));
+  };
+  ["touchstart", "wheel", "keydown"].forEach((ev) => window.addEventListener(ev, stop, { passive: true, once: true }));
+  setTimeout(stop, 8000);
+
+  // Le foto sopra il post (e quelle del post stesso) partono subito, non "lazy" a scorrimento.
+  const lista = card.parentElement;
+  for (const img of lista.querySelectorAll("img")) {
+    if (card.compareDocumentPosition(img) & Node.DOCUMENT_POSITION_FOLLOWING && !card.contains(img)) continue;
+    img.loading = "eager";
+    if (!img.complete) img.addEventListener("load", () => attivo && centra(), { once: true });
+  }
 }
 
 // TODO: filtri per tipo.
@@ -288,6 +316,9 @@ export async function montaFeed(list, opts = {}) {
     const params = new URLSearchParams();
     if (opts.userId) params.set("userId", String(opts.userId));
     if (opts.q) params.set("q", opts.q);
+    // finoA resta anche dopo (quando il Feed si ridisegna per una reazione) così il post non sparisce.
+    if (opts.postId) opts.finoA = opts.postId;
+    if (opts.finoA) params.set("finoA", String(opts.finoA));
     const qs = params.toString();
     const { posts } = await api.get(qs ? `/feed?${qs}` : "/feed");
 
@@ -492,12 +523,7 @@ export async function montaFeed(list, opts = {}) {
     // (opts viene riusato quando il Feed si ridisegna dopo una reazione).
     if (opts.postId) {
       const card = list.querySelector(`[data-post-card="${opts.postId}"]`);
-      if (card) {
-        card.scrollIntoView({ block: "center" });
-        card.style.outline = "2px solid var(--accent)";
-        setTimeout(() => (card.style.outline = ""), 1800);
-        if (opts.apriCommenti) card.querySelector(".commenti-toggle-btn")?.click();
-      }
+      if (card) portaAlPost(card, opts.apriCommenti);
       opts.postId = null;
     }
 

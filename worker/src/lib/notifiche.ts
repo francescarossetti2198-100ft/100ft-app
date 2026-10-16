@@ -415,7 +415,7 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
       icona: mio ? "🎂" : undefined,
       testo: mio
         ? "Tanti auguri! 🎉 Oggi è il tuo compleanno: guarda il post nel Feed"
-        : "oggi compie gli anni 🎂 Fagli gli auguri!",
+        : "oggi compie gli anni 🎂 Passa a fare gli auguri!",
       link: `/feed?post=${c.id}&commenti=1`,
     });
   }
@@ -442,7 +442,7 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
       totaleAttori: 1,
       testo: n.data === oggiData ? "ha scritto le info sull'allenamento di oggi:" : "ha scritto le info sull'allenamento:",
       anteprima: corto(n.testo),
-      link: n.data === oggiData ? "/" : undefined,
+      link: n.data === oggiData ? "/?nota=1" : undefined,
     });
   }
 

@@ -38,9 +38,38 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Le foto scattate col telefono pesano 2–7 MB: ridotte qui a max 1600 px sul lato lungo
+// (JPEG 82%) diventano ~200–400 KB, e il Feed carica molto più in fretta. Solo i campi
+// "foto": gli allegati del diario ("file", es. la scheda) restano com'erano. Se il browser
+// non riesce a decodificarla, o il risultato non è più leggero, si manda l'originale.
+const LATO_MAX_FOTO = 1600;
+async function comprimiFoto(file) {
+  if (!(file instanceof File) || !/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type)) return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scala = Math.min(1, LATO_MAX_FOTO / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scala);
+    canvas.height = Math.round(bitmap.height * scala);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; // i PNG trasparenti diventano JPEG: sfondo bianco invece di nero
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]*$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 // Per upload di file (foto sfide/Daily Drop) — niente Content-Type esplicito, il browser
 // imposta multipart/form-data con il boundary corretto da solo.
 async function requestForm(path, formData) {
+  for (const [campo, valore] of [...formData.entries()]) {
+    if (campo === "foto" && valore instanceof File) formData.set(campo, await comprimiFoto(valore));
+  }
   let res;
   try {
     res = await fetch(`${BASE_URL}${path}`, {

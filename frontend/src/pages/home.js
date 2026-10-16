@@ -1,5 +1,6 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
+import { currentQuery } from "../router.js";
 import { CATEGORIE_RICHIESTA, etichettaCategoria } from "../richieste-categorie.js";
 import { costruisciQuestionario } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
@@ -587,6 +588,14 @@ async function loadCoach(el) {
            <p style="white-space:pre-line; font-size:15px; line-height:1.5">${esc(testo.trim())}</p>
          </div>`
       : "";
+    // Arrivo dalla notifica "la coach ha scritto le info sull'allenamento" (#/?nota=1).
+    if (testo && currentQuery().get("nota") === "1") {
+      box.scrollIntoView({ block: "center" });
+      const nota = box.firstElementChild;
+      nota.style.transition = "background .6s";
+      nota.style.background = "color-mix(in srgb, var(--accent) 14%, transparent)";
+      setTimeout(() => (nota.style.background = ""), 2500);
+    }
   } catch {
     box.innerHTML = "";
   }

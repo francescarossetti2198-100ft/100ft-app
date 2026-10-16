@@ -25,10 +25,13 @@ function tempoFa(data) {
   return giorni < 7 ? `${giorni} g` : `${Math.floor(giorni / 7)} sett`;
 }
 
-// Come Instagram: prima le nuove, poi le già viste per periodo.
+// Sezioni per periodo, sempre in quest'ordine: Oggi, Questa settimana, Questo mese, Prima.
+// Le nuove non hanno una sezione a parte: stanno nel loro periodo, evidenziate col pallino.
+const ORDINE_GRUPPI = ["Oggi", "Questa settimana", "Questo mese", "Prima"];
 function gruppoDi(n) {
-  if (n.nuova) return "Nuove";
-  const giorni = (Date.now() - istante(n.data).getTime()) / 86400000;
+  const d = istante(n.data);
+  if (d.toDateString() === new Date().toDateString()) return "Oggi";
+  const giorni = (Date.now() - d.getTime()) / 86400000;
   if (giorni < 7) return "Questa settimana";
   if (giorni < 30) return "Questo mese";
   return "Prima";
@@ -158,6 +161,7 @@ async function carica(lista) {
     gruppi.set(g, [...(gruppi.get(g) ?? []), n]);
   }
   lista.innerHTML = [...gruppi]
+    .sort(([a], [b]) => ORDINE_GRUPPI.indexOf(a) - ORDINE_GRUPPI.indexOf(b))
     .map(([titolo, righe]) => `<p class="nt-gruppo">${titolo}</p>${righe.map(rigaHtml).join("")}`)
     .join("");
 
