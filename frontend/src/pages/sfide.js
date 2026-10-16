@@ -557,29 +557,78 @@ function attachPartecipa(container, el, onDone) {
   });
 }
 
-// Box "Sfide extra" del mese mostrato nel carosello: solo da leggere, non contano per la
-// coccarda (le sfide del mese restano alla portata di tutti).
+// Sfida extra a foto: carica la foto → punti + post nel Feed (POST /sfide-extra/:id/partecipa).
+function attachPartecipaExtra(box, el, onDone) {
+  box.querySelectorAll(".extra-partecipa-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const item = btn.closest("[data-extra-id]");
+      const errorEl = item.querySelector(".extra-foto-error");
+      const input = item.querySelector(".extra-foto-input");
+      if (!input.files[0]) {
+        errorEl.textContent = "Scegli o scatta una foto per completare la sfida";
+        errorEl.hidden = false;
+        return;
+      }
+      const formData = new FormData();
+      formData.append("foto", input.files[0]);
+      btn.disabled = true;
+      try {
+        await api.postForm(`/sfide-extra/${item.dataset.extraId}/partecipa`, formData);
+        loadClassifica(el, "mese");
+        onDone();
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// Box "Sfide extra" del mese mostrato nel carosello: non contano per la coccarda (le sfide
+// del mese restano alla portata di tutti). Di solito solo da leggere; quelle "a foto" (es. il
+// trekking del 18/10) si completano caricando la foto nei giorni in cui sono aperte.
 function sfideExtraHtml(righe) {
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const dd = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const oggi = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" }); // "YYYY-MM-DD"
+  const isCoach = getUser()?.role === "coach";
+  const conFoto = righe.some((r) => r.foto);
+
+  const azioneFoto = (r) => {
+    if (r.fatta) return `<p class="mono" style="color:var(--mese-accento, var(--accent)); font-size:13px; margin-top:10px">✓ Completata</p>`;
+    if (isCoach) return `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">Gli atleti la completano caricando una foto${r.apertaDal ? ` dal ${dd(r.apertaDal)}` : ""}${r.apertaFino ? ` al ${dd(r.apertaFino)}` : ""}.</p>`;
+    if (r.apertaDal && r.apertaDal > oggi)
+      return `<button class="btn" style="width:100%; margin-top:10px" disabled>Si apre il ${dd(r.apertaDal)}</button>`;
+    if (r.apertaFino && r.apertaFino < oggi)
+      return `<button class="btn" style="width:100%; margin-top:10px" disabled>Sfida terminata</button>`;
+    return `
+      ${fotoInputHtml("extra-foto-input", { galleria: true })}
+      <p class="error-text extra-foto-error" hidden style="margin-top:6px"></p>
+      <button class="btn extra-partecipa-btn" style="width:100%; margin-top:10px">Carica foto e completa</button>
+      ${r.apertaFino ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:6px; text-align:center">Puoi caricarla fino al ${dd(r.apertaFino)}</p>` : ""}`;
+  };
+
   return `
     <div class="extra-head">
       <span class="extra-plus" aria-hidden="true">+</span>
       <h2 class="extra-title">Sfide extra</h2>
     </div>
     <p class="mono extra-sub">
-      Punti in più per la classifica. Non devi fare niente: i punti arrivano da soli, in base
-      alle tue presenze o assegnati dalla coach.
+      ${conFoto
+        ? "Punti in più per la classifica, non contano per la coccarda del mese. Alcune arrivano da sole, per altre carichi tu la foto."
+        : "Punti in più per la classifica. Non devi fare niente: i punti arrivano da soli, in base alle tue presenze o assegnati dalla coach."}
     </p>
     ${righe
       .map(
         (r) => `
-      <div class="extra-item">
+      <div class="extra-item" data-extra-id="${r.id}">
         <p style="font-weight:700">${esc(r.titolo)}</p>
         ${r.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px; line-height:1.5">${esc(r.descrizione)}</p>` : ""}
         ${r.punti ? `<span class="mono extra-pill">+${r.punti} PT</span>` : ""}
         ${r.data ? `<span class="mono" style="color:var(--mute); font-size:12px; margin-left:${r.punti ? 8 : 0}px">il ${dd(r.data)}</span>` : ""}
+        ${r.foto ? azioneFoto(r) : ""}
       </div>`
       )
       .join("")}`;
@@ -781,6 +830,8 @@ async function loadSfide(el, meseVoluto) {
     extraBox.hidden = extra.length === 0;
     extraBox.style.setProperty("--mese-accento", accento);
     extraBox.innerHTML = extra.length ? sfideExtraHtml(extra) : "";
+    attachFotoInput(extraBox);
+    attachPartecipaExtra(extraBox, el, () => loadSfide(el, mesi[idx]));
   };
 
   const vaiA = (nuovoIdx, dir) => {

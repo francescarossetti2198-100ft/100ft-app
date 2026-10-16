@@ -99,6 +99,7 @@ function inizioUtc(data: string): string {
 // Il "perché" di ogni riga di xp_log, in parole.
 export function etichettaPunti(azione: string, titoloSfida: string | null, motivo: string | null): string {
   if (azione === "sfida") return titoloSfida ? `Sfida completata: ${titoloSfida}` : "Sfida completata";
+  if (azione.startsWith("sfida_extra_")) return motivo ? `Sfida extra completata: ${motivo}` : "Sfida extra completata";
   if (azione.startsWith("settimana_completa_")) return "Settimana completa: lunedì, mercoledì e venerdì";
   if (azione.startsWith("sfide_mese_complete_")) {
     const m = Number(azione.slice(-2));
@@ -381,7 +382,7 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
       data: p.data,
       punti: p.punti,
       testo: etichettaPunti(p.azione, p.titolo, p.motivo),
-      link: p.azione === "sfida" || p.azione.startsWith("sfide_mese_complete_") ? "/sfide" : undefined,
+      link: p.azione === "sfida" || p.azione.startsWith("sfida_extra_") || p.azione.startsWith("sfide_mese_complete_") ? "/sfide" : undefined,
     });
   }
 
