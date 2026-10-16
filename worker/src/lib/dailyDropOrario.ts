@@ -7,7 +7,12 @@ import { adessoRoma } from "./oggi";
 // un hash della data — così l'endpoint risponde in modo coerente per tutta la giornata senza
 // dover salvare nulla su un cron/Durable Object (che restano comunque necessari per la vera
 // notifica push, non ancora costruita — vedi nota in routes/daily-drop.ts).
-const INIZIO_GIORNO_MIN = 8 * 60; // 08:00
+// Mai prima delle 9:30 (regola di Francesca, 16 ott 2026). Fino al 16/10 compreso il giorno
+// partiva dalle 8:00: per quelle date resta così, altrimenti cambierebbe a posteriori
+// l'orario di un Daily Drop già scattato (quello del 16/10 è uscito alle 8:14).
+const INIZIO_GIORNO_MIN = 9 * 60 + 30; // 09:30
+const INIZIO_GIORNO_MIN_VECCHIO = 8 * 60; // 08:00, per le date fino al 2026-10-16
+const DATA_REGOLA_930 = "2026-10-17";
 const FINE_GIORNO_MIN = 22 * 60; // 22:00
 
 // Daily Drop a settimana: esattamente 2 (richiesta di Francesca, "2 volte a settimana non
@@ -84,10 +89,11 @@ export function orarioDailyDrop(data: string, giornoSettimana: number): number |
 
   const escluse = fasceEscluse(giornoSettimana);
   const minutiEsclusi = escluse.reduce((tot, f) => tot + (f.fine - f.inizio), 0);
-  const disponibili = FINE_GIORNO_MIN - INIZIO_GIORNO_MIN - minutiEsclusi;
+  const inizio = data >= DATA_REGOLA_930 ? INIZIO_GIORNO_MIN : INIZIO_GIORNO_MIN_VECCHIO;
+  const disponibili = FINE_GIORNO_MIN - inizio - minutiEsclusi;
   const offset = Math.floor(random() * disponibili);
 
-  let minuti = INIZIO_GIORNO_MIN + offset;
+  let minuti = inizio + offset;
   for (const f of escluse) {
     if (minuti >= f.inizio) minuti += f.fine - f.inizio; // salta questa fascia (allenamento o promemoria acqua)
   }
