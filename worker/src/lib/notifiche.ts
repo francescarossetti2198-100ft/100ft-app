@@ -499,6 +499,25 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
         testo: `ha risposto al tuo sorpasso: ${n.reazione ?? ""}`,
         link: "/sfide",
       });
+    } else if (n.tipo === "messaggio_coach") {
+      // Promemoria personale della coach a una singola atleta (inserito a mano in DB).
+      let dato: { testo?: string; link?: string } = {};
+      try {
+        dato = JSON.parse(n.dato ?? "{}");
+      } catch {
+        // dato non leggibile: frase senza dettagli
+      }
+      if (!dato.testo) continue;
+      out.push({
+        id: `msg-${n.id}`,
+        tipo: "coach",
+        data: n.data,
+        attori: [coach],
+        totaleAttori: 1,
+        testo: "ti ha scritto:",
+        anteprima: dato.testo,
+        link: dato.link,
+      });
     }
   }
 
