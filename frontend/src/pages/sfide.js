@@ -584,7 +584,7 @@ function fotoVotoHtml(f, { fase, mioVoto, isCoach }) {
   const votata = mioVoto === f.userId;
   const voti = f.voti != null ? `<span class="mono" style="font-size:12px; color:var(--mute)">${f.voti} ${f.voti === 1 ? "voto" : "voti"}</span>` : "";
   let azione = "";
-  if (fase === "voto" && !isCoach) {
+  if (fase === "voto") {
     azione = f.mia
       ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Non votabile</p>`
       : `<button type="button" class="btn vota-btn${votata ? "" : " btn-secondary"}" data-user="${f.userId}"
@@ -632,7 +632,7 @@ async function disegnaVotazione(box) {
     testa = `
       <p style="font-weight:600">🗳️ Vota la foto più bella</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${
-        isCoach ? `Votazione aperta fino a mezzanotte.` : `Hai un voto: puoi cambiarlo fino a mezzanotte. Tocca una foto per ingrandirla.`
+        `Hai un voto: puoi cambiarlo fino a mezzanotte. Tocca una foto per ingrandirla.`
       }</p>`;
   } else if (v.fase === "attesa") {
     testa = `

@@ -248,9 +248,8 @@ sfide.get("/:id/votazione", requireAuth, async (c) => {
 });
 
 // Voto alla foto più bella: un voto a testa (si può cambiare finché è aperto), mai la propria.
-// Può votare ogni atleta, anche chi non ha caricato la foto.
+// Può votare ogni atleta, anche chi non ha caricato la foto, e anche la coach (Francesca).
 sfide.post("/:id/vota", requireAuth, async (c) => {
-  if (c.var.user.role !== "atleta") return c.json({ error: "Solo gli atleti possono votare" }, 403);
   const sfidaId = Number(c.req.param("id"));
   const body = await c.req.json<{ userId?: number }>().catch(() => ({}) as { userId?: number });
   const votato = Number(body.userId);
