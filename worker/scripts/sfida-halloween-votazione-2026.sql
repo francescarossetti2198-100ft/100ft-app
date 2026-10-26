@@ -10,6 +10,9 @@ DELETE FROM sfide WHERE titolo = 'Halloween' AND flash = 1 AND data_inizio = '20
 INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, foto_richieste, data_inizio, data_fine,
                    votazione_dal, votazione_fino, risultati_dal, punti_vincitore) VALUES
   ('🎃 Halloween: la foto più bella',
-   'Carica una foto di te con qualsiasi riferimento a Halloween entro il 31 ottobre alle 14:00. Il 31 dalle 14:00 a mezzanotte si vota la più bella: il risultato esce il 1° novembre alle 13:00, insieme all''Atleta del mese.',
+   'Carica una foto a tema Halloween: un travestimento, un trucco, una foto artistica… quello che vuoi tu, non serve un selfie! Entro il 31 ottobre alle 14:00. Il 31 dalle 14:00 a mezzanotte si vota la più bella: il risultato esce il 1° novembre alle 13:00, insieme all''Atleta del mese.',
    'foto', NULL, 5, 1, 1, '2026-10-26', '2026-10-31',
    '2026-10-31 14:00', '2026-11-01 00:00', '2026-11-01 13:00', 5);
+
+-- 26/10 (Francesca): non per forza un selfie, va bene qualsiasi foto a tema. Già in prod:
+-- UPDATE sfide SET descrizione = '...' WHERE id = 13;
