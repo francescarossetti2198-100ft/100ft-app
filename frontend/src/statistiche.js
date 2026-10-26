@@ -172,7 +172,8 @@ export async function initStatistiche(content) {
       rigaStat("Mese record", meseRec) +
       rigaStat("Umore medio", umoreTxt) +
       rigaStat("Come vivi gli allenamenti", diffTxt) +
-      rigaStat("Sfide completate", `${sfP.length} · ${puntiSf} pt`) +
+      // Ultima settimana del mese: punti segreti fino all'Atleta del mese.
+      rigaStat("Sfide completate", dati.puntiNascosti ? `${sfP.length} · 🤫` : `${sfP.length} · ${puntiSf} pt`) +
       rigaStat("Settimane completate (tot.)", dati.settimaneCompletateTotali ?? 0) +
       rigaStat("Livello", `${raggiunte}/6 soglie · ${dati.allenamentiFatti || 0} allenamenti`);
   };

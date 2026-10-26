@@ -183,10 +183,14 @@ profilo.get("/statistiche", requireAuth, async (c) => {
       .first<{ n: number }>(),
   ]);
 
+  // Ultima settimana del mese: niente punti delle sfide (lib/suspense.ts).
+  const puntiNascosti = !!classificaNascosta();
+
   return c.json({
     presenze: presenze.results.map((r) => r.data),
     feedback: feedback.results,
-    sfide: sfide.results,
+    sfide: puntiNascosti ? sfide.results.map((s) => ({ data: s.data, punti: null })) : sfide.results,
+    puntiNascosti,
     settimaneCompletateTotali: anelli.settimaneCompletateTotali,
     allenamentiFatti: allen?.n ?? 0,
   });
