@@ -1795,7 +1795,9 @@ async function loadProfilo(el) {
             <p class="mono" style="color:var(--mute); font-size:12px">Settimane complete</p>
           </div>
           <div>
-            <p style="font-weight:600; font-size:18px">${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}</p>
+            <p style="font-weight:600; font-size:18px">${
+              p.classificaTotale ? `${p.classificaTotale.posizione}° / ${p.classificaTotale.totaleAtleti}` : "🤫"
+            }</p>
             <p class="mono" style="color:var(--mute); font-size:12px">Classifica</p>
           </div>
         </div>

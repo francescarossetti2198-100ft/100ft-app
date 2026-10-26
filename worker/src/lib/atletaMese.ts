@@ -1,6 +1,7 @@
 import type { Env } from "../types";
 import { mesePrecedente, mezzanotteRomaUtc } from "./oggi";
 import { sendWebPush } from "./webPush";
+import { ORARIO_ATLETA_MESE } from "./suspense";
 
 const MESI = [
   "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
@@ -8,7 +9,7 @@ const MESI = [
 ];
 
 // Stesso orario-check delle altre notifiche mensili (feedbackMensilePush.ts) — giorno 1 alle
-// 08:00: prima si chiude il mese con il vincitore, alle 09:00 si apre il questionario.
+// 13:00 (lib/suspense.ts; fino a ottobre 2026 erano le 08:00).
 function oraRoma(): { giorno: number; oraMinuti: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Rome",
@@ -34,7 +35,8 @@ function oraRoma(): { giorno: number; oraMinuti: string } {
 // prima del 1° ottobre, quindi la prima assegnazione avviene naturalmente in quel momento.
 export async function assegnaAtletaDelMeseSeAttivo(env: Env): Promise<void> {
   const { giorno, oraMinuti } = oraRoma();
-  if (giorno !== 1 || oraMinuti !== "08:00") return;
+  // Alle 13:00 (lib/suspense.ts): la classifica resta nascosta fino a quest'ora.
+  if (giorno !== 1 || oraMinuti !== ORARIO_ATLETA_MESE) return;
 
   const { mese, anno } = mesePrecedente();
 

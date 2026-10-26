@@ -8,6 +8,9 @@ import { snapshotProgressione, segnalaAvanzamento } from "../lib/progressione";
 import { stagioneDi, verificaEAssegnaTrofeo, statoTrofei } from "../lib/trofei";
 import { verificaTraguardi, verificaBonusMese, criterioValido } from "../lib/traguardi";
 import { adessoRoma, mezzanotteRomaUtc } from "../lib/oggi";
+import { classificaNascostaPer } from "../lib/suspense";
+import { faseVotazione } from "../lib/votazioneSfide";
+import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 
 type Variables = { user: SessionUser };
 const sfide = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -27,6 +30,11 @@ type Periodo = (typeof PERIODI)[number];
 sfide.get("/classifica", requireAuth, async (c) => {
   const richiesto = c.req.query("periodo");
   const periodo: Periodo = PERIODI.includes(richiesto as Periodo) ? (richiesto as Periodo) : "mese";
+
+  // Ultima settimana del mese: per gli atleti la classifica è segreta fino all'Atleta del mese
+  // (lib/suspense.ts). Niente calcolo, così non si aggiornano nemmeno le frecce.
+  const nascosta = classificaNascostaPer(c.var.user.role);
+  if (nascosta) return c.json({ classifica: [], periodo, nascosta: true, svelaIl: nascosta.fino });
 
   const oggi = adessoRoma();
 
@@ -139,7 +147,8 @@ sfide.get("/", requireAuth, async (c) => {
 
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.flash, s.data_inizio, s.data_fine,
-            s.foto_richieste AS fotoRichieste,
+            s.foto_richieste AS fotoRichieste, s.votazione_dal, s.votazione_fino, s.risultati_dal,
+            s.punti_vincitore AS puntiVincitore,
             (SELECT COUNT(*) FROM sfide_foto f WHERE f.sfida_id = s.id AND f.user_id = ?) AS fotoCaricate,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
@@ -160,7 +169,115 @@ sfide.get("/", requireAuth, async (c) => {
         s.flash && s.data_inizio > oggi ? { ...s, titolo: null, descrizione: null, nascosta: 1 } : s
       );
 
-  return c.json({ sfide: sfideVisibili });
+  // Sfide con votazione (es. Halloween): la fase attuale, per la card.
+  const conFase = sfideVisibili.map((s) => {
+    const fase = faseVotazione(s as unknown as Parameters<typeof faseVotazione>[0]);
+    return fase ? { ...s, votazione: fase } : s;
+  });
+
+  return c.json({ sfide: conFase });
+});
+
+// Galleria di una sfida con votazione (lib/votazioneSfide.ts). Agli atleti le foto degli
+// altri restano segrete finché non si apre il voto; i conteggi si vedono solo coi risultati.
+// La coach vede sempre tutto.
+sfide.get("/:id/votazione", requireAuth, async (c) => {
+  const sfidaId = Number(c.req.param("id"));
+  const sfida = await c.env.DB.prepare(
+    `SELECT id, titolo, punti, punti_vincitore AS puntiVincitore, votazione_dal, votazione_fino, risultati_dal
+     FROM sfide WHERE id = ?`
+  )
+    .bind(sfidaId)
+    .first<{
+      id: number; titolo: string; punti: number; puntiVincitore: number;
+      votazione_dal: string | null; votazione_fino: string | null; risultati_dal: string | null;
+    }>();
+  const fase = sfida ? faseVotazione(sfida) : null;
+  if (!sfida || !fase) return c.json({ error: "Sfida non trovata" }, 404);
+
+  const isCoach = c.var.user.role === "coach";
+  const io = c.var.user.userId;
+  const vediTutte = isCoach || fase !== "caricamento";
+  const vediVoti = isCoach || fase === "risultati";
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT p.user_id AS userId, p.foto_url AS foto, a.nome, a.nickname, a.foto_url AS fotoUrl,
+            a.foto_personalizzazione AS fotoPersonalizzazione,
+            (SELECT COUNT(*) FROM voti_sfide v WHERE v.sfida_id = p.sfida_id AND v.votato_id = p.user_id) AS voti
+     FROM partecipazioni_sfide p
+     LEFT JOIN athlete_profile a ON a.user_id = p.user_id
+     WHERE p.sfida_id = ? ${vediTutte ? "" : "AND p.user_id = ?"}
+     ORDER BY p.id`
+  )
+    .bind(...(vediTutte ? [sfidaId] : [sfidaId, io]))
+    .all<{
+      userId: number; foto: string | null; nome: string | null; nickname: string | null;
+      fotoUrl: string | null; fotoPersonalizzazione: string | null; voti: number;
+    }>();
+
+  const mioVoto = await c.env.DB.prepare(`SELECT votato_id AS userId FROM voti_sfide WHERE sfida_id = ? AND votante_id = ?`)
+    .bind(sfidaId, io)
+    .first<{ userId: number }>();
+
+  const massimo = Math.max(0, ...results.map((r) => r.voti));
+  const foto = results.map((r) => ({
+    userId: r.userId,
+    foto: r.foto,
+    nome: r.nome,
+    nickname: r.nickname,
+    fotoUrl: r.fotoUrl,
+    fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+    mia: r.userId === io,
+    voti: vediVoti ? r.voti : null,
+    vincitrice: fase === "risultati" && massimo > 0 && r.voti === massimo,
+  }));
+  // Coi risultati, la più votata in cima.
+  if (vediVoti) foto.sort((a, b) => (b.voti ?? 0) - (a.voti ?? 0));
+
+  return c.json({
+    fase,
+    votazioneDal: sfida.votazione_dal,
+    votazioneFino: sfida.votazione_fino,
+    risultatiDal: sfida.risultati_dal,
+    puntiVincitore: sfida.puntiVincitore,
+    puntiTotali: sfida.punti + sfida.puntiVincitore, // della più votata: quelli di tutte + i suoi in più
+    totaleFoto: vediTutte ? results.length : null,
+    mioVoto: mioVoto?.userId ?? null,
+    foto,
+  });
+});
+
+// Voto alla foto più bella: un voto a testa (si può cambiare finché è aperto), mai la propria.
+// Può votare ogni atleta, anche chi non ha caricato la foto.
+sfide.post("/:id/vota", requireAuth, async (c) => {
+  if (c.var.user.role !== "atleta") return c.json({ error: "Solo gli atleti possono votare" }, 403);
+  const sfidaId = Number(c.req.param("id"));
+  const body = await c.req.json<{ userId?: number }>().catch(() => ({}) as { userId?: number });
+  const votato = Number(body.userId);
+  if (!Number.isInteger(votato)) return c.json({ error: "Scegli una foto da votare" }, 400);
+
+  const sfida = await c.env.DB.prepare(`SELECT votazione_dal, votazione_fino, risultati_dal FROM sfide WHERE id = ?`)
+    .bind(sfidaId)
+    .first<{ votazione_dal: string | null; votazione_fino: string | null; risultati_dal: string | null }>();
+  const fase = sfida ? faseVotazione(sfida) : null;
+  if (!fase) return c.json({ error: "Sfida non trovata" }, 404);
+  if (fase === "caricamento") return c.json({ error: "La votazione non è ancora aperta" }, 400);
+  if (fase !== "voto") return c.json({ error: "La votazione è chiusa" }, 400);
+  if (votato === c.var.user.userId) return c.json({ error: "Non puoi votare la tua foto 😉" }, 400);
+
+  const partecipa = await c.env.DB.prepare(`SELECT 1 FROM partecipazioni_sfide WHERE sfida_id = ? AND user_id = ?`)
+    .bind(sfidaId, votato)
+    .first();
+  if (!partecipa) return c.json({ error: "Questa atleta non ha caricato la foto" }, 400);
+
+  await c.env.DB.prepare(
+    `INSERT INTO voti_sfide (sfida_id, votante_id, votato_id) VALUES (?, ?, ?)
+     ON CONFLICT (sfida_id, votante_id) DO UPDATE SET votato_id = excluded.votato_id, data = datetime('now')`
+  )
+    .bind(sfidaId, c.var.user.userId, votato)
+    .run();
+
+  return c.json({ ok: true, mioVoto: votato });
 });
 
 sfide.post("/:id/partecipa", requireAuth, async (c) => {
@@ -171,12 +288,14 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
 
   const sfida = await c.env.DB.prepare(
-    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste FROM sfide WHERE id = ?`
+    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste,
+            votazione_dal, votazione_fino, risultati_dal FROM sfide WHERE id = ?`
   )
     .bind(sfidaId)
     .first<{
       id: number; titolo: string; tipo: string; punti: number; flash: number;
       data_inizio: string; data_fine: string; foto_richieste: number;
+      votazione_dal: string | null; votazione_fino: string | null; risultati_dal: string | null;
     }>();
   if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
   if (sfida.tipo === "traguardo") {
@@ -188,6 +307,9 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   // Una sfida del mese si vede dal 1° (programma pubblicato), ma una "lampo" con date
   // precise (es. Halloween 26–31 ottobre) si può completare solo dentro il suo periodo.
   if (sfida.data_inizio > oggi) return c.json({ error: "La sfida non è ancora iniziata" }, 400);
+  // Sfida con votazione: le foto si caricano solo prima che si apra il voto.
+  const fase = faseVotazione(sfida);
+  if (fase && fase !== "caricamento") return c.json({ error: "Il caricamento delle foto è chiuso: ora si vota!" }, 400);
 
   const esistente = await c.env.DB.prepare(`SELECT id FROM partecipazioni_sfide WHERE sfida_id = ? AND user_id = ?`)
     .bind(sfidaId, c.var.user.userId)
@@ -236,9 +358,13 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   // Ogni sfida completata finisce nel Feed (scelta di Francesca, 31 ago): quelle foto con
   // la foto, le altre (presenza/valore_manuale) solo col titolo; le "lampo" col prefisso ⚡.
   // I traguardi automatici pubblicano da lib/traguardi.ts.
-  await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
-    .bind(c.var.user.userId, fotoUrl, sfida.flash ? `⚡ ${sfida.titolo}` : sfida.titolo)
-    .run();
+  // Con votazione la foto resta segreta: nel Feed va solo la più votata, ai risultati
+  // (lib/votazioneSfide.ts).
+  if (!fase) {
+    await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'sfida', ?, ?)`)
+      .bind(c.var.user.userId, fotoUrl, sfida.flash ? `⚡ ${sfida.titolo}` : sfida.titolo)
+      .run();
+  }
 
   // Completare una sfida chiude l'anello CHALLENGES del mese, che può chiudere una
   // settimana (e far salire di livello) — non solo confermare la presenza.

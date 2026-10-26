@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { classificaNascosta } from "../lib/suspense";
 import type { Env, SessionUser } from "../types";
 import { requireAuth } from "../middleware/auth";
 import { calcolaLivello } from "../lib/livelli";
@@ -141,8 +142,13 @@ profilo.get("/me", requireAuth, async (c) => {
     role: c.var.user.role,
     anelli,
     livello: calcolaLivello(presenzeTotali?.n ?? 0),
-    puntiTotali: posizione?.punti ?? 0,
-    classificaTotale: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
+    // Ultima settimana del mese: punti e posizione segreti fino all'Atleta del mese (lib/suspense.ts).
+    ...(classificaNascosta()
+      ? { puntiTotali: null, classificaTotale: null, classificaNascosta: true }
+      : {
+          puntiTotali: posizione?.punti ?? 0,
+          classificaTotale: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
+        }),
     sfideCompletate: sfideCompletate?.n ?? 0,
     presenzeTotali: presenzeTotali?.n ?? 0,
     trofei,

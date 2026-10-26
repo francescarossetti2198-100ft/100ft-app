@@ -312,7 +312,22 @@ const PRIMI_IN_CLASSIFICA = 5;
 async function loadClassifica(el, periodo) {
   const box = el.querySelector("#classifica");
   try {
-    const { classifica } = await api.get(`/sfide/classifica?periodo=${periodo}`);
+    const { classifica, nascosta, svelaIl } = await api.get(`/sfide/classifica?periodo=${periodo}`);
+
+    // Ultima settimana del mese: classifica segreta fino all'Atleta del mese.
+    if (nascosta) {
+      const [, m, g] = svelaIl.slice(0, 10).split("-").map(Number);
+      box.innerHTML = `
+        <div class="card" style="text-align:center; padding:22px 16px">
+          <p style="font-size:34px; line-height:1">🤫</p>
+          <p style="font-weight:600; margin-top:8px">Classifica segreta</p>
+          <p class="mono" style="color:var(--mute); font-size:13px; margin-top:6px; line-height:1.5">
+            Nell'ultima settimana del mese la classifica si nasconde: dai il massimo fino all'ultimo!<br>
+            Si svela il ${g === 1 ? "1°" : g} ${MESI[m - 1].toLowerCase()} alle ${svelaIl.slice(11, 16)} con l'Atleta del mese 🏆
+          </p>
+        </div>`;
+      return;
+    }
 
     const tabsHtml = `
       <div style="display:flex; gap:6px; margin-bottom:10px">
@@ -471,6 +486,7 @@ function fotoProgressoHtml(s) {
 // Una singola sfida come riga dentro la card del mese. Le completate restano visibili
 // ma "archiviate" (classe .done -> opacità ridotta + esito riuscito).
 function sfidaItemHtml(s, oggi) {
+  if (s.votazione) return sfidaVotazioneHtml(s);
   // Sfida flash segreta (il worker manda titolo/descrizione null fino a data_inizio): si vede
   // che c'è, ma "glitchata", senza nome né contenuto.
   if (s.nascosta) {
@@ -521,6 +537,160 @@ function sfidaItemHtml(s, oggi) {
       ${azione}
     </div>
   `;
+}
+
+// "2026-10-31 14:00" → "31/10 alle 14:00"
+function quandoTesto(t) {
+  return `${t.slice(8, 10)}/${t.slice(5, 7)} alle ${t.slice(11, 16)}`;
+}
+
+// Sfida foto con votazione (es. Halloween): fino a votazione_dal si carica la foto, che resta
+// segreta; poi la galleria per votare la più bella, e infine il risultato. La galleria la
+// riempie attachVotazione (GET /sfide/:id/votazione).
+function sfidaVotazioneHtml(s) {
+  const done = !!s.partecipato;
+  const isCoach = getUser()?.role === "coach";
+  let corpo;
+  if (s.votazione === "caricamento") {
+    corpo = done
+      ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Foto caricata · si vota il ${quandoTesto(s.votazione_dal)}</p>`
+      : isCoach
+        ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:10px">Come coach non partecipi alle sfide.</p>`
+        : `
+          ${fotoInputHtml("foto-input", { galleria: true })}
+          <p class="error-text foto-error" hidden style="margin-top:6px"></p>
+          <button class="btn partecipa-btn" style="width:100%; margin-top:10px">Carica foto e partecipa</button>
+          <p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px">🤫 Le foto restano segrete fino al ${quandoTesto(s.votazione_dal)}: poi si vota la più bella.</p>`;
+  } else {
+    corpo = `<div class="vota-box" data-sfida="${s.id}" style="margin-top:12px">
+      <p class="mono" style="color:var(--mute); font-size:13px">Carico le foto...</p></div>`;
+  }
+
+  return `
+    <div class="sfida-item" data-id="${s.id}" data-tipo="${s.tipo}">
+      <p class="mono" style="color:var(--mute); font-size:11px">${
+        s.flash ? `<span style="color:var(--sessione-b)">⚡ LAMPO</span> · ` : ""
+      }${TIPO_LABEL[s.tipo] ?? s.tipo}</p>
+      <p style="font-weight:600; margin-top:2px">${s.titolo}</p>
+      ${s.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">${s.descrizione}</p>` : ""}
+      <p class="mono" style="color:var(--accent); font-size:13px; margin-top:8px">+${s.punti} PT a tutte · +${s.punti + s.puntiVincitore} alla più votata · ${s.numeroPartecipanti} ${s.numeroPartecipanti === 1 ? "foto" : "foto caricate"}</p>
+      ${corpo}
+    </div>
+  `;
+}
+
+function fotoVotoHtml(f, { fase, mioVoto, isCoach }) {
+  const nome = f.mia ? "La tua foto" : f.nickname || f.nome || "Atleta";
+  const votata = mioVoto === f.userId;
+  const voti = f.voti != null ? `<span class="mono" style="font-size:12px; color:var(--mute)">${f.voti} ${f.voti === 1 ? "voto" : "voti"}</span>` : "";
+  let azione = "";
+  if (fase === "voto" && !isCoach) {
+    azione = f.mia
+      ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Non votabile</p>`
+      : `<button type="button" class="btn vota-btn${votata ? "" : " btn-secondary"}" data-user="${f.userId}"
+           style="width:100%; margin-top:4px; padding:8px; font-size:13px${votata ? "" : "; background:var(--surface-2); color:var(--text)"}">${
+           votata ? "Votata ✓" : "Vota"
+         }</button>`;
+  }
+  return `
+    <div class="vota-foto" style="min-width:0">
+      <div style="position:relative">
+        <img src="${mediaUrl(f.foto)}" alt="Foto di ${nome}" loading="lazy" class="vota-img"
+          style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; display:block; cursor:zoom-in;
+                 ${votata ? "outline:3px solid var(--accent); outline-offset:-3px;" : ""}" />
+        ${f.vincitrice ? `<span style="position:absolute; top:6px; left:6px; font-size:20px">🏆</span>` : ""}
+        ${votata ? `<span style="position:absolute; top:6px; right:6px; background:var(--accent); color:#fff; border-radius:50%; width:22px; height:22px; font-size:13px; display:flex; align-items:center; justify-content:center">✓</span>` : ""}
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:4px">
+        <span style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; ${votata ? "color:var(--accent)" : ""}">${nome}</span>
+        ${voti}
+      </div>
+      ${azione}
+    </div>`;
+}
+
+async function disegnaVotazione(box) {
+  const id = box.dataset.sfida;
+  let v;
+  try {
+    v = await api.get(`/sfide/${id}/votazione`);
+  } catch (err) {
+    box.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+    return;
+  }
+  const isCoach = getUser()?.role === "coach";
+  const opz = { fase: v.fase, mioVoto: v.mioVoto, isCoach };
+
+  if (!v.foto.length) {
+    box.innerHTML = `<p class="mono" style="color:var(--mute); font-size:13px">Nessuna foto caricata 👻</p>`;
+    return;
+  }
+
+  let testa = "";
+  let lista = v.foto;
+  if (v.fase === "voto") {
+    testa = `
+      <p style="font-weight:600">🗳️ Vota la foto più bella</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">${
+        isCoach ? `Votazione aperta fino a mezzanotte.` : `Hai un voto: puoi cambiarlo fino a mezzanotte. Tocca una foto per ingrandirla.`
+      }</p>`;
+  } else if (v.fase === "attesa") {
+    testa = `
+      <p style="font-weight:600">🤫 Votazione chiusa</p>
+      <p class="mono" style="color:var(--mute); font-size:12px; margin-top:2px">Il risultato esce il ${quandoTesto(v.risultatiDal)}, insieme all'Atleta del mese 🏆</p>`;
+  } else {
+    const vincitrici = v.foto.filter((f) => f.vincitrice);
+    lista = v.foto.filter((f) => !f.vincitrice);
+    testa = vincitrici.length
+      ? `
+        <p style="font-weight:600">🏆 ${vincitrici.length > 1 ? "Le foto più votate" : "La foto più votata"}</p>
+        ${vincitrici
+          .map(
+            (f) => `
+          <img src="${mediaUrl(f.foto)}" alt="" class="vota-img" style="width:100%; max-height:360px; object-fit:cover; border-radius:12px; display:block; margin-top:8px; cursor:zoom-in" />
+          <p style="font-weight:600; margin-top:6px">${f.mia ? "La tua foto" : f.nickname || f.nome} · ${f.voti} ${f.voti === 1 ? "voto" : "voti"}</p>
+          <p class="mono" style="color:var(--accent); font-size:13px">${v.puntiTotali} punti 🎉</p>`
+          )
+          .join("")}`
+      : `<p style="font-weight:600">Nessun voto 👻</p>`;
+  }
+
+  box.innerHTML = `
+    ${testa}
+    ${lista.length ? `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px">${lista.map((f) => fotoVotoHtml(f, opz)).join("")}</div>` : ""}
+    <p class="error-text vota-error" hidden style="margin-top:6px"></p>
+  `;
+
+  // Tocco sulla foto: la ingrandisce a tutta larghezza (e la riporta piccola).
+  box.querySelectorAll(".vota-foto .vota-img").forEach((img) => {
+    img.addEventListener("click", () => {
+      const cella = img.closest(".vota-foto");
+      const grande = cella.style.gridColumn !== "1 / -1";
+      cella.style.gridColumn = grande ? "1 / -1" : "";
+      img.style.aspectRatio = grande ? "auto" : "1";
+      img.style.objectFit = grande ? "contain" : "cover";
+      img.style.cursor = grande ? "zoom-out" : "zoom-in";
+    });
+  });
+
+  box.querySelectorAll(".vota-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await api.post(`/sfide/${id}/vota`, { userId: Number(btn.dataset.user) });
+        await disegnaVotazione(box);
+      } catch (err) {
+        const e = box.querySelector(".vota-error");
+        e.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        e.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function attachVotazione(container) {
+  container.querySelectorAll(".vota-box").forEach((box) => disegnaVotazione(box));
 }
 
 function attachPartecipa(container, el, onDone) {
@@ -824,6 +994,7 @@ async function loadSfide(el, meseVoluto) {
 
     attachPartecipa(track, el, () => loadSfide(el, mesi[idx]));
     attachFotoInput(track);
+    attachVotazione(track);
     aggiornaToggle();
 
     const extra = extraPerMese.get(key) ?? [];

@@ -8,6 +8,7 @@
 // apre la pagina Notifiche.
 import { adessoRoma, mezzanotteRomaUtc, oggi } from "./oggi";
 import { parseFotoPersonalizzazione } from "./fotoPersonalizzazione";
+import { classificaNascosta, adessoRomaTesto } from "./suspense";
 
 // Quanto indietro guarda la campanella.
 const GIORNI_STORICO = 45;
@@ -99,6 +100,7 @@ function inizioUtc(data: string): string {
 // Il "perché" di ogni riga di xp_log, in parole.
 export function etichettaPunti(azione: string, titoloSfida: string | null, motivo: string | null): string {
   if (azione === "sfida") return titoloSfida ? `Sfida completata: ${titoloSfida}` : "Sfida completata";
+  if (azione === "sfida_vincitrice") return `🏆 La tua foto è la più votata: ${titoloSfida ?? motivo ?? "sfida"}`;
   if (azione.startsWith("sfida_extra_")) return motivo ? `Sfida extra completata: ${motivo}` : "Sfida extra completata";
   if (azione.startsWith("settimana_completa_")) return "Settimana completa: lunedì, mercoledì e venerdì";
   if (azione.startsWith("sfide_mese_complete_")) {
@@ -122,6 +124,9 @@ const PERSONA_SQL = `u.id AS userId, u.role, a.nome, a.nickname, a.foto_url AS f
 // dà +10 a tutti insieme nessuno "sorpassa" nessuno. Chiamata dal cron ogni minuto e quando
 // un atleta apre le notifiche; la `chiave` UNIQUE evita doppioni se girano insieme.
 export async function rilevaSorpassi(db: D1Database): Promise<void> {
+  // Ultima settimana del mese: classifica nascosta (lib/suspense.ts), niente sorpassi.
+  // L'istantanea si rifà da zero col mese nuovo, quindi non escono "a scoppio ritardato".
+  if (classificaNascosta()) return;
   const r = adessoRoma();
   const anno = r.getUTCFullYear();
   const mese = r.getUTCMonth() + 1;
@@ -228,6 +233,16 @@ export async function segnaLette(db: D1Database, userId: number): Promise<void> 
     .run();
 }
 
+// Istante UTC da cui la classifica è nascosta: mezzanotte di Roma del primo degli ultimi 7
+// giorni del mese "in suspense" (il 1° del mese è la coda di quello prima).
+function inizioSettimanaNascosta(): string {
+  const t = adessoRomaTesto();
+  let [a, m] = t.slice(0, 7).split("-").map(Number);
+  if (t.slice(8, 10) === "01") [a, m] = m === 1 ? [a - 1, 12] : [a, m - 1];
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return mezzanotteRomaUtc(a, m, ultimo - 6);
+}
+
 export async function elencoNotifiche(db: D1Database, userId: number): Promise<Notifica[]> {
   const utente = await db
     .prepare(`SELECT created_at AS creato FROM users WHERE id = ?`)
@@ -237,6 +252,9 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
   const da = utente && utente.creato > limite ? utente.creato : limite;
   const { data: oggiData } = oggi();
   const lettura = await ultimaLettura(db, userId);
+  // Ultima settimana del mese (lib/suspense.ts): niente notifiche di punti fatti da quando
+  // la classifica è nascosta — si calcolano al volo, quindi ricompaiono dopo l'annuncio.
+  const inizioSuspense = classificaNascosta() ? inizioSettimanaNascosta() : null;
 
   const [commenti, reazioni, punti, mieiPost, compleanni, postCoach, note, sfideNuove, salvate] = await Promise.all([
     db
@@ -270,7 +288,8 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
            AND x.azione NOT IN (${AZIONI_ROUTINE.map(() => "?").join(",")})`
       )
       .bind(userId, da, ...AZIONI_ROUTINE)
-      .all<{ id: number; azione: string; punti: number; data: string; motivo: string | null; titolo: string | null }>(),
+      .all<{ id: number; azione: string; punti: number; data: string; motivo: string | null; titolo: string | null }>()
+      .then((r) => (inizioSuspense ? { ...r, results: r.results.filter((x) => x.data < inizioSuspense) } : r)),
     db
       .prepare(
         `SELECT id, tipo, testo, data FROM post_feed
@@ -577,6 +596,7 @@ async function promemoriaSfide(db: D1Database, userId: number, oggiData: string)
 // punti (col dettaglio di ognuno) e posizione nella classifica di quella settimana. Solo se
 // l'atleta ha fatto qualcosa: un "0 allenamenti" non motiva nessuno.
 async function riepilogoSettimana(db: D1Database, userId: number): Promise<Notifica | null> {
+  if (classificaNascosta()) return null; // punti e posizione: segreti nell'ultima settimana
   const r = adessoRoma();
   const oggiData = r.toISOString().slice(0, 10);
   let indietro = (r.getUTCDay() + 6) % 7; // 0 = lunedì

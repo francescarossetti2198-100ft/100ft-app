@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { classificaNascostaPer } from "../lib/suspense";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { calcolaLivello } from "../lib/livelli";
@@ -371,7 +372,10 @@ atleti.get("/:id/pubblico", requireAuth, async (c) => {
     livello: calcolaLivello(presenzeTotali?.n ?? 0),
     presenzeTotali: presenzeTotali?.n ?? 0,
     settimaneComplete: anelli.settimaneCompletateTotali,
-    classifica: { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
+    // Ultima settimana del mese: posizione segreta agli atleti (lib/suspense.ts).
+    classifica: classificaNascostaPer(c.var.user.role)
+      ? null
+      : { posizione: posizione?.posizione ?? 1, totaleAtleti: posizione?.totaleAtleti ?? 0 },
     badgeMensili,
   });
 });

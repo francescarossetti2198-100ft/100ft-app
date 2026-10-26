@@ -38,6 +38,8 @@ import { inviaPromemoriaFeedbackSeAttivo } from "./lib/feedbackPromemoriaPush";
 import { inviaPromemoriaPresenzaSeraSeAttivo } from "./lib/promemoriaPresenzaSeraPush";
 import { pubblicaMerendaDelGiornoSeAttivo } from "./lib/merendaFeed";
 import { assegnaAtletaDelMeseSeAttivo } from "./lib/atletaMese";
+import { chiudiVotazioniScadute } from "./lib/votazioneSfide";
+import { inviaPushSfidaLampoSeAttivo } from "./lib/sfidaLampoPush";
 import { pubblicaCompleanniSeAttivo } from "./lib/compleanniFeed";
 import { rilevaSorpassi } from "./lib/notifiche";
 
@@ -123,8 +125,16 @@ export default {
     ctx.waitUntil(inviaPromemoriaFeedbackSeAttivo(env));
     ctx.waitUntil(inviaPromemoriaPresenzaSeraSeAttivo(env));
     ctx.waitUntil(pubblicaMerendaDelGiornoSeAttivo(env));
-    ctx.waitUntil(assegnaAtletaDelMeseSeAttivo(env));
+    // In ordine: prima i punti delle votazioni chiuse (es. Halloween), poi l'Atleta del mese,
+    // così la vincitrice della votazione li ha già quando si calcola il mese.
+    ctx.waitUntil(
+      (async () => {
+        await chiudiVotazioniScadute(env);
+        await assegnaAtletaDelMeseSeAttivo(env);
+      })()
+    );
     ctx.waitUntil(pubblicaCompleanniSeAttivo(env));
+    ctx.waitUntil(inviaPushSfidaLampoSeAttivo(env));
     // Sorpassi in classifica per la campanella delle notifiche (lib/notifiche.ts).
     ctx.waitUntil(rilevaSorpassi(env.DB));
   },
