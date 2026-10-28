@@ -752,7 +752,7 @@ export function rigaMerenda(m = {}, onChange = () => {}) {
     </div>
 
     <div style="display:flex; align-items:center; gap:8px">
-      <label class="mono" style="font-size:12px; color:var(--mute)">Per il giorno</label>
+      <label class="mono" style="font-size:12px; color:var(--mute)">Settimana del (lunedì)</label>
       <input class="merenda-data" type="date" value="${m.data ?? ""}" style="${inputStile}" />
     </div>
     <button type="button" class="link-btn merenda-rimuovi" style="align-self:flex-start; color:var(--livello-5)">Rimuovi</button>
@@ -822,17 +822,16 @@ export function initPiano(el) {
   const errorEl = el.querySelector("#piano-error");
   const successEl = el.querySelector("#piano-success");
 
-  // Calendario merende: solo i giorni di allenamento (lun/mer/ven) del mese selezionato,
-  // perché le merende esistono solo in quei giorni. Serve alla coach per vedere a colpo
-  // d'occhio quali L/M/V sono ancora senza merenda.
-  const NOMI_G = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
-  function giorniLMV(anno, mese) {
+  // Calendario merende: una merenda a settimana, datata il lunedì (il post nel Feed esce
+  // quel lunedì mattina e resta visibile fino a domenica). Mostra i lunedì del mese
+  // selezionato, così la coach vede a colpo d'occhio quali settimane sono ancora scoperte.
+  function lunediDelMese(anno, mese) {
     const out = [];
     const ultimo = new Date(Date.UTC(anno, mese, 0)).getUTCDate();
     for (let d = 1; d <= ultimo; d++) {
       const dow = new Date(Date.UTC(anno, mese - 1, d)).getUTCDay();
-      if (dow === 1 || dow === 3 || dow === 5) {
-        out.push({ iso: `${anno}-${String(mese).padStart(2, "0")}-${String(d).padStart(2, "0")}`, label: `${NOMI_G[dow]} ${d}` });
+      if (dow === 1) {
+        out.push({ iso: `${anno}-${String(mese).padStart(2, "0")}-${String(d).padStart(2, "0")}`, label: `sett. ${d}/${mese}` });
       }
     }
     return out;
@@ -848,7 +847,7 @@ export function initPiano(el) {
   function disegnaCalendarioMerende() {
     const anno = Number(annoInput.value);
     const mese = Number(meseSel.value);
-    const giorni = giorniLMV(anno, mese);
+    const giorni = lunediDelMese(anno, mese);
     const mappa = merendePerData();
     let assegnate = 0;
 
@@ -871,10 +870,10 @@ export function initPiano(el) {
           .join("")}
       </div>
       <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">
-        Pallino verde = merenda pronta. Tocca un giorno per aggiungerla o modificarla.
+        Pallino verde = merende della settimana pronte. Tocca una settimana per aggiungerle o modificarle.
       </p>`;
 
-    summaryMerende.textContent = `Merende del mese — ${assegnate} su ${giorni.length} giorni`;
+    summaryMerende.textContent = `Merende del mese — ${assegnate} su ${giorni.length} settimane`;
 
     calWrap.querySelectorAll(".merenda-cal-cell").forEach((cell) => {
       cell.addEventListener("click", () => {
@@ -930,7 +929,7 @@ export function initPiano(el) {
       if (nota) {
         nota.textContent =
           `Stai modificando ${MESI[mese - 1]} ${anno}. Le merende finiscono in questo mese; ` +
-          `la data "Per il giorno" dice solo agli atleti quando vale, non le sposta.`;
+          `il lunedì scelto dice solo da quale settimana valgono, non le sposta.`;
       }
 
       const esistente = mesi.find((m) => m.mese === mese && m.anno === anno);

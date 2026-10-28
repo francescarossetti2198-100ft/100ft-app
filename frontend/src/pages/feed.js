@@ -15,7 +15,7 @@ const TIPO_INFO = {
   badge: { icona: "🏅", azione: "ha conquistato il badge di" },
   annuncio_coach: { icona: "📣", azione: "annuncio" },
   allenamento: { icona: "🏋️", azione: "" },
-  merenda: { icona: "🍎", azione: "merenda di oggi" },
+  merenda: { icona: "🍎", azione: "merende della settimana" },
   compleanno: { icona: "🎂", azione: "festeggia il compleanno" },
 };
 

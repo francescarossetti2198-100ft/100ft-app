@@ -53,8 +53,8 @@ export function renderCoachMese(appEl) {
           <summary>Merende fit</summary>
           <div class="blocco-corpo">
             <p class="mono" id="merende-mese-nota" style="color:var(--mute); font-size:12px; margin-top:6px">
-              Le merende finiscono nel mese selezionato in alto. La data "Per il giorno" dice solo
-              agli atleti in che giorno vale — NON sposta la merenda in un altro mese.
+              Una grafica a settimana: esce nel Feed il lunedì alle 8:00 e resta visibile fino a
+              domenica. Il lunedì scelto NON sposta le merende in un altro mese.
             </p>
             <div id="merende-calendario" style="margin-top:12px"></div>
             <details class="blocco-mese" id="merende-dettaglio" style="margin-top:12px">

@@ -23,14 +23,19 @@ const MESI = [
 
 const GIORNI_SETTIMANA = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
 
-// "2026-08-25" -> "Lunedì 25/08" — un'etichetta leggibile per la data assegnata a una merenda.
+// Etichetta leggibile per la data assegnata a una merenda. Un lunedì = merende della
+// settimana: "2026-11-02" -> "Settimana 02/11 – 08/11"; le merende vecchie (una per
+// giorno di allenamento) restano "Mercoledì 28/10".
 function etichettaData(dataIso) {
   const d = new Date(`${dataIso}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return null;
-  const giorno = GIORNI_SETTIMANA[d.getUTCDay()];
-  const gg = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  return `${giorno} ${gg}/${mm}`;
+  const ggmm = (x) => `${String(x.getUTCDate()).padStart(2, "0")}/${String(x.getUTCMonth() + 1).padStart(2, "0")}`;
+  if (d.getUTCDay() === 1) {
+    const domenica = new Date(d);
+    domenica.setUTCDate(d.getUTCDate() + 6);
+    return `Settimana ${ggmm(d)} – ${ggmm(domenica)}`;
+  }
+  return `${GIORNI_SETTIMANA[d.getUTCDay()]} ${ggmm(d)}`;
 }
 
 // Domenica 23:59:59 (ora locale ≈ Roma) della settimana Lun–Dom che contiene `d`.
@@ -43,8 +48,8 @@ function fineSettimana(d) {
 }
 
 // Una merenda con data compare all'atleta dalle 07:00 (ora locale ≈ Roma) del suo
-// giorno e resta visibile fino a fine settimana: lunedì si vede quella di lunedì,
-// mercoledì quelle di lun+mer, venerdì tutte e tre; la settimana dopo riparte da capo.
+// giorno e resta visibile fino a fine settimana: quelle settimanali (datate lunedì)
+// si vedono da lunedì a domenica; la settimana dopo riparte da capo.
 // Le merende senza data sono sempre visibili.
 function merendaDisponibile(dataIso, ora = new Date()) {
   if (!dataIso) return true;
