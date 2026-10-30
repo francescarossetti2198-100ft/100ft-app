@@ -787,7 +787,7 @@ const REGOLAMENTO = [
     extra: `
       <ul style="list-style:none; padding:0; margin:8px 0 0; display:flex; flex-direction:column; gap:6px">
         <li class="mono" style="font-size:13px">🏋️ Presenza confermata dalla coach — <strong>+10 punti</strong></li>
-        <li class="mono" style="font-size:13px">📅 Settimana completa (lunedì, mercoledì e venerdì) — <strong>+10 punti</strong></li>
+        <li class="mono" style="font-size:13px">📅 Settimana completa (lunedì, mercoledì e venerdì) — <strong>+10 punti</strong>, una volta al mese</li>
         <li class="mono" style="font-size:13px">🎯 Sfida completata — <strong>+10 punti</strong></li>
         <li class="mono" style="font-size:13px">🏅 Tutte le sfide del mese completate — <strong>+10 punti</strong></li>
         <li class="mono" style="font-size:13px">💧 Daily Drop — <strong>+5 punti</strong></li>
@@ -801,8 +801,9 @@ const REGOLAMENTO = [
         rispondi prendi +5 punti.
       </p>
       <p style="font-size:13px; margin-top:8px">
-        <strong>📅 Settimana completa</strong> — se ti alleni lunedì, mercoledì e venerdì
-        della stessa settimana prendi +10 punti in più, oltre ai punti delle presenze. Se la
+        <strong>📅 Settimana completa</strong> — la prima settimana del mese in cui ti alleni
+        lunedì, mercoledì e venerdì prendi +10 punti in più, oltre ai punti delle presenze.
+        Vale una volta al mese, non ogni settimana. Se la
         palestra è chiusa uno dei tre giorni, bastano gli altri due.
       </p>`,
   },

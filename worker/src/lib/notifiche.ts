@@ -102,7 +102,7 @@ export function etichettaPunti(azione: string, titoloSfida: string | null, motiv
   if (azione === "sfida") return titoloSfida ? `Sfida completata: ${titoloSfida}` : "Sfida completata";
   if (azione === "sfida_vincitrice") return `🏆 La tua foto è la più votata: ${titoloSfida ?? motivo ?? "sfida"}`;
   if (azione.startsWith("sfida_extra_")) return motivo ? `Sfida extra completata: ${motivo}` : "Sfida extra completata";
-  if (azione.startsWith("settimana_completa_")) return "Settimana completa: lunedì, mercoledì e venerdì";
+  if (azione.startsWith("settimana_completa_")) return "Settimana completa del mese: lunedì, mercoledì e venerdì";
   if (azione.startsWith("sfide_mese_complete_")) {
     const m = Number(azione.slice(-2));
     return `Bonus: tutte le sfide di ${MESI[m - 1] ?? "questo mese"} completate`;
