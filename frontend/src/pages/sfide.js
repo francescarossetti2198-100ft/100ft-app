@@ -580,14 +580,15 @@ function sfidaVotazioneHtml(s) {
 }
 
 function fotoVotoHtml(f, { fase, mioVoto, isCoach }) {
-  const nome = f.mia ? "La tua foto" : f.nickname || f.nome || "Atleta";
-  const votata = mioVoto === f.userId;
+  // Fino ai risultati le foto arrivano anonime (senza nome).
+  const nome = f.mia ? "La tua foto" : f.nickname || f.nome || "";
+  const votata = mioVoto === f.id;
   const voti = f.voti != null ? `<span class="mono" style="font-size:12px; color:var(--mute)">${f.voti} ${f.voti === 1 ? "voto" : "voti"}</span>` : "";
   let azione = "";
   if (fase === "voto") {
     azione = f.mia
       ? `<p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">Non votabile</p>`
-      : `<button type="button" class="btn vota-btn${votata ? "" : " btn-secondary"}" data-user="${f.userId}"
+      : `<button type="button" class="btn vota-btn${votata ? "" : " btn-secondary"}" data-foto="${f.id}"
            style="width:100%; margin-top:4px; padding:8px; font-size:13px${votata ? "" : "; background:var(--surface-2); color:var(--text)"}">${
            votata ? "Votata ✓" : "Vota"
          }</button>`;
@@ -595,7 +596,7 @@ function fotoVotoHtml(f, { fase, mioVoto, isCoach }) {
   return `
     <div class="vota-foto" style="min-width:0">
       <div style="position:relative">
-        <img src="${mediaUrl(f.foto)}" alt="Foto di ${nome}" loading="lazy" class="vota-img"
+        <img src="${mediaUrl(f.foto)}" alt="${nome ? `Foto di ${nome}` : "Foto"}" loading="lazy" class="vota-img"
           style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; display:block; cursor:zoom-in;
                  ${votata ? "outline:3px solid var(--accent); outline-offset:-3px;" : ""}" />
         ${f.vincitrice ? `<span style="position:absolute; top:6px; left:6px; font-size:20px">🏆</span>` : ""}
@@ -677,7 +678,7 @@ async function disegnaVotazione(box) {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
-        await api.post(`/sfide/${id}/vota`, { userId: Number(btn.dataset.user) });
+        await api.post(`/sfide/${id}/vota`, { fotoId: Number(btn.dataset.foto) });
         await disegnaVotazione(box);
       } catch (err) {
         const e = box.querySelector(".vota-error");

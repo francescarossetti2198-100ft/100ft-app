@@ -180,7 +180,7 @@ sfide.get("/", requireAuth, async (c) => {
 
 // Galleria di una sfida con votazione (lib/votazioneSfide.ts). Agli atleti le foto degli
 // altri restano segrete finché non si apre il voto; i conteggi si vedono solo coi risultati.
-// La coach vede sempre tutto.
+// La coach vede sempre foto e conteggi, ma i nomi solo coi risultati come tutte.
 sfide.get("/:id/votazione", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
   const sfida = await c.env.DB.prepare(
@@ -199,34 +199,46 @@ sfide.get("/:id/votazione", requireAuth, async (c) => {
   const io = c.var.user.userId;
   const vediTutte = isCoach || fase !== "caricamento";
   const vediVoti = isCoach || fase === "risultati";
+  // Fino ai risultati le foto sono anonime per tutte (anche la coach, che vota): niente
+  // nome né userId, si vota per id della foto e l'ordine (per URL, casuale) non dice chi
+  // l'ha caricata prima.
+  const anonime = fase !== "risultati";
 
   const { results } = await c.env.DB.prepare(
-    `SELECT p.user_id AS userId, p.foto_url AS foto, a.nome, a.nickname, a.foto_url AS fotoUrl,
+    `SELECT p.id, p.user_id AS userId, p.foto_url AS foto, a.nome, a.nickname, a.foto_url AS fotoUrl,
             a.foto_personalizzazione AS fotoPersonalizzazione,
             (SELECT COUNT(*) FROM voti_sfide v WHERE v.sfida_id = p.sfida_id AND v.votato_id = p.user_id) AS voti
      FROM partecipazioni_sfide p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
      WHERE p.sfida_id = ? ${vediTutte ? "" : "AND p.user_id = ?"}
-     ORDER BY p.id`
+     ORDER BY p.foto_url`
   )
     .bind(...(vediTutte ? [sfidaId] : [sfidaId, io]))
     .all<{
-      userId: number; foto: string | null; nome: string | null; nickname: string | null;
+      id: number; userId: number; foto: string | null; nome: string | null; nickname: string | null;
       fotoUrl: string | null; fotoPersonalizzazione: string | null; voti: number;
     }>();
 
-  const mioVoto = await c.env.DB.prepare(`SELECT votato_id AS userId FROM voti_sfide WHERE sfida_id = ? AND votante_id = ?`)
+  const mioVoto = await c.env.DB.prepare(
+    `SELECT p.id FROM voti_sfide v
+     JOIN partecipazioni_sfide p ON p.sfida_id = v.sfida_id AND p.user_id = v.votato_id
+     WHERE v.sfida_id = ? AND v.votante_id = ?`
+  )
     .bind(sfidaId, io)
-    .first<{ userId: number }>();
+    .first<{ id: number }>();
 
   const massimo = Math.max(0, ...results.map((r) => r.voti));
   const foto = results.map((r) => ({
-    userId: r.userId,
+    id: r.id,
     foto: r.foto,
-    nome: r.nome,
-    nickname: r.nickname,
-    fotoUrl: r.fotoUrl,
-    fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+    ...(anonime
+      ? {}
+      : {
+          nome: r.nome,
+          nickname: r.nickname,
+          fotoUrl: r.fotoUrl,
+          fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+        }),
     mia: r.userId === io,
     voti: vediVoti ? r.voti : null,
     vincitrice: fase === "risultati" && massimo > 0 && r.voti === massimo,
@@ -242,18 +254,19 @@ sfide.get("/:id/votazione", requireAuth, async (c) => {
     puntiVincitore: sfida.puntiVincitore,
     puntiTotali: sfida.punti + sfida.puntiVincitore, // della più votata: quelli di tutte + i suoi in più
     totaleFoto: vediTutte ? results.length : null,
-    mioVoto: mioVoto?.userId ?? null,
+    mioVoto: mioVoto?.id ?? null,
     foto,
   });
 });
 
 // Voto alla foto più bella: un voto a testa (si può cambiare finché è aperto), mai la propria.
 // Può votare ogni atleta, anche chi non ha caricato la foto, e anche la coach (Francesca).
+// Si vota per id della foto (partecipazione), così il client non sa di chi è.
 sfide.post("/:id/vota", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
-  const body = await c.req.json<{ userId?: number }>().catch(() => ({}) as { userId?: number });
-  const votato = Number(body.userId);
-  if (!Number.isInteger(votato)) return c.json({ error: "Scegli una foto da votare" }, 400);
+  const body = await c.req.json<{ fotoId?: number }>().catch(() => ({}) as { fotoId?: number });
+  const fotoId = Number(body.fotoId);
+  if (!Number.isInteger(fotoId)) return c.json({ error: "Scegli una foto da votare" }, 400);
 
   const sfida = await c.env.DB.prepare(`SELECT votazione_dal, votazione_fino, risultati_dal FROM sfide WHERE id = ?`)
     .bind(sfidaId)
@@ -262,12 +275,13 @@ sfide.post("/:id/vota", requireAuth, async (c) => {
   if (!fase) return c.json({ error: "Sfida non trovata" }, 404);
   if (fase === "caricamento") return c.json({ error: "La votazione non è ancora aperta" }, 400);
   if (fase !== "voto") return c.json({ error: "La votazione è chiusa" }, 400);
-  if (votato === c.var.user.userId) return c.json({ error: "Non puoi votare la tua foto 😉" }, 400);
 
-  const partecipa = await c.env.DB.prepare(`SELECT 1 FROM partecipazioni_sfide WHERE sfida_id = ? AND user_id = ?`)
-    .bind(sfidaId, votato)
-    .first();
-  if (!partecipa) return c.json({ error: "Questa atleta non ha caricato la foto" }, 400);
+  const partecipazione = await c.env.DB.prepare(`SELECT user_id AS userId FROM partecipazioni_sfide WHERE sfida_id = ? AND id = ?`)
+    .bind(sfidaId, fotoId)
+    .first<{ userId: number }>();
+  if (!partecipazione) return c.json({ error: "Foto non trovata" }, 400);
+  const votato = partecipazione.userId;
+  if (votato === c.var.user.userId) return c.json({ error: "Non puoi votare la tua foto 😉" }, 400);
 
   await c.env.DB.prepare(
     `INSERT INTO voti_sfide (sfida_id, votante_id, votato_id) VALUES (?, ?, ?)
@@ -276,7 +290,7 @@ sfide.post("/:id/vota", requireAuth, async (c) => {
     .bind(sfidaId, c.var.user.userId, votato)
     .run();
 
-  return c.json({ ok: true, mioVoto: votato });
+  return c.json({ ok: true, mioVoto: fotoId });
 });
 
 sfide.post("/:id/partecipa", requireAuth, async (c) => {
