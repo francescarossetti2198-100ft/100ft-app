@@ -219,6 +219,12 @@ export function montaSfide(container, { conDailyDrop = true } = {}) {
         content: "\\25BE"; color: var(--mese-accento, var(--accent)); font-size: 14px; transition: transform 0.15s ease;
       }
       #sfide-blocco .sfida-tappe[open] > summary::after { transform: rotate(180deg); }
+      #sfide-blocco .missione-dettaglio > summary { list-style: none; cursor: pointer; }
+      #sfide-blocco .missione-dettaglio > summary::-webkit-details-marker { display: none; }
+      #sfide-blocco .missione-dettaglio > summary::after {
+        content: " \\24D8"; color: var(--mute); font-size: 13px;
+      }
+      #sfide-blocco .missione-dettaglio[open] > summary::after { color: var(--mese-accento, var(--accent)); }
       #sfide-blocco .mese-arrow {
         background: none; border: none; color: var(--mute); font-size: 22px;
         line-height: 1; padding: 4px 10px; cursor: pointer; font-family: inherit;
@@ -496,14 +502,18 @@ function fotoProgressoHtml(s) {
     <div style="margin-top:6px">${puntini}</div>`;
 }
 
-// "Pausa pranzo 🍽️ — Una foto del tuo pranzo." → nome in grassetto + spiegazione sotto.
+// "Pausa pranzo 🍽️ — Una foto del tuo pranzo." → si vede solo il nome in grassetto; tocchi
+// il nome e si apre la spiegazione sotto (troppo testo tutto insieme, Francesca nov 2026).
 // Senza " — " la missione è solo il nome.
 function missioneTestoHtml(m) {
   const [nome, ...resto] = m.split(" — ");
   const spiegazione = resto.join(" — ");
-  return `<span style="font-weight:600">${nome}</span>${
-    spiegazione ? `<span class="mono" style="display:block; color:var(--mute); font-size:12px; margin-top:2px">${spiegazione}</span>` : ""
-  }`;
+  if (!spiegazione) return `<span style="font-weight:600">${nome}</span>`;
+  return `
+    <details class="missione-dettaglio">
+      <summary><span style="font-weight:600">${nome}</span></summary>
+      <span class="mono" style="display:block; color:var(--mute); font-size:12px; margin-top:4px">${spiegazione}</span>
+    </details>`;
 }
 
 // Sfida a tappe = una giornata raccontata in foto: una riga per missione. Fatta = miniatura
@@ -535,9 +545,9 @@ function missioniHtml(s) {
              <input class="missione-input" type="file" accept="image/*" capture="environment" style="position:absolute; width:1px; height:1px; opacity:0" />
            </label>`;
       return `
-        <div class="missione-riga" data-missione="${i}" style="display:flex; align-items:center; gap:10px">
+        <div class="missione-riga" data-missione="${i}" style="display:flex; align-items:flex-start; gap:10px">
           ${segno}
-          <span style="flex:1; min-width:0; font-size:14px">${missioneTestoHtml(m)}</span>
+          <span style="flex:1; min-width:0; font-size:14px; padding-top:10px">${missioneTestoHtml(m)}</span>
           ${azione}
         </div>`;
     })
