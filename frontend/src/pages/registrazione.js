@@ -1,6 +1,7 @@
 import { api, ApiError } from "../api.js";
 import { setUser } from "../auth.js";
 import { navigate } from "../router.js";
+import { passwordFieldHtml, attachPasswordToggles } from "../components/password-field.js";
 
 export function renderRegistrazione(appEl) {
   const el = document.createElement("div");
@@ -22,21 +23,15 @@ export function renderRegistrazione(appEl) {
         <input id="nickname" type="text" autocomplete="nickname" />
       </div>
       <div class="field">
-        <label for="data_nascita">Data di nascita (opzionale)</label>
-        <input id="data_nascita" type="date" autocomplete="bday" />
+        <label for="data_nascita">Data di nascita</label>
+        <input id="data_nascita" type="date" autocomplete="bday" required />
       </div>
       <div class="field">
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required />
       </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="new-password" minlength="8" required />
-      </div>
-      <div class="field">
-        <label for="conferma-password">Conferma password</label>
-        <input id="conferma-password" type="password" autocomplete="new-password" minlength="8" required />
-      </div>
+      ${passwordFieldHtml("password", "Password", "new-password", 'minlength="8" required')}
+      ${passwordFieldHtml("conferma-password", "Conferma password", "new-password", 'minlength="8" required')}
       <p class="error-text" id="registrazione-error" hidden></p>
       <button class="btn" type="submit" style="width:100%">Crea account</button>
     </form>
@@ -45,6 +40,7 @@ export function renderRegistrazione(appEl) {
     </div>
   `;
   appEl.appendChild(el);
+  attachPasswordToggles(el);
 
   const form = el.querySelector("#registrazione-form");
   const errorEl = el.querySelector("#registrazione-error");
@@ -61,6 +57,12 @@ export function renderRegistrazione(appEl) {
     const password = el.querySelector("#password").value;
     const confermaPassword = el.querySelector("#conferma-password").value;
 
+    if (!data_nascita) {
+      errorEl.textContent = "Inserisci la tua data di nascita";
+      errorEl.hidden = false;
+      return;
+    }
+
     if (password !== confermaPassword) {
       errorEl.textContent = "Le password non coincidono";
       errorEl.hidden = false;
@@ -72,11 +74,11 @@ export function renderRegistrazione(appEl) {
         nome,
         cognome,
         nickname: nickname || undefined,
-        data_nascita: data_nascita || undefined,
+        data_nascita,
         email,
         password,
       });
-      setUser({ isCoach: false, atletaId: user.id });
+      setUser({ userId: user.id, role: user.role });
       navigate("/");
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";

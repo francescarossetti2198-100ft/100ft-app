@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {},
+  "dependencies": {
+    "jspdf": "^4.2.1"
+  },
   "devDependencies": {
     "vite": "^6.0.3",
     "vite-plugin-pwa": "^0.21.1"

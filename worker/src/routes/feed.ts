@@ -1,0 +1,335 @@
+import { Hono } from "hono";
+import type { Env, SessionUser } from "../types";
+import { requireAuth, requireCoach } from "../middleware/auth";
+import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
+import { eliminaFoto } from "../lib/storage";
+
+const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉", "🖕"];
+
+type Variables = { user: SessionUser };
+const feed = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+feed.get("/", requireAuth, async (c) => {
+  // Filtri opzionali:
+  //  ?userId=N -> solo i post di quell'atleta (feed della sua scheda pubblica)
+  //  ?q=testo  -> ricerca: testo del post, nome/nickname dell'autore, o "coach" per i
+  //               post della coach (annunci + diario, che hanno user_id NULL)
+  //  ?finoA=ID -> arrivo da una notifica: oltre ai soliti 50, carica tutti i post fino a
+  //               quello (anche se è più vecchio), così il Feed può portarci sopra
+  const userIdFiltro = c.req.query("userId");
+  const finoA = Number(c.req.query("finoA")) || 0;
+  const q = (c.req.query("q") ?? "").trim();
+
+  const condizioni: string[] = [];
+  const parametri: unknown[] = [];
+
+  if (userIdFiltro && /^\d+$/.test(userIdFiltro)) {
+    condizioni.push("p.user_id = ?");
+    parametri.push(Number(userIdFiltro));
+  }
+  if (q) {
+    const like = `%${q}%`;
+    condizioni.push(
+      "(p.testo LIKE ? OR a.nome LIKE ? OR a.nickname LIKE ? OR (p.user_id IS NULL AND ? LIKE '%coach%'))"
+    );
+    parametri.push(like, like, like, q.toLowerCase());
+  }
+
+  const whereSql = condizioni.length ? `WHERE ${condizioni.join(" AND ")}` : "";
+
+  let limite = 50;
+  if (finoA) {
+    const r = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM post_feed WHERE data >= (SELECT data FROM post_feed WHERE id = ?)`
+    )
+      .bind(finoA)
+      .first<{ n: number }>();
+    limite = Math.min(Math.max(limite, (r?.n ?? 0) + 2), 400);
+  }
+
+  const { results: posts } = await c.env.DB.prepare(
+    `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
+            p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
+            p.data, p.user_id AS userId, a.nome, a.nickname,
+            a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
+     FROM post_feed p
+     LEFT JOIN athlete_profile a ON a.user_id = p.user_id
+     ${whereSql}
+     ORDER BY p.data DESC
+     LIMIT ?`
+  )
+    .bind(...parametri, limite)
+    .all<{
+      id: number;
+      tipo: string;
+      testo: string;
+      contenutoUrl: string | null;
+      allegatoUrl: string | null;
+      allegatoNome: string | null;
+      data: string;
+      userId: number | null;
+      nome: string | null;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+    }>();
+
+  // Foto della coach — i suoi post (annuncio / diario / merenda) hanno user_id NULL, quindi
+  // il LEFT JOIN sopra non la aggancia. La recuperiamo a parte e la mettiamo su quei post.
+  const coach = await c.env.DB.prepare(
+    `SELECT p.foto_url AS fotoUrl, p.foto_personalizzazione AS fotoPersonalizzazione
+     FROM users u JOIN athlete_profile p ON p.user_id = u.id
+     WHERE u.role = 'coach' LIMIT 1`
+  ).first<{ fotoUrl: string | null; fotoPersonalizzazione: string | null }>();
+
+  const idPost = posts.map((p) => p.id);
+  const reazioniPerPost = new Map<number, { emoji: string; n: number; mia: boolean }[]>();
+  const commentiPerPost = new Map<number, number>();
+
+  if (idPost.length) {
+    const segnaposto = idPost.map(() => "?").join(",");
+    const [{ results: reazioni }, { results: commenti }] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT post_id AS postId, emoji, COUNT(*) AS n,
+                MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mia
+         FROM feed_reazioni
+         WHERE post_id IN (${segnaposto})
+         GROUP BY post_id, emoji`
+      )
+        .bind(c.var.user.userId, ...idPost)
+        .all<{ postId: number; emoji: string; n: number; mia: number }>(),
+      c.env.DB.prepare(
+        `SELECT post_id AS postId, COUNT(*) AS n FROM feed_commenti WHERE post_id IN (${segnaposto}) GROUP BY post_id`
+      )
+        .bind(...idPost)
+        .all<{ postId: number; n: number }>(),
+    ]);
+
+    for (const r of reazioni) {
+      const lista = reazioniPerPost.get(r.postId) ?? [];
+      lista.push({ emoji: r.emoji, n: r.n, mia: !!r.mia });
+      reazioniPerPost.set(r.postId, lista);
+    }
+    for (const r of commenti) commentiPerPost.set(r.postId, r.n);
+  }
+
+  // Sfide con più foto (es. "2 merende"): il post nasce con l'ultima foto, quella che chiude
+  // la sfida — da lì risaliamo a tutte le foto caricate dall'atleta per quella sfida, in
+  // ordine, così il Feed le mostra a carosello. Scelta di Francesca, ott 2026.
+  // Le sfide a tappe vanno nell'ordine delle missioni (colazione → cena), non di caricamento.
+  // Le sfide a tappe ("La mia giornata") escono invece come collage: al post vanno anche le
+  // missioni e il titolo, il disegno lo fa il frontend (collage.js).
+  const fotoPerPost = new Map<string, string[]>();
+  const collagePerPost = new Map<string, { titolo: string; dataInizio: string; missioni: string[] }>();
+  // Post di una sfida di prova (sfide.solo_user_id): li vedono solo quell'atleta e la coach.
+  const postNascosti = new Set<string>();
+  const vedeTutto = c.var.user.role === "coach";
+  const urlSfide = [...new Set(posts.filter((p) => p.tipo === "sfida" && p.contenutoUrl).map((p) => p.contenutoUrl!))];
+  if (urlSfide.length) {
+    const { results: foto } = await c.env.DB.prepare(
+      `SELECT x.foto_url AS chiave, y.foto_url AS fotoUrl, s.titolo, s.data_inizio AS dataInizio, s.missioni,
+              s.solo_user_id AS soloUserId
+       FROM sfide_foto x
+       JOIN sfide_foto y ON y.sfida_id = x.sfida_id AND y.user_id = x.user_id
+       JOIN sfide s ON s.id = x.sfida_id
+       WHERE x.foto_url IN (${urlSfide.map(() => "?").join(",")})
+       ORDER BY y.missione IS NULL, y.missione, y.id`
+    )
+      .bind(...urlSfide)
+      .all<{ chiave: string; fotoUrl: string; titolo: string; dataInizio: string; missioni: string | null; soloUserId: number | null }>();
+    for (const f of foto) {
+      if (f.soloUserId != null && f.soloUserId !== c.var.user.userId && !vedeTutto) postNascosti.add(f.chiave);
+      fotoPerPost.set(f.chiave, [...(fotoPerPost.get(f.chiave) ?? []), f.fotoUrl]);
+      if (f.missioni && !collagePerPost.has(f.chiave)) {
+        collagePerPost.set(f.chiave, { titolo: f.titolo, dataInizio: f.dataInizio, missioni: JSON.parse(f.missioni) });
+      }
+    }
+  }
+
+  return c.json({
+    posts: posts.filter((p) => !p.contenutoUrl || !postNascosti.has(p.contenutoUrl)).map((p) => {
+      const daCoach = p.userId == null;
+      return {
+        ...p,
+        foto: p.contenutoUrl ? (fotoPerPost.get(p.contenutoUrl) ?? [p.contenutoUrl]) : [],
+        collage: p.contenutoUrl ? (collagePerPost.get(p.contenutoUrl) ?? null) : null,
+        fotoUrl: daCoach ? (coach?.fotoUrl ?? null) : p.fotoUrl,
+        fotoPersonalizzazione: parseFotoPersonalizzazione(
+          daCoach ? coach?.fotoPersonalizzazione : p.fotoPersonalizzazione
+        ),
+        reazioni: reazioniPerPost.get(p.id) ?? [],
+        numeroCommenti: commentiPerPost.get(p.id) ?? 0,
+      };
+    }),
+  });
+});
+
+// Chi ha reagito a un post, raggruppato per emoji — per il tap "vedi chi ha reagito".
+feed.get("/:id/reazioni", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.emoji, u.id AS userId, u.role, a.nome, a.nickname
+     FROM feed_reazioni r
+     JOIN users u ON u.id = r.user_id
+     LEFT JOIN athlete_profile a ON a.user_id = u.id
+     WHERE r.post_id = ?
+     ORDER BY r.data ASC`
+  )
+    .bind(postId)
+    .all<{ emoji: string; userId: number; role: string; nome: string | null; nickname: string | null }>();
+
+  return c.json({
+    reazioni: results.map((r) => ({
+      emoji: r.emoji,
+      userId: r.userId,
+      autore: r.role === "coach" ? "Coach" : r.nickname || r.nome || "Atleta",
+    })),
+  });
+});
+
+// Commenti di un post, in ordine cronologico.
+feed.get("/:id/commenti", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT co.id, co.testo, co.data, u.id AS userId, u.role, a.nome, a.nickname,
+            a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
+     FROM feed_commenti co
+     JOIN users u ON u.id = co.user_id
+     LEFT JOIN athlete_profile a ON a.user_id = u.id
+     WHERE co.post_id = ?
+     ORDER BY co.data ASC`
+  )
+    .bind(postId)
+    .all<{
+      id: number;
+      testo: string;
+      data: string;
+      userId: number;
+      role: string;
+      nome: string | null;
+      nickname: string | null;
+      fotoUrl: string | null;
+      fotoPersonalizzazione: string | null;
+    }>();
+
+  return c.json({
+    commenti: results.map((r) => ({
+      id: r.id,
+      testo: r.testo,
+      data: r.data,
+      userId: r.userId,
+      autore: r.role === "coach" ? "Coach" : r.nickname || r.nome || "Atleta",
+      fotoUrl: r.fotoUrl,
+      fotoPersonalizzazione: parseFotoPersonalizzazione(r.fotoPersonalizzazione),
+      puoiCancellare: r.userId === c.var.user.userId || c.var.user.role === "coach",
+    })),
+  });
+});
+
+feed.post("/:id/commenti", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  if (!Number.isInteger(postId)) return c.json({ error: "Post non valido" }, 400);
+
+  const post = await c.env.DB.prepare(`SELECT id FROM post_feed WHERE id = ?`).bind(postId).first();
+  if (!post) return c.json({ error: "Post non trovato" }, 404);
+
+  const { testo } = await c.req.json<{ testo?: string }>();
+  const pulito = testo?.trim() ?? "";
+  if (!pulito) return c.json({ error: "Scrivi qualcosa" }, 400);
+  if (pulito.length > 500) return c.json({ error: "Massimo 500 caratteri" }, 400);
+
+  await c.env.DB.prepare(`INSERT INTO feed_commenti (post_id, user_id, testo) VALUES (?, ?, ?)`)
+    .bind(postId, c.var.user.userId, pulito)
+    .run();
+
+  return c.json({ ok: true }, 201);
+});
+
+// Cancella un commento: l'autore può cancellare il proprio, la coach può cancellare
+// qualsiasi commento (moderazione).
+feed.delete("/commenti/:commentoId", requireAuth, async (c) => {
+  const id = Number(c.req.param("commentoId"));
+  if (!Number.isInteger(id)) return c.json({ error: "Commento non valido" }, 400);
+
+  const commento = await c.env.DB.prepare(`SELECT user_id AS userId FROM feed_commenti WHERE id = ?`)
+    .bind(id)
+    .first<{ userId: number }>();
+  if (!commento) return c.json({ error: "Commento non trovato" }, 404);
+  if (commento.userId !== c.var.user.userId && c.var.user.role !== "coach") {
+    return c.json({ error: "Puoi cancellare solo i tuoi commenti" }, 403);
+  }
+
+  await c.env.DB.prepare(`DELETE FROM feed_commenti WHERE id = ?`).bind(id).run();
+  return c.json({ ok: true });
+});
+
+// Toggle: se l'utente ha già reagito con questa emoji la rimuove, altrimenti la aggiunge.
+feed.post("/:id/reazioni", requireAuth, async (c) => {
+  const postId = Number(c.req.param("id"));
+  const { emoji } = await c.req.json<{ emoji?: string }>();
+  if (!emoji || !EMOJI_VALIDE.includes(emoji)) return c.json({ error: "Emoji non valida" }, 400);
+
+  const esistente = await c.env.DB.prepare(
+    `SELECT id FROM feed_reazioni WHERE post_id = ? AND user_id = ? AND emoji = ?`
+  )
+    .bind(postId, c.var.user.userId, emoji)
+    .first<{ id: number }>();
+
+  if (esistente) {
+    await c.env.DB.prepare(`DELETE FROM feed_reazioni WHERE id = ?`).bind(esistente.id).run();
+    return c.json({ ok: true, azione: "rimossa" });
+  }
+
+  await c.env.DB.prepare(`INSERT INTO feed_reazioni (post_id, user_id, emoji) VALUES (?, ?, ?)`)
+    .bind(postId, c.var.user.userId, emoji)
+    .run();
+
+  return c.json({ ok: true, azione: "aggiunta" });
+});
+
+// Cancella un post pubblicato dalla coach (annuncio, voce di diario, merenda del giorno —
+// tutti con user_id NULL). Solo quelli: i post degli atleti (sfide, daily drop, livelli...)
+// non si toccano da qui. Le reazioni se ne vanno da sole (FK ON DELETE CASCADE); la
+// foto/allegato su R2 li ripuliamo a parte, best-effort.
+feed.delete("/:id", requireCoach, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "Post non valido" }, 400);
+
+  const post = await c.env.DB.prepare(
+    `SELECT user_id AS userId, tipo, contenuto_url AS contenutoUrl, allegato_url AS allegatoUrl
+     FROM post_feed WHERE id = ?`
+  )
+    .bind(id)
+    .first<{ userId: number | null; tipo: string; contenutoUrl: string | null; allegatoUrl: string | null }>();
+
+  if (!post) return c.json({ error: "Post non trovato" }, 404);
+  // I post di compleanno li pubblica il cron col festeggiato come autore, ma restano "della
+  // coach": può toglierli se serve (es. data di nascita sbagliata).
+  if (post.userId != null && post.tipo !== "compleanno") {
+    return c.json({ error: "Puoi cancellare solo i post pubblicati da te" }, 403);
+  }
+
+  await c.env.DB.prepare(`DELETE FROM post_feed WHERE id = ?`).bind(id).run();
+
+  await Promise.all([eliminaFoto(c.env.FOTO_SFIDE, post.contenutoUrl), eliminaFoto(c.env.FOTO_SFIDE, post.allegatoUrl)]);
+
+  return c.json({ ok: true });
+});
+
+// Annunci del coach — post manuale (brief, sezione 11), user_id NULL.
+feed.post("/annuncio", requireCoach, async (c) => {
+  const { testo } = await c.req.json<{ testo?: string }>();
+  if (!testo?.trim()) return c.json({ error: "Testo obbligatorio" }, 400);
+
+  await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, testo) VALUES (NULL, 'annuncio_coach', ?)`)
+    .bind(testo.trim())
+    .run();
+
+  return c.json({ ok: true }, 201);
+});
+
+export default feed;

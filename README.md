@@ -48,22 +48,25 @@ npm run db:migrate:remote   # quando sei pronta per il database di produzione
 
 In locale, copia `worker/.dev.vars.example` in `worker/.dev.vars` e compila i valori (il file `.dev.vars` non va committato, è già in `.gitignore`).
 
-Per generare l'hash della password del coach:
+Per la produzione, imposta i secrets su Cloudflare:
 
 ```bash
-cd worker
-node scripts/hash-coach-password.mjs "la-password-che-vuole-francesca"
-```
-
-Incolla il risultato come `COACH_PASSWORD_HASH` in `.dev.vars` (locale) e, per la produzione, imposta i secrets su Cloudflare:
-
-```bash
-npx wrangler secret put COACH_PASSWORD_HASH
 npx wrangler secret put SESSION_SECRET
 npx wrangler secret put RESEND_API_KEY
 ```
 
-### 5. Avvia in locale
+### 5. Crea l'account coach
+
+Non è un secret: è una riga nella tabella `users` con ruolo `coach` (login identico agli atleti, email + password).
+
+```bash
+cd worker
+node scripts/create-coach-account.mjs "coach@esempio.it" "la-password-che-vuole-francesca"
+```
+
+Copia lo statement SQL stampato ed eseguilo con `wrangler d1 execute 100ft-db --local --command "..."` (o `--remote` in produzione).
+
+### 6. Avvia in locale
 
 In due terminali separati:
 
@@ -72,7 +75,7 @@ cd worker && npm run dev      # API su http://127.0.0.1:8787
 cd frontend && npm run dev    # PWA su http://localhost:5173 (proxy /api -> worker)
 ```
 
-Apri `http://localhost:5173`. La schermata di login chiama `/api/auth/login`; per un primo test, registra un atleta con una chiamata a `POST /api/auth/register` (non c'è ancora una UI di registrazione — vedi "Cosa manca" sotto).
+Apri `http://localhost:5173`: puoi registrarti come atleta dalla schermata di login ("Registrati") oppure accedere con l'account coach appena creato.
 
 ## Deploy
 
@@ -85,18 +88,18 @@ Il `dist/` del frontend va collegato a un progetto Cloudflare Pages (nuovo, come
 
 ## Cosa c'è già
 
-- Schema D1 completo (8 blocchi del brief + tabelle di supporto: richieste pre-allenamento, sessioni di login, token di reset password) — [`worker/migrations/0001_init.sql`](worker/migrations/0001_init.sql).
-- Autenticazione: registrazione/login atleti, login separato coach, sessioni persistenti su cookie httpOnly ("il device ricorda il login"), recupero password via Resend — [`worker/src/routes/auth.ts`](worker/src/routes/auth.ts).
+- Schema D1 allineato al brief v2 (`users`/`role` unificato per atleti e coach, profilo pubblico/privato separato, XP log, personal best, milestones, athlete of the week, feed, sfide, presenze, pagamenti + tabelle di supporto per sessioni di login e reset password) — [`worker/migrations/0001_init.sql`](worker/migrations/0001_init.sql).
+- Autenticazione: registrazione/login atleti, login coach (stesso endpoint, ruolo `coach`), sessioni persistenti su cookie httpOnly ("il device ricorda il login"), recupero/reset password via Resend — [`worker/src/routes/auth.ts`](worker/src/routes/auth.ts).
 - Hashing password con PBKDF2 via Web Crypto (nessuna dipendenza nativa, compatibile col runtime Workers).
-- Scheletro PWA con le 6 schermate del mockup (login, home, programma, sfide, feed, profilo), router e tabbar — le schermate sono per ora placeholder da riempire di logica.
+- UI complete per login, registrazione atleta, password dimenticata e reset password — [`frontend/src/pages/`](frontend/src/pages).
+- Scheletro PWA con le altre 5 schermate del mockup (home, programma, sfide, feed, profilo), router e tabbar — per ora placeholder da riempire di logica.
 - Manifest PWA (installabilità) via `vite-plugin-pwa`.
 
 ## Cosa manca (prossimi passi)
 
-- Icone PWA reali in `frontend/public/icons/` (192×192 e 512×512) — i loghi definitivi (`logo-100ft-*.png`) citati nel brief non sono ancora tra gli asset disponibili.
-- UI di registrazione atleta e di recupero/reset password (gli endpoint API ci sono già).
-- Rotte API e logica per: atleti/dati privati, programma mensile + merende fit, sessioni/presenze, sfide + classifica calcolata, feed + reazioni, feedback allenamento, pagamenti.
-- Sfida "Ricordati di bere": notifica push a orario casuale + countdown 5 minuti (richiede Durable Objects o Cron Trigger, da progettare come segnalato nel brief).
-- Sistema di livelli/medaglie (calcolo settimane cumulative, carte 512×512 già pronte in `frontend/public/cards/`).
-- Pannello admin per il coach.
-- Due domande aperte del brief da chiudere con Francesca: azzeramento livelli a inizio stagione, e se i mesi passati del programma restano consultabili.
+- Icone PWA reali in `frontend/public/icons/` (192×192 e 512×512) — i loghi ripuliti (`logo-100ft-*.png`) citati nel brief non sono ancora tra gli asset disponibili.
+- Rotte API e logica per: profilo/dati privati atleta, programma mensile + merende fit, sessioni/presenze, richieste pre-allenamento (vista aggregata pubblica + vista coach), sfide + classifiche multiple, personal best, milestones, athlete of the week, feed + reazioni, feedback allenamento, pagamenti, XP/livelli.
+- Daily Drop: notifica push a orario casuale + countdown 5 minuti, fotocamera doppia stile BeReal (richiede Durable Objects o Cron Trigger, da progettare come segnalato nel brief).
+- Sistema di livelli/medaglie (calcolo settimane cumulative, carte 512×512 già pronte in `frontend/public/cards/`) e Season System (reset stagionale a settembre).
+- Coach Dashboard (pannello admin): presenze in tempo reale, richieste con nomi, pagamenti, alert "Needs Attention".
+- Due domande aperte del brief v2 da chiudere con Francesca: se i mesi passati del programma restano consultabili, e il nome definitivo del brand.

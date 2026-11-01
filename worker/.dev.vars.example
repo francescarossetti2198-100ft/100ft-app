@@ -1,8 +1,15 @@
 FRONTEND_ORIGIN=http://localhost:5173
 SESSION_SECRET=cambia-questa-stringa-con-un-valore-casuale-lungo
-COACH_PASSWORD_HASH=
 RESEND_API_KEY=
+# Mittente delle email di reset password. DEVE usare un dominio verificato su Resend.
+# Senza dominio verificato, per i soli test verso la TUA email: "100FT <onboarding@resend.dev>"
+EMAIL_FROM=100FT <no-reply@100-ft.com>
+VAPID_PRIVATE_KEY=
 
-# Per generare COACH_PASSWORD_HASH: crea un piccolo script che importa
-# hashPassword() da worker/src/lib/password.ts e stampa il risultato,
-# poi incollalo qui (in locale) o con `wrangler secret put COACH_PASSWORD_HASH` (in produzione).
+# VAPID_PUBLIC_KEY non è un secret, sta in wrangler.toml [vars]. Per generare la coppia:
+#   node -e "..." (vedi commento in worker/src/lib/webPush.ts) e incolla qui la privata.
+
+# L'account coach non è un secret: dopo aver applicato le migrazioni, crealo con
+#   node scripts/create-coach-account.mjs "coach@esempio.it" "la-password-scelta"
+# e incolla lo statement SQL stampato in:
+#   npx wrangler d1 execute 100ft-db --local --command "..."

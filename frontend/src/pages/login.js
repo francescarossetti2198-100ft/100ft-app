@@ -1,22 +1,19 @@
 import { api, ApiError } from "../api.js";
 import { setUser } from "../auth.js";
 import { navigate } from "../router.js";
+import { passwordFieldHtml, attachPasswordToggles } from "../components/password-field.js";
 
 export function renderLogin(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
   el.innerHTML = `
-    <h1>100FT</h1>
-    <p class="mono" style="color:var(--mute)">Functional Training — Centocelle</p>
+    <h1 class="logo-100ft"><img class="logo-bianco" src="/logo-bianco.png" alt="100 Functional Training" /><img class="logo-nero" src="/logo-nero.png" alt="100 Functional Training" /></h1>
     <form id="login-form" style="margin-top:24px">
       <div class="field">
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required />
       </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" required />
-      </div>
+      ${passwordFieldHtml("password", "Password", "current-password", "required")}
       <p class="error-text" id="login-error" hidden></p>
       <button class="btn" type="submit" style="width:100%">Accedi</button>
     </form>
@@ -26,6 +23,7 @@ export function renderLogin(appEl) {
     </div>
   `;
   appEl.appendChild(el);
+  attachPasswordToggles(el);
 
   const form = el.querySelector("#login-form");
   const errorEl = el.querySelector("#login-error");
@@ -38,7 +36,7 @@ export function renderLogin(appEl) {
 
     try {
       const user = await api.post("/auth/login", { email, password });
-      setUser({ isCoach: false, atletaId: user.id });
+      setUser({ userId: user.id, role: user.role });
       navigate("/");
     } catch (err) {
       errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";

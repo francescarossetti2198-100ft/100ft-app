@@ -3,25 +3,44 @@ main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Origine del frontend Pages, per CORS + cookie di sessione.
-# Aggiorna con l'URL reale del progetto Pages appena creato.
+# Dominio custom dell'API (la zona 100-ft.com è sullo stesso account Cloudflare:
+# il record DNS e il certificato vengono creati in automatico al deploy).
+routes = [
+  { pattern = "api.100-ft.com", custom_domain = true },
+]
+
+# Origine del frontend Pages, per CORS + cookie di sessione (dominio custom su Cloudflare Pages).
 [vars]
-FRONTEND_ORIGIN = "http://localhost:5173"
+FRONTEND_ORIGIN = "https://app.100-ft.com"
+# Mittente email di reset password — deve usare un dominio verificato su Resend.
+EMAIL_FROM = "100FT <no-reply@100-ft.com>"
+# Chiave pubblica VAPID per le notifiche push (Daily Drop) — non è un segreto, il browser
+# la usa per verificare che il push arrivi da questo server. La privata sta tra i secrets.
+VAPID_PUBLIC_KEY = "BC4D7YS90_oPJgq6d1bbSLfKT5Zl5RUFm_Yc7NCwZJgwlRPgFCzlZqJgEMWZNmUGmYdfcsy1_ejey2RYieU53M8"
 
 # Database D1 — creare con: wrangler d1 create 100ft-db
 # poi incollare qui il database_id restituito.
 [[d1_databases]]
 binding = "DB"
 database_name = "100ft-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "6458022a-1450-4482-928b-b996d5f9b852"
 migrations_dir = "migrations"
 
-# Bucket R2 per le foto della sfida "Ricordati di bere" — creare con: wrangler r2 bucket create 100ft-foto
+# Bucket R2 per le foto della sfida Daily Drop — creare con: wrangler r2 bucket create 100ft-foto
 [[r2_buckets]]
 binding = "FOTO_SFIDE"
 bucket_name = "100ft-foto"
 
+
+# Cron Trigger: controlla ogni minuto se è scattato il Daily Drop e manda il push a chi è
+# iscritto — stesso orario "a sorpresa" già calcolato in lib/dailyDropOrario.ts.
+[triggers]
+crons = ["* * * * *"]
+
 # Secrets da impostare con `wrangler secret put <NOME>` (mai in questo file):
-#   SESSION_SECRET        - stringa casuale lunga, usata per firmare i cookie di sessione
-#   COACH_PASSWORD_HASH   - hash pbkdf2 della password del coach (vedi worker/src/lib/password.ts)
-#   RESEND_API_KEY        - chiave API resend.com per l'invio email di reset password
+#   SESSION_SECRET   - stringa casuale lunga, usata per firmare i cookie di sessione
+#   RESEND_API_KEY   - chiave API resend.com per l'invio email di reset password
+#   VAPID_PRIVATE_KEY - chiave privata VAPID per firmare le notifiche push (Daily Drop)
+#
+# L'account coach non è un secret: si crea come riga nella tabella `users` (ruolo "coach")
+# con worker/scripts/create-coach-account.mjs.
