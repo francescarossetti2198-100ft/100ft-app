@@ -26,7 +26,7 @@ import { adessoRoma } from "./oggi";
 // chiudi l'anello facendo tutte le sfide di quel mese.
 async function sfidePerMesePubblicate(db: D1Database): Promise<Map<string, number>> {
   const { results } = await db
-    .prepare(`SELECT substr(data_inizio, 1, 7) AS mese, COUNT(*) AS n FROM sfide GROUP BY mese`)
+    .prepare(`SELECT substr(data_inizio, 1, 7) AS mese, COUNT(*) AS n FROM sfide WHERE solo_user_id IS NULL GROUP BY mese`)
     .all<{ mese: string; n: number }>();
   return new Map(results.map((r) => [r.mese, r.n]));
 }

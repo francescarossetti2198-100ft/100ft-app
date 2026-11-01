@@ -141,6 +141,7 @@ sfide.get("/", requireAuth, async (c) => {
   // atleti (stesse sfide, flash segrete glitchate). La dashboard "Gestione sfide" non lo
   // passa e vede tutto in chiaro. Richiesta di Francesca, ott 2026.
   const comeAtleta = !isCoach || c.req.query("vista") === "atleta";
+  const io = c.var.user.userId;
 
   // Aprendo le Sfide l'atleta fa scattare le "traguardo" già maturate.
   if (!isCoach) await verificaTraguardi(c.env.DB, c.var.user.userId);
@@ -148,25 +149,44 @@ sfide.get("/", requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.flash, s.data_inizio, s.data_fine,
             s.foto_richieste AS fotoRichieste, s.votazione_dal, s.votazione_fino, s.risultati_dal,
-            s.punti_vincitore AS puntiVincitore,
+            s.punti_vincitore AS puntiVincitore, s.missioni, s.solo_user_id AS soloUserId,
             (SELECT COUNT(*) FROM sfide_foto f WHERE f.sfida_id = s.id AND f.user_id = ?) AS fotoCaricate,
+            (SELECT json_group_array(json_object('missione', f.missione, 'foto', f.foto_url, 'giorno', f.giorno)) FROM sfide_foto f
+              WHERE f.sfida_id = s.id AND f.user_id = ? AND f.missione IS NOT NULL) AS missioniFatte,
             EXISTS(SELECT 1 FROM partecipazioni_sfide p WHERE p.sfida_id = s.id AND p.user_id = ?) AS partecipato,
             (SELECT COUNT(*) FROM partecipazioni_sfide p WHERE p.sfida_id = s.id) AS numeroPartecipanti
      FROM sfide s
      ${!comeAtleta ? "" : `WHERE (s.data_inizio <= ? OR substr(s.data_inizio, 1, 7) IN
-       (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))`}
+       (SELECT printf('%04d-%02d', anno, mese) FROM programma_mensile WHERE pubblicato = 1))
+       AND (s.solo_user_id IS NULL OR s.solo_user_id = ?)`}
      ORDER BY s.data_fine DESC`
   )
-    .bind(...(!comeAtleta ? [c.var.user.userId, c.var.user.userId] : [c.var.user.userId, c.var.user.userId, oggi]))
-    .all<Record<string, unknown> & { flash: number; data_inizio: string }>();
+    // Sfida di prova (solo_user_id): agli atleti la vede solo il suo, la dashboard coach sempre.
+    .bind(...(!comeAtleta ? [io, io, io] : [io, io, io, oggi, io]))
+    .all<Record<string, unknown> & { flash: number; data_inizio: string; missioni: string | null; missioniFatte: string }>();
+
+  // Sfide a tappe: missioni come array di testi, e per ogni missione fatta la foto
+  // dell'atleta (la card la mostra come miniatura). Finché la sfida non è completata
+  // valgono solo le foto di oggi: quelle di un giorno lasciato a metà vanno rifatte.
+  const conMissioni = results.map(({ missioni, missioniFatte, ...s }) => {
+    if (!missioni) return s;
+    const fatte = JSON.parse(missioniFatte) as { missione: number; foto: string; giorno: string }[];
+    const valide = s.partecipato ? fatte : fatte.filter((f) => f.giorno === oggi);
+    return {
+      ...s,
+      missioni: JSON.parse(missioni) as string[],
+      missioniFatte: valide,
+      giornoLasciato: valide.length < fatte.length ? fatte[0].giorno : null,
+    };
+  });
 
   // Sfida flash non ancora iniziata (es. Halloween, dal 26/10): l'atleta vede che c'è, ma
   // titolo e descrizione restano segreti fino a data_inizio — tolti qui, non solo nascosti
   // dalla UI, così non si leggono nemmeno dalla risposta. Scelta di Francesca, ott 2026.
   const sfideVisibili = !comeAtleta
-    ? results
-    : results.map((s) =>
-        s.flash && s.data_inizio > oggi ? { ...s, titolo: null, descrizione: null, nascosta: 1 } : s
+    ? conMissioni
+    : conMissioni.map((s) =>
+        s.flash && s.data_inizio > oggi ? { ...s, titolo: null, descrizione: null, missioni: undefined, nascosta: 1 } : s
       );
 
   // Sfide con votazione (es. Halloween): la fase attuale, per la card.
@@ -301,16 +321,18 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   const sfidaId = Number(c.req.param("id"));
 
   const sfida = await c.env.DB.prepare(
-    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste,
+    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste, missioni, solo_user_id,
             votazione_dal, votazione_fino, risultati_dal FROM sfide WHERE id = ?`
   )
     .bind(sfidaId)
     .first<{
       id: number; titolo: string; tipo: string; punti: number; flash: number;
-      data_inizio: string; data_fine: string; foto_richieste: number;
+      data_inizio: string; data_fine: string; foto_richieste: number; missioni: string | null; solo_user_id: number | null;
       votazione_dal: string | null; votazione_fino: string | null; risultati_dal: string | null;
     }>();
-  if (!sfida) return c.json({ error: "Sfida non trovata" }, 404);
+  if (!sfida || (sfida.solo_user_id != null && sfida.solo_user_id !== c.var.user.userId)) {
+    return c.json({ error: "Sfida non trovata" }, 404);
+  }
   if (sfida.tipo === "traguardo") {
     return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
   }
@@ -338,14 +360,33 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
     return c.json({ error: "Questa sfida richiede una foto per essere convalidata" }, 400);
   }
 
+  // Sfida a tappe: ogni foto dice a quale missione risponde (indice nella lista).
+  const missioni = sfida.missioni ? (JSON.parse(sfida.missioni) as string[]) : null;
+  const missione = missioni ? Number(body.missione) : null;
+  if (missioni && (!Number.isInteger(missione) || missione! < 0 || missione! >= missioni.length)) {
+    return c.json({ error: "Missione non valida" }, 400);
+  }
+
   const fotoUrl = foto ? await salvaFoto(c.env.FOTO_SFIDE, "sfide", foto) : null;
 
   // Sfida con più foto (es. "3 merende"): ogni foto si salva in sfide_foto; finché non si
   // arriva a foto_richieste niente punti né Feed, si risponde solo col conteggio.
   if (sfida.tipo === "foto" && sfida.foto_richieste > 1 && fotoUrl) {
-    await c.env.DB.prepare(`INSERT INTO sfide_foto (sfida_id, user_id, foto_url) VALUES (?, ?, ?)`)
-      .bind(sfidaId, c.var.user.userId, fotoUrl)
+    // Sfida a tappe = una sola giornata: le foto di un giorno lasciato a metà non valgono
+    // più, si riparte da capo oggi. Scelta di Francesca, nov 2026.
+    if (missioni) {
+      await c.env.DB.prepare(
+        `DELETE FROM sfide_foto WHERE sfida_id = ? AND user_id = ? AND missione IS NOT NULL AND giorno IS NOT ?`
+      )
+        .bind(sfidaId, c.var.user.userId, oggi)
+        .run();
+    }
+    const ins = await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO sfide_foto (sfida_id, user_id, foto_url, missione, giorno) VALUES (?, ?, ?, ?, ?)`
+    )
+      .bind(sfidaId, c.var.user.userId, fotoUrl, missione, missioni ? oggi : null)
       .run();
+    if ((ins.meta.changes ?? 0) === 0) return c.json({ error: "Hai già caricato la foto di questa missione" }, 409);
     const n = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM sfide_foto WHERE sfida_id = ? AND user_id = ?`)
       .bind(sfidaId, c.var.user.userId)
       .first<{ n: number }>();
@@ -411,12 +452,18 @@ sfide.post("/", requireCoach, async (c) => {
     criterio?: string;
     flash?: boolean | number;
     foto_richieste?: number;
+    missioni?: string[];
     data_inizio?: string;
     data_fine?: string;
   }>();
   const { titolo, descrizione, tipo, criterio, data_inizio, data_fine } = body;
   const flash = body.flash ? 1 : 0;
-  const fotoRichieste = tipo === "foto" ? Number(body.foto_richieste ?? 1) : 1;
+  // Sfida a tappe: una foto per missione, quindi le missioni decidono quante foto servono.
+  const missioni =
+    tipo === "foto" && Array.isArray(body.missioni)
+      ? body.missioni.map((m) => String(m).trim()).filter(Boolean)
+      : [];
+  const fotoRichieste = tipo === "foto" ? (missioni.length || Number(body.foto_richieste ?? 1)) : 1;
 
   if (!titolo || !tipo || !data_inizio || !data_fine) {
     return c.json({ error: "Titolo, tipo, data_inizio e data_fine sono obbligatori" }, 400);
@@ -431,14 +478,17 @@ sfide.post("/", requireCoach, async (c) => {
     return c.json({ error: "La data di fine è prima di quella di inizio" }, 400);
   }
   if (!Number.isInteger(fotoRichieste) || fotoRichieste < 1 || fotoRichieste > 10) {
-    return c.json({ error: "Il numero di foto deve essere tra 1 e 10" }, 400);
+    return c.json({ error: missioni.length ? "Le missioni devono essere al massimo 10" : "Il numero di foto deve essere tra 1 e 10" }, 400);
+  }
+  if (missioni.length === 1) {
+    return c.json({ error: "Una sfida a tappe ha almeno 2 missioni" }, 400);
   }
 
   // Ogni sfida completata vale 10 punti fissi (sistema punti 2026-08) — non più deciso dal coach.
   const PUNTI_SFIDA = 10;
   const result = await c.env.DB.prepare(
-    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, foto_richieste, data_inizio, data_fine)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sfide (titolo, descrizione, tipo, criterio, punti, flash, foto_richieste, missioni, data_inizio, data_fine)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       titolo,
@@ -448,6 +498,7 @@ sfide.post("/", requireCoach, async (c) => {
       PUNTI_SFIDA,
       flash,
       fotoRichieste,
+      missioni.length ? JSON.stringify(missioni) : null,
       data_inizio,
       data_fine
     )

@@ -40,6 +40,7 @@ export async function statoBadgeMensili(
               COUNT(DISTINCT CASE WHEN p.user_id = ? THEN s.id END) AS fatte
        FROM sfide s
        LEFT JOIN partecipazioni_sfide p ON p.sfida_id = s.id
+       WHERE s.solo_user_id IS NULL
        GROUP BY substr(s.data_inizio, 1, 7)`
     )
     .bind(userId)

@@ -324,7 +324,7 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
     db
       .prepare(
         `SELECT id, titolo, flash, data_inizio AS dataInizio FROM sfide
-         WHERE data_inizio <= ? AND data_inizio >= ?`
+         WHERE data_inizio <= ? AND data_inizio >= ? AND solo_user_id IS NULL`
       )
       .bind(oggiData, da.slice(0, 10))
       .all<{ id: number; titolo: string; flash: number; dataInizio: string }>(),
@@ -568,7 +568,7 @@ async function promemoriaSfide(db: D1Database, userId: number, oggiData: string)
   const { results } = await db
     .prepare(
       `SELECT s.titolo, s.data_fine AS dataFine FROM sfide s
-       WHERE s.data_inizio <= ? AND s.data_fine >= ?
+       WHERE s.data_inizio <= ? AND s.data_fine >= ? AND s.solo_user_id IS NULL
          AND NOT EXISTS (SELECT 1 FROM partecipazioni_sfide ps WHERE ps.sfida_id = s.id AND ps.user_id = ?)
        ORDER BY s.data_fine, s.id`
     )

@@ -39,14 +39,14 @@ export function stagioneCorrente(now: Date = adessoRoma()): number {
 async function conteggiBlocco(db: D1Database, userId: number, stagione: number, blocco: Blocco) {
   const [min, max] = intervalloBlocco(stagione, blocco);
   const totale = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sfide WHERE data_inizio BETWEEN ? AND ?`)
+    .prepare(`SELECT COUNT(*) AS n FROM sfide WHERE data_inizio BETWEEN ? AND ? AND solo_user_id IS NULL`)
     .bind(min, max)
     .first<{ n: number }>();
   const fatte = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM partecipazioni_sfide ps
        JOIN sfide s ON s.id = ps.sfida_id
-       WHERE ps.user_id = ? AND s.data_inizio BETWEEN ? AND ?`
+       WHERE ps.user_id = ? AND s.data_inizio BETWEEN ? AND ? AND s.solo_user_id IS NULL`
     )
     .bind(userId, min, max)
     .first<{ n: number }>();

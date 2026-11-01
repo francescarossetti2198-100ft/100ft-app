@@ -172,10 +172,10 @@ export async function verificaBonusMese(db: D1Database, userId: number, meseKey:
   const c = await db
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM sfide WHERE substr(data_inizio, 1, 7) = ?) AS totali,
+         (SELECT COUNT(*) FROM sfide WHERE substr(data_inizio, 1, 7) = ? AND solo_user_id IS NULL) AS totali,
          (SELECT COUNT(*) FROM sfide s
            JOIN partecipazioni_sfide p ON p.sfida_id = s.id
-          WHERE substr(s.data_inizio, 1, 7) = ? AND p.user_id = ?) AS fatte`
+          WHERE substr(s.data_inizio, 1, 7) = ? AND p.user_id = ? AND s.solo_user_id IS NULL) AS fatte`
     )
     .bind(meseKey, meseKey, userId)
     .first<{ totali: number; fatte: number }>();

@@ -116,27 +116,43 @@ feed.get("/", requireAuth, async (c) => {
   // Sfide con più foto (es. "2 merende"): il post nasce con l'ultima foto, quella che chiude
   // la sfida — da lì risaliamo a tutte le foto caricate dall'atleta per quella sfida, in
   // ordine, così il Feed le mostra a carosello. Scelta di Francesca, ott 2026.
+  // Le sfide a tappe vanno nell'ordine delle missioni (colazione → cena), non di caricamento.
+  // Le sfide a tappe ("La mia giornata") escono invece come collage: al post vanno anche le
+  // missioni e il titolo, il disegno lo fa il frontend (collage.js).
   const fotoPerPost = new Map<string, string[]>();
+  const collagePerPost = new Map<string, { titolo: string; dataInizio: string; missioni: string[] }>();
+  // Post di una sfida di prova (sfide.solo_user_id): li vedono solo quell'atleta e la coach.
+  const postNascosti = new Set<string>();
+  const vedeTutto = c.var.user.role === "coach";
   const urlSfide = [...new Set(posts.filter((p) => p.tipo === "sfida" && p.contenutoUrl).map((p) => p.contenutoUrl!))];
   if (urlSfide.length) {
     const { results: foto } = await c.env.DB.prepare(
-      `SELECT x.foto_url AS chiave, y.foto_url AS fotoUrl
+      `SELECT x.foto_url AS chiave, y.foto_url AS fotoUrl, s.titolo, s.data_inizio AS dataInizio, s.missioni,
+              s.solo_user_id AS soloUserId
        FROM sfide_foto x
        JOIN sfide_foto y ON y.sfida_id = x.sfida_id AND y.user_id = x.user_id
+       JOIN sfide s ON s.id = x.sfida_id
        WHERE x.foto_url IN (${urlSfide.map(() => "?").join(",")})
-       ORDER BY y.id`
+       ORDER BY y.missione IS NULL, y.missione, y.id`
     )
       .bind(...urlSfide)
-      .all<{ chiave: string; fotoUrl: string }>();
-    for (const f of foto) fotoPerPost.set(f.chiave, [...(fotoPerPost.get(f.chiave) ?? []), f.fotoUrl]);
+      .all<{ chiave: string; fotoUrl: string; titolo: string; dataInizio: string; missioni: string | null; soloUserId: number | null }>();
+    for (const f of foto) {
+      if (f.soloUserId != null && f.soloUserId !== c.var.user.userId && !vedeTutto) postNascosti.add(f.chiave);
+      fotoPerPost.set(f.chiave, [...(fotoPerPost.get(f.chiave) ?? []), f.fotoUrl]);
+      if (f.missioni && !collagePerPost.has(f.chiave)) {
+        collagePerPost.set(f.chiave, { titolo: f.titolo, dataInizio: f.dataInizio, missioni: JSON.parse(f.missioni) });
+      }
+    }
   }
 
   return c.json({
-    posts: posts.map((p) => {
+    posts: posts.filter((p) => !p.contenutoUrl || !postNascosti.has(p.contenutoUrl)).map((p) => {
       const daCoach = p.userId == null;
       return {
         ...p,
         foto: p.contenutoUrl ? (fotoPerPost.get(p.contenutoUrl) ?? [p.contenutoUrl]) : [],
+        collage: p.contenutoUrl ? (collagePerPost.get(p.contenutoUrl) ?? null) : null,
         fotoUrl: daCoach ? (coach?.fotoUrl ?? null) : p.fotoUrl,
         fotoPersonalizzazione: parseFotoPersonalizzazione(
           daCoach ? coach?.fotoPersonalizzazione : p.fotoPersonalizzazione

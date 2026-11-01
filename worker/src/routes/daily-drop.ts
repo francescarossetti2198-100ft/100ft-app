@@ -23,6 +23,7 @@ import { verificaTraguardi } from "../lib/traguardi";
 // in overlay) resta semplificata a una singola foto.
 type Variables = { user: SessionUser };
 const dailyDrop = new Hono<{ Bindings: Env; Variables: Variables }>();
+const MAX_DIDASCALIA = 280;
 
 // La coach ha aperto una simulazione per questo utente e non è ancora scaduta?
 async function simulazioneAttiva(env: Env, userId: number): Promise<boolean> {
@@ -85,11 +86,16 @@ dailyDrop.post("/", requireAuth, async (c) => {
   const body = await c.req.parseBody();
   const foto = body.foto instanceof File ? body.foto : null;
   if (!foto) return c.json({ error: "Serve una foto per rispondere" }, 400);
+  // Didascalia facoltativa scritta dall'atleta (nov 2026): diventa il testo del post nel Feed.
+  const didascalia = typeof body.testo === "string" ? body.testo.trim() : "";
+  if (didascalia.length > MAX_DIDASCALIA) {
+    return c.json({ error: `Il testo può avere al massimo ${MAX_DIDASCALIA} caratteri` }, 400);
+  }
 
   const fotoUrl = await salvaFoto(c.env.FOTO_SFIDE, "daily-drop", foto);
 
   await c.env.DB.prepare(`INSERT INTO post_feed (user_id, tipo, contenuto_url, testo) VALUES (?, 'daily_drop', ?, ?)`)
-    .bind(c.var.user.userId, fotoUrl, "ha risposto al Daily Drop")
+    .bind(c.var.user.userId, fotoUrl, didascalia || "ha risposto al Daily Drop")
     .run();
 
   // +5 punti alla pubblicazione (sistema punti 2026-08).

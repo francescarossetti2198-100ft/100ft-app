@@ -28,6 +28,8 @@ export const esc = (s) =>
 
 // Riga leggibile per una sfida nell'elenco della dashboard.
 export function descriviSfida(s) {
+  if (s.soloUserId) return `🧪 Solo prova (un atleta) · ${descriviSfida({ ...s, soloUserId: null })}`;
+  if (s.tipo === "foto" && Array.isArray(s.missioni)) return `🗺️ A tappe — ${s.missioni.length} missioni`;
   if (s.tipo === "foto") return s.fotoRichieste > 1 ? `📸 ${s.fotoRichieste} foto` : "📸 Foto";
   if (s.tipo !== "traguardo") return "👋 Di gruppo";
   const c = s.criterio || "";
@@ -1100,6 +1102,8 @@ export function initSfida(el) {
   const criterioN = el.querySelector("#sfida-criterio-n");
   const fotoNWrap = el.querySelector("#sfida-foto-n-wrap");
   const fotoN = el.querySelector("#sfida-foto-n");
+  const missioniWrap = el.querySelector("#sfida-missioni-wrap");
+  const missioniInput = el.querySelector("#sfida-missioni");
   const flashChk = el.querySelector("#sfida-flash");
   const meseSel = el.querySelector("#sfida-mese");
   const annoInput = el.querySelector("#sfida-anno");
@@ -1186,11 +1190,15 @@ export function initSfida(el) {
   const aggiornaCriterio = () => {
     // `.field` ha display:flex, che vince su [hidden] -> uso style.display.
     criterioWrap.style.display = tipoSel.value === "traguardo" ? "" : "none";
-    fotoNWrap.style.display = tipoSel.value === "foto" ? "" : "none";
+    // Con le missioni le foto sono una per missione: il numero di foto sparisce.
+    const conMissioni = missioniInput.value.trim() !== "";
+    fotoNWrap.style.display = tipoSel.value === "foto" && !conMissioni ? "" : "none";
+    missioniWrap.style.display = tipoSel.value === "foto" ? "" : "none";
     criterioN.hidden = !(tipoSel.value === "traguardo" && ["presenze", "daily_drop_n"].includes(criterioSel.value));
   };
   tipoSel.addEventListener("change", aggiornaCriterio);
   criterioSel.addEventListener("change", aggiornaCriterio);
+  missioniInput.addEventListener("input", aggiornaCriterio);
   aggiornaCriterio();
 
   // Spuntando "sfida lampo" apro le date precise e propongo i prossimi 7 giorni.
@@ -1252,6 +1260,7 @@ export function initSfida(el) {
         criterio,
         flash: flashChk.checked ? 1 : 0,
         foto_richieste: tipo === "foto" ? Number(fotoN.value) || 1 : undefined,
+        missioni: tipo === "foto" ? missioniInput.value.split("\n").map((m) => m.trim()).filter(Boolean) : undefined,
         data_inizio: dataInizio,
         data_fine: dataFine,
       });
@@ -1260,6 +1269,8 @@ export function initSfida(el) {
       el.querySelector("#sfida-descrizione").value = "";
       flashChk.checked = false;
       fotoN.value = "1";
+      missioniInput.value = "";
+      aggiornaCriterio();
       inizioInput.value = "";
       fineInput.value = "";
       datePrecise.open = false;

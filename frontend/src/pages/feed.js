@@ -4,6 +4,7 @@ import { fotoProfiloHtml } from "./profilo.js";
 import { getUser } from "../auth.js";
 import { currentQuery } from "../router.js";
 import { trofeoUrl } from "../badge-mensili.js";
+import { collageHtml, scaricaCollageHtml, attachCollage } from "../collage.js";
 
 const TIPO_INFO = {
   level_up: { icona: "🎉", azione: "ha raggiunto un nuovo livello" },
@@ -38,7 +39,14 @@ function datiVittoria(p) {
 }
 // Foto del post: una sola → immagine piena; più foto (sfide tipo "2 merende") → carosello
 // a scorrimento orizzontale con i pallini sotto (aggiornati in montaFeed allo scroll).
+// Sfida a tappe ("La mia giornata") → collage numerato al posto del carosello.
 function fotoPostHtml(p) {
+  if (p.collage) {
+    // Il proprio collage si può scaricare anche da qui.
+    const dati = { ...p.collage, foto: p.foto };
+    const mio = p.userId != null && p.userId === getUser()?.userId;
+    return `<div style="margin-top:10px">${collageHtml(dati)}${mio ? scaricaCollageHtml(dati) : ""}</div>`;
+  }
   const foto = p.foto?.length ? p.foto : p.contenutoUrl ? [p.contenutoUrl] : [];
   if (!foto.length) return "";
   const img = (url) =>
@@ -418,6 +426,8 @@ export async function montaFeed(list, opts = {}) {
         `;
       })
       .join("");
+
+    attachCollage(list);
 
     // Carosello stile Instagram: swipe di lato, oppure le frecce ‹ › (per chi non scorre).
     // Contatore "1/2", pallini e frecce seguono la foto visibile.

@@ -32,6 +32,10 @@ export function renderCoachSfide(appEl) {
             <label>Quante foto servono per completarla</label>
             <input id="sfida-foto-n" type="number" min="1" max="10" value="1" style="${SEL_STYLE}" />
           </div>
+          <div class="field" id="sfida-missioni-wrap">
+            <label>Missioni — facoltative, una per riga (es. Pausa pranzo 🍽️ — Una foto del tuo pranzo)</label>
+            <textarea id="sfida-missioni" rows="4" placeholder="Lascia vuoto per una sfida foto normale" style="${SEL_STYLE}"></textarea>
+          </div>
           <div class="field" id="sfida-criterio-wrap" style="display:none">
             <label>Si completa quando l'atleta…</label>
             <select id="sfida-criterio" style="${SEL_STYLE}">

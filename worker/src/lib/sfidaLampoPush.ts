@@ -15,7 +15,7 @@ export async function inviaPushSfidaLampoSeAttivo(env: Env): Promise<void> {
 
   const { results: sfide } = await env.DB.prepare(
     `SELECT id, titolo FROM sfide
-     WHERE flash = 1 AND push_lampo_inviata = 0 AND data_inizio <= ? AND data_fine >= ?`
+     WHERE flash = 1 AND push_lampo_inviata = 0 AND data_inizio <= ? AND data_fine >= ? AND solo_user_id IS NULL`
   )
     .bind(oggi, oggi)
     .all<{ id: number; titolo: string }>();

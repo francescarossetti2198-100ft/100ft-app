@@ -1,6 +1,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { getUser } from "../auth.js";
+import { collageHtml, scaricaCollageHtml, attachCollage } from "../collage.js";
 
 const TIPO_LABEL = {
   presenza: "Sfida di gruppo",
@@ -208,8 +209,16 @@ export function montaSfide(container, { conDailyDrop = true } = {}) {
       #sfide-blocco .tendina-btn { color: var(--mese-accento, var(--accent)); }
       #sfide-blocco .sfida-item { padding: 14px 0; border-top: 1px solid var(--border); }
       #sfide-blocco .sfida-item:first-of-type { border-top: none; padding-top: 2px; }
+      /* La tendina a tappe è un <details>: il primo <div> dopo di lei non è il primo della lista. */
+      #sfide-blocco details.sfida-item ~ div.sfida-item { border-top: 1px solid var(--border); padding-top: 14px; }
       /* Sfida completata: sembra archiviata e riuscita, senza stravolgere lo stile. */
       #sfide-blocco .sfida-item.done { opacity: 0.5; }
+      #sfide-blocco .sfida-tappe > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; }
+      #sfide-blocco .sfida-tappe > summary::-webkit-details-marker { display: none; }
+      #sfide-blocco .sfida-tappe > summary::after {
+        content: "\\25BE"; color: var(--mese-accento, var(--accent)); font-size: 14px; transition: transform 0.15s ease;
+      }
+      #sfide-blocco .sfida-tappe[open] > summary::after { transform: rotate(180deg); }
       #sfide-blocco .mese-arrow {
         background: none; border: none; color: var(--mute); font-size: 22px;
         line-height: 1; padding: 4px 10px; cursor: pointer; font-family: inherit;
@@ -272,6 +281,9 @@ async function loadDailyDrop(el) {
       <p style="margin-top:6px">Una foto al volo, ovunque tu sia in questo momento.</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
       ${fotoInputHtml("dd-foto")}
+      <textarea id="dd-testo" rows="2" maxlength="280" placeholder="Scrivi qualcosa da mettere nel Feed (facoltativo)"
+        style="width:100%; margin-top:10px; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+               background:var(--surface-2); color:var(--text); font:inherit; font-size:14px; resize:vertical"></textarea>
       <p class="error-text" id="dd-error" hidden style="margin-top:6px"></p>
       <button class="btn" id="dd-submit" style="width:100%; margin-top:10px">Rispondi</button>
     `;
@@ -292,6 +304,7 @@ async function loadDailyDrop(el) {
       e.target.disabled = true;
       const formData = new FormData();
       formData.append("foto", input.files[0]);
+      formData.append("testo", card.querySelector("#dd-testo").value.trim());
       try {
         await api.postForm("/daily-drop", formData);
         loadDailyDrop(el);
@@ -483,6 +496,61 @@ function fotoProgressoHtml(s) {
     <div style="margin-top:6px">${puntini}</div>`;
 }
 
+// "Pausa pranzo 🍽️ — Una foto del tuo pranzo." → nome in grassetto + spiegazione sotto.
+// Senza " — " la missione è solo il nome.
+function missioneTestoHtml(m) {
+  const [nome, ...resto] = m.split(" — ");
+  const spiegazione = resto.join(" — ");
+  return `<span style="font-weight:600">${nome}</span>${
+    spiegazione ? `<span class="mono" style="display:block; color:var(--mute); font-size:12px; margin-top:2px">${spiegazione}</span>` : ""
+  }`;
+}
+
+// Sfida a tappe = una giornata raccontata in foto: una riga per missione. Fatta = miniatura
+// della foto + ✓; da fare = bottone 📷 che apre la fotocamera (niente galleria: le foto si
+// scattano dall'app, quel giorno) e carica subito (attachMissioni). Completata → collage.
+function missioniHtml(s) {
+  const fatte = new Map(s.missioniFatte.map((f) => [f.missione, f.foto]));
+  if (s.partecipato) {
+    const dati = { titolo: s.titolo, dataInizio: s.data_inizio, missioni: s.missioni, foto: s.missioni.map((_, i) => fatte.get(i)) };
+    return `<div style="margin-top:12px">${collageHtml(dati)}</div>${scaricaCollageHtml(dati)}`;
+  }
+  const gg = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const avviso = s.giornoLasciato
+    ? `Il ${gg(s.giornoLasciato)} non avevi finito: le foto di quel giorno non valgono più, oggi si riparte da capo.`
+    : fatte.size
+      ? "Oggi è la tua giornata: scatta le foto che mancano entro mezzanotte!"
+      : `Scegli un giorno di allenamento e scatta le ${s.missioni.length} foto dall'app, tutte lo stesso giorno. Se non finisci, un altro giorno si riparte da capo.`;
+  const righe = s.missioni
+    .map((m, i) => {
+      const foto = fatte.get(i);
+      const segno = foto
+        ? `<img src="${mediaUrl(foto)}" alt="" loading="lazy" style="width:40px; height:40px; object-fit:cover; border-radius:8px; flex:0 0 auto" />`
+        : `<span style="width:40px; height:40px; border-radius:8px; flex:0 0 auto; border:2px dashed var(--border)"></span>`;
+      const azione = foto
+        ? `<span style="color:var(--livello-1); font-weight:600">✓</span>`
+        : `<label class="foto-btn" style="position:relative; flex:0 0 auto; padding:8px 12px; border-radius:10px;
+                  background:var(--surface-2); color:var(--text); font-weight:600; font-size:14px; cursor:pointer">
+             <span class="missione-txt">📷 Scatta</span>
+             <input class="missione-input" type="file" accept="image/*" capture="environment" style="position:absolute; width:1px; height:1px; opacity:0" />
+           </label>`;
+      return `
+        <div class="missione-riga" data-missione="${i}" style="display:flex; align-items:center; gap:10px">
+          ${segno}
+          <span style="flex:1; min-width:0; font-size:14px">${missioneTestoHtml(m)}</span>
+          ${azione}
+        </div>`;
+    })
+    .join("");
+  return `
+    <p class="mono" style="font-size:12px; margin-top:10px; padding:8px 10px; border-radius:8px; background:var(--surface-2)">📅 ${avviso}</p>
+    <p class="mono" style="font-size:13px; margin-top:10px">
+      Missioni completate: <strong>${fatte.size} di ${s.missioni.length}</strong>
+    </p>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px">${righe}</div>
+    <p class="error-text foto-error" hidden style="margin-top:6px"></p>`;
+}
+
 // Una singola sfida come riga dentro la card del mese. Le completate restano visibili
 // ma "archiviate" (classe .done -> opacità ridotta + esito riuscito).
 function sfidaItemHtml(s, oggi) {
@@ -505,7 +573,17 @@ function sfidaItemHtml(s, oggi) {
   const nonIniziata = s.data_inizio > oggi;
   const done = !!s.partecipato;
   const isCoach = getUser()?.role === "coach";
-  const azione = done
+  const aTappe = s.tipo === "foto" && Array.isArray(s.missioni);
+  const conRighe = aTappe && !isCoach && (done || (!scaduta && !nonIniziata));
+  // Coach o sfida chiusa: le missioni solo come elenco, senza caricamento.
+  const elencoMissioni = aTappe && !conRighe
+    ? `<ul class="mono" style="font-size:13px; margin:8px 0 0; padding-left:18px">${s.missioni.map((m) => `<li style="margin-top:4px">${missioneTestoHtml(m)}</li>`).join("")}</ul>`
+    : "";
+  const azione = conRighe
+    ? `${missioniHtml(s)}${
+        done ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>` : ""
+      }`
+    : done
     ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>`
     : scaduta
       ? `<button class="btn" style="width:100%; margin-top:10px" disabled>Sfida terminata</button>`
@@ -526,6 +604,29 @@ function sfidaItemHtml(s, oggi) {
         `
             : `<button class="btn partecipa-btn" style="width:100%; margin-top:10px">Partecipa</button>`;
 
+  // Sfida a tappe: testo lungo, quindi a tendina (chiusa di default) — dalla riga chiusa si
+  // vedono titolo, punti e a che punto sei. Richiesta di Francesca, nov 2026.
+  if (aTappe) {
+    const stato = done
+      ? `<span style="color:var(--livello-1)">✓ Completata</span>`
+      : conRighe ? `${s.missioniFatte.length}/${s.missioni.length} missioni` : `${s.missioni.length} missioni`;
+    return `
+      <details class="sfida-item sfida-tappe" data-id="${s.id}" data-tipo="${s.tipo}"${tappeAperte.has(s.id) ? " open" : ""}>
+        <summary>
+          <span style="flex:1; min-width:0">
+            <span class="mono" style="display:block; color:var(--mute); font-size:11px">${TIPO_LABEL[s.tipo] ?? s.tipo} · A TAPPE</span>
+            <span style="display:block; font-weight:600; margin-top:2px">${s.titolo}</span>
+            <span class="mono" style="display:block; color:var(--accent); font-size:13px; margin-top:6px">+${s.punti} PT · ${stato}</span>
+          </span>
+        </summary>
+        ${s.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px">${s.descrizione}</p>` : ""}
+        ${elencoMissioni}
+        <p class="mono" style="color:var(--mute); font-size:12px; margin-top:8px">${s.numeroPartecipanti} partecipanti</p>
+        ${azione}
+      </details>
+    `;
+  }
+
   return `
     <div class="sfida-item${done ? " done" : ""}" data-id="${s.id}" data-tipo="${s.tipo}">
       <p class="mono" style="color:var(--mute); font-size:11px">${
@@ -533,6 +634,7 @@ function sfidaItemHtml(s, oggi) {
       }${TIPO_LABEL[s.tipo] ?? s.tipo}${done ? " · ARCHIVIATA" : ""}</p>
       <p style="font-weight:600; margin-top:2px">${s.titolo}</p>
       ${s.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">${s.descrizione}</p>` : ""}
+      ${elencoMissioni}
       <p class="mono" style="color:var(--accent); font-size:13px; margin-top:8px">+${s.punti} PT · ${s.numeroPartecipanti} partecipanti</p>
       ${azione}
     </div>
@@ -694,6 +796,49 @@ function attachVotazione(container) {
   container.querySelectorAll(".vota-box").forEach((box) => disegnaVotazione(box));
 }
 
+// Tendine delle sfide a tappe aperte: la pagina si ridisegna a ogni foto caricata, così
+// restano aperte invece di richiudersi sotto il dito.
+const tappeAperte = new Set();
+
+// Sfida a tappe: scelta la foto di una missione la carica subito, senza bottone di conferma.
+function attachMissioni(container, el, onDone) {
+  container.querySelectorAll(".sfida-tappe").forEach((d) => {
+    d.addEventListener("toggle", () => {
+      const id = Number(d.dataset.id);
+      if (d.open) tappeAperte.add(id);
+      else tappeAperte.delete(id);
+    });
+  });
+  attachCollage(container);
+  container.querySelectorAll(".missione-input").forEach((input) => {
+    input.addEventListener("change", async () => {
+      if (!input.files[0]) return;
+      const cardEl = input.closest("[data-id]");
+      const riga = input.closest(".missione-riga");
+      const errorEl = cardEl.querySelector(".foto-error");
+      const txt = riga.querySelector(".missione-txt");
+      errorEl.hidden = true;
+      txt.textContent = "Carico...";
+      input.disabled = true;
+
+      const formData = new FormData();
+      formData.append("foto", input.files[0]);
+      formData.append("missione", riga.dataset.missione);
+      try {
+        const r = await api.postForm(`/sfide/${cardEl.dataset.id}/partecipa`, formData);
+        if (r?.completata) loadClassifica(el, "mese");
+        onDone();
+      } catch (err) {
+        errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errorEl.hidden = false;
+        txt.textContent = "📷 Scatta";
+        input.disabled = false;
+        input.value = "";
+      }
+    });
+  });
+}
+
 function attachPartecipa(container, el, onDone) {
   container.querySelectorAll(".partecipa-btn").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
@@ -799,7 +944,11 @@ function sfideExtraHtml(righe) {
         ${r.descrizione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px; line-height:1.5">${esc(r.descrizione)}</p>` : ""}
         ${r.punti ? `<span class="mono extra-pill">+${r.punti} PT</span>` : ""}
         ${r.data ? `<span class="mono" style="color:var(--mute); font-size:12px; margin-left:${r.punti ? 8 : 0}px">il ${dd(r.data)}</span>` : ""}
-        ${r.foto ? azioneFoto(r) : ""}
+        ${r.foto
+          ? azioneFoto(r)
+          : r.fatta
+            ? `<p class="mono" style="color:var(--mese-accento, var(--accent)); font-size:13px; margin-top:10px">✓ Completata</p>`
+            : ""}
       </div>`
       )
       .join("")}`;
@@ -994,6 +1143,7 @@ async function loadSfide(el, meseVoluto) {
     });
 
     attachPartecipa(track, el, () => loadSfide(el, mesi[idx]));
+    attachMissioni(track, el, () => loadSfide(el, mesi[idx]));
     attachFotoInput(track);
     attachVotazione(track);
     aggiornaToggle();
