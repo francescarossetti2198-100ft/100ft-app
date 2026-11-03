@@ -106,16 +106,25 @@ export function renderCoachPuntiExtra(appEl) {
           esito.style.color = "var(--livello-5)";
           return;
         }
+        // Bottoni bloccati mentre salva e per un attimo dopo il ✓: i tocchi ripetuti
+        // assegnavano i punti più volte (es. sei +5 di fila a un atleta, nov 2026).
+        const bottoni = row.querySelectorAll(".pe-quick, .pe-assegna");
+        bottoni.forEach((b) => (b.disabled = true));
+        esito.textContent = "Salvo...";
+        let pausa = 0;
         try {
           await api.post("/punti-extra", { userId: a.userId, punti, motivo: motivoInput.value.trim() });
           esito.textContent = `+${punti} ✓`;
           esito.style.color = "var(--livello-1)";
           nInput.value = "";
           motivoInput.value = "";
+          pausa = 1500;
           await caricaStorico();
         } catch (err) {
           esito.textContent = err instanceof ApiError ? err.message : "Errore";
           esito.style.color = "var(--livello-5)";
+        } finally {
+          setTimeout(() => bottoni.forEach((b) => (b.disabled = false)), pausa);
         }
       }
 
