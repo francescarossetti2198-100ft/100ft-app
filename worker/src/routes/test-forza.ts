@@ -8,9 +8,9 @@ type Variables = { user: SessionUser };
 const testForza = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-// Giorni dopo il test in cui l'atleta può ancora inserire o correggere i risultati
-// (chi non li segna in sala li mette a casa, anche il giorno dopo).
-const GIORNI_PER_INSERIRE = 2;
+// Giorni dopo il test in cui l'atleta può ancora inserire o correggere i risultati.
+// 0 = solo il giorno del test (scelta di Francesca, nov 2026: "solo oggi, non tutti i giorni").
+const GIORNI_PER_INSERIRE = 0;
 
 // Giorno di test "aperto" per l'atleta: il più recente segnato dalla coach nel Diario,
 // tra oggi e GIORNI_PER_INSERIRE giorni fa (ora di Roma).
