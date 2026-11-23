@@ -3,6 +3,7 @@
 import { api, ApiError, mediaUrl } from "../api.js";
 import { etichettaCategoria } from "../richieste-categorie.js";
 import { PIANI } from "../abbonamenti.js";
+import { TEST_FORZA, valoreLeggibile } from "../test-forza.js";
 
 export const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -215,6 +216,15 @@ export function initDiario(el) {
       <textarea class="diario-nota" rows="2" placeholder="Nota (opzionale)"
         style="${inputStile}; resize:vertical">${esc(g.nota || "")}</textarea>
 
+      <label style="font-size:13px; display:flex; gap:8px; align-items:center">
+        <input type="checkbox" class="diario-test" ${g.testForza ? "checked" : ""} />
+        🏁 Giorno di test di forza <span class="mono" style="color:var(--mute); font-size:11px">(gli atleti inseriscono i risultati in Home)</span>
+      </label>
+      <div class="diario-test-box" style="${g.testForza ? "" : "display:none"}">
+        <button type="button" class="link-btn diario-test-vedi">Vedi i risultati</button>
+        <div class="diario-test-tabella" style="margin-top:6px"></div>
+      </div>
+
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
         <label class="link-btn" style="cursor:pointer">
           <span class="diario-file-testo">${g.fileNome ? "Cambia scheda" : "Allega scheda (PDF/Word)"}</span>
@@ -267,6 +277,35 @@ export function initDiario(el) {
     const pubConferma = row.querySelector(".diario-pub-conferma");
 
     const mostraErrore = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
+
+    const testCheck = row.querySelector(".diario-test");
+    const testBox = row.querySelector(".diario-test-box");
+    const testTabella = row.querySelector(".diario-test-tabella");
+
+    testCheck.addEventListener("change", async () => {
+      errEl.hidden = true;
+      testCheck.disabled = true;
+      try {
+        const r = await api.post(`/diario/${g.data}/test-forza`, { attivo: testCheck.checked });
+        g.testForza = r.testForza;
+        testBox.style.display = g.testForza ? "" : "none";
+      } catch (err) {
+        testCheck.checked = !testCheck.checked;
+        mostraErrore(err instanceof ApiError ? err.message : "Errore imprevisto");
+      } finally {
+        testCheck.disabled = false;
+      }
+    });
+
+    row.querySelector(".diario-test-vedi").addEventListener("click", async () => {
+      testTabella.innerHTML = `<p class="mono" style="color:var(--mute); font-size:12px">Carico...</p>`;
+      try {
+        const { atleti } = await api.get(`/test-forza/coach/${g.data}`);
+        testTabella.innerHTML = tabellaTestForza(atleti);
+      } catch (err) {
+        testTabella.innerHTML = `<p class="error-text">${err instanceof ApiError ? err.message : "Errore imprevisto"}</p>`;
+      }
+    });
 
     salvaBtn.addEventListener("click", async () => {
       errEl.hidden = true;
@@ -421,6 +460,39 @@ export function initDiario(el) {
   meseSel.addEventListener("change", carica);
   annoInput.addEventListener("change", carica);
   carica();
+}
+
+// Tabella dei test di forza di un giorno: una riga per atleta, una colonna per test
+// (valore principale + dettagli sotto, es. "sulle ginocchia", "12 kg"). Scorre in orizzontale.
+function tabellaTestForza(atleti) {
+  const fatti = atleti.filter((a) => a.risultati);
+  const cella = (t, ris) => {
+    const [princ, ...extra] = t.campi.map((c) => valoreLeggibile(c, ris?.[c.chiave]));
+    const sotto = extra.filter(Boolean).map(esc).join(" · ");
+    return `<td style="padding:6px 8px; border-top:1px solid var(--border); white-space:nowrap; vertical-align:top">
+      <strong>${esc(princ) || "—"}</strong>${sotto ? `<br><span class="mono" style="color:var(--mute); font-size:10px">${sotto}</span>` : ""}
+    </td>`;
+  };
+  return `
+    <p class="mono" style="color:var(--mute); font-size:11px">${fatti.length} su ${atleti.length} atleti hanno inserito i risultati</p>
+    <div style="overflow-x:auto; margin-top:6px">
+      <table style="border-collapse:collapse; font-size:12px; min-width:100%">
+        <thead><tr>
+          <th style="text-align:left; padding:6px 8px">Atleta</th>
+          ${TEST_FORZA.map((t) => `<th style="text-align:left; padding:6px 8px; white-space:nowrap">${t.emoji} ${esc(t.nome)}</th>`).join("")}
+        </tr></thead>
+        <tbody>
+          ${atleti
+            .map(
+              (a) => `<tr style="${a.risultati ? "" : "opacity:.45"}">
+                <td style="padding:6px 8px; border-top:1px solid var(--border); white-space:nowrap">${esc(a.nickname || a.nome)}</td>
+                ${TEST_FORZA.map((t) => cella(t, a.risultati)).join("")}
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 // Storico allenamenti per il coach: per ogni giorno, chi c'era (esito appello o prenotazione)

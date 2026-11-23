@@ -27,6 +27,7 @@ import puntiExtra from "./routes/punti-extra";
 import sfideExtra from "./routes/sfide-extra";
 import atletaMese from "./routes/atleta-mese";
 import notifiche from "./routes/notifiche";
+import testForza from "./routes/test-forza";
 import { inviaDailyDropSeAttivo } from "./lib/dailyDropPush";
 import { inviaPromemoriaAllenamentoSeAttivo } from "./lib/promemoriaPush";
 import { inviaFeedbackMensileSeAttivo } from "./lib/feedbackMensilePush";
@@ -97,6 +98,7 @@ app.route("/api/punti-extra", puntiExtra);
 app.route("/api/sfide-extra", sfideExtra);
 app.route("/api/atleta-mese", atletaMese);
 app.route("/api/notifiche", notifiche);
+app.route("/api/test-forza", testForza);
 
 // Esempio di rotta protetta — punto di partenza per pagamenti/coach dashboard,
 // da costruire seguendo lo stesso pattern (vedi worker/src/routes/auth.ts).

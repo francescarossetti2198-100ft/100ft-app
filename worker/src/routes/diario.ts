@@ -34,6 +34,7 @@ type Riga = {
   file_nome: string | null;
   foto_url: string | null;
   pubblicato_feed: number;
+  test_forza: number;
 };
 
 function serializza(data: string, r: Riga | null) {
@@ -45,13 +46,14 @@ function serializza(data: string, r: Riga | null) {
     fileNome: r?.file_nome ?? null,
     fotoUrl: r?.foto_url ?? null,
     pubblicatoFeed: !!r?.pubblicato_feed,
+    testForza: !!r?.test_forza,
   };
 }
 
 async function rigaPerData(db: D1Database, data: string): Promise<Riga | null> {
   return db
     .prepare(
-      `SELECT data, focus, nota, file_url, file_nome, foto_url, pubblicato_feed
+      `SELECT data, focus, nota, file_url, file_nome, foto_url, pubblicato_feed, test_forza
        FROM diario_allenamenti WHERE data = ?`
     )
     .bind(data)
@@ -104,7 +106,7 @@ diario.get("/", requireCoach, async (c) => {
 
   const [{ results: righe }, { results: chiusi }, programma] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT data, focus, nota, file_url, file_nome, foto_url, pubblicato_feed
+      `SELECT data, focus, nota, file_url, file_nome, foto_url, pubblicato_feed, test_forza
        FROM diario_allenamenti WHERE data >= ? AND data <= ?`
     )
       .bind(inizio, fine)
@@ -216,6 +218,21 @@ diario.delete("/:data", requireCoach, async (c) => {
     await c.env.DB.prepare(`DELETE FROM diario_allenamenti WHERE data = ?`).bind(data).run();
   }
   return c.json({ ok: true });
+});
+
+// Segna (o toglie) il giorno come giorno di test di forza: gli atleti vedono in Home il
+// form per inserire i risultati (routes/test-forza.ts).
+diario.post("/:data/test-forza", requireCoach, async (c) => {
+  const data = c.req.param("data") ?? "";
+  if (!DATA_REGEX.test(data)) return c.json({ error: "Data non valida" }, 400);
+  const { attivo } = await c.req.json<{ attivo?: boolean }>().catch(() => ({}) as { attivo?: boolean });
+  await upsertRiga(c.env.DB, data, {});
+  await c.env.DB.prepare(
+    `UPDATE diario_allenamenti SET test_forza = ?, aggiornato_il = datetime('now') WHERE data = ?`
+  )
+    .bind(attivo ? 1 : 0, data)
+    .run();
+  return c.json(serializza(data, await rigaPerData(c.env.DB, data)));
 });
 
 // Pubblica la voce nel Feed: la coach sceglie voce per voce cosa includere.

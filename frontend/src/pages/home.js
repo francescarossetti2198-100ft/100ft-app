@@ -4,6 +4,7 @@ import { currentQuery } from "../router.js";
 import { CATEGORIE_RICHIESTA, etichettaCategoria } from "../richieste-categorie.js";
 import { costruisciQuestionario } from "../components/questionario.js";
 import { FEEDBACK_MENSILE_DOMANDE } from "../feedback-mensile-domande.js";
+import { TEST_FORZA, formattaSecondi, leggiSecondi, valoreLeggibile } from "../test-forza.js";
 
 // Scala fissa del feedback "Com'è andata oggi?" — sempre queste 5 faccine, in quest'ordine,
 // mai sostituite con stelle, slider, numeri o altre emoji.
@@ -115,6 +116,9 @@ export function renderHome(appEl) {
       #allenamento-oggi-card #ao-coach { margin-top: 12px; }
       #allenamento-oggi-card #ao-richieste { margin-top: 16px; }
       #allenamento-oggi-card #ao-presenze { margin-top: 14px; }
+      #allenamento-oggi-card #ao-test {
+        margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
+      }
       #allenamento-oggi-card #ao-feedback {
         margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
       }
@@ -152,6 +156,7 @@ export function renderHome(appEl) {
         <p class="mono" style="color:var(--mute); font-size:13px">Oggi non è un giorno di allenamento.</p>
       </div>
       <div class="ao-sezione" id="ao-coach"></div>
+      <div class="ao-sezione" id="ao-test"></div>
       <div class="ao-sezione" id="ao-richieste"></div>
       <div class="ao-sezione" id="ao-presenze"></div>
       <div class="ao-sezione" id="ao-feedback"></div>
@@ -239,10 +244,10 @@ async function loadFeedbackMese(el) {
 async function loadAllenamentoOggi(el) {
   // "Prima dell'allenamento" (richieste: parte alta / bassa / ecc.) nascosta per ora —
   // riattivare rimettendo `loadRichieste(el)` qui e `"#ao-richieste"` nella lista sotto.
-  await Promise.all([loadCoach(el), loadPresenzeOggi(el), loadFeedback(el)]);
+  await Promise.all([loadCoach(el), loadTestForza(el), loadPresenzeOggi(el), loadFeedback(el)]);
   const card = el.querySelector("#allenamento-oggi-card");
   if (!card) return;
-  const vuoto = ["#ao-coach", "#ao-presenze", "#ao-feedback"].every(
+  const vuoto = ["#ao-coach", "#ao-test", "#ao-presenze", "#ao-feedback"].every(
     (sel) => !card.querySelector(sel)?.innerHTML.trim()
   );
   const box = card.querySelector("#ao-empty");
@@ -599,6 +604,137 @@ async function loadCoach(el) {
   } catch {
     box.innerHTML = "";
   }
+}
+
+// Test di forza: compare nei giorni che la coach segna nel Diario (e nei 2 giorni dopo,
+// per chi li inserisce a casa). L'atleta scrive i propri numeri; li vede solo lui e la coach.
+async function loadTestForza(el) {
+  const box = el.querySelector("#ao-test");
+  let stato;
+  try {
+    stato = await api.get("/test-forza/oggi");
+  } catch {
+    box.innerHTML = "";
+    return;
+  }
+  if (!stato.data) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const [, m, d] = stato.data.split("-").map(Number);
+  const giorno = GIORNI[(new Date(`${stato.data}T00:00:00Z`).getUTCDay() + 6) % 7];
+  const titolo = `🏁 I TUOI TEST DI FORZA${stato.oggi ? "" : ` DI ${giorno.toUpperCase()} ${d}/${m}`}`;
+  const inputStile =
+    "background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font:inherit; font-size:15px; width:100%; box-sizing:border-box";
+  let risultati = stato.risultati;
+
+  function riepilogo() {
+    box.innerHTML = `
+      <p class="mono" style="font-size:12px; letter-spacing:1px">${titolo}</p>
+      <div style="margin-top:8px">
+        ${TEST_FORZA.map((t) => {
+          const [princ, ...extra] = t.campi.map((c) => valoreLeggibile(c, risultati[c.chiave]));
+          const sotto = extra.filter(Boolean).join(" · ");
+          return `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border)">
+            <span style="font-size:14px">${t.emoji} ${esc(t.nome)}</span>
+            <span style="font-size:14px; text-align:right"><strong>${esc(princ) || "—"}</strong>${
+              sotto ? `<br><span class="mono" style="color:var(--mute); font-size:11px">${esc(sotto)}</span>` : ""
+            }</span>
+          </div>`;
+        }).join("")}
+      </div>
+      <p class="mono" style="color:var(--mute); font-size:11px; margin-top:6px">Li vedete solo tu e la coach · a gennaio li rifacciamo 💪</p>
+      <button type="button" class="link-btn" id="tf-modifica" style="margin-top:6px">Modifica</button>`;
+    box.querySelector("#tf-modifica").addEventListener("click", form);
+  }
+
+  function campoHtml(c) {
+    const v = risultati?.[c.chiave];
+    if (c.tipo === "si_no") {
+      return `<label style="display:flex; gap:8px; align-items:center; font-size:13px; margin-top:6px">
+        <input type="checkbox" data-chiave="${c.chiave}" ${v ? "checked" : ""} /> ${esc(c.label)}</label>`;
+    }
+    const attr =
+      c.tipo === "sec"
+        ? `type="text" inputmode="decimal" placeholder="es. 1:45" value="${esc(formattaSecondi(v))}"`
+        : c.tipo === "testo"
+          ? `type="text" maxlength="40" placeholder="${esc(c.placeholder || "")}" value="${esc(v ?? "")}"`
+          : c.tipo === "kg"
+            ? // testo e non number: il <input type=number> scarta "12,5" scritto con la virgola
+              `type="text" inputmode="decimal" placeholder="es. 12,5" value="${esc(v == null ? "" : String(v).replace(".", ","))}"`
+            : `type="number" inputmode="numeric" min="0" step="1" value="${esc(v ?? "")}"`;
+    return `<label style="display:block; flex:1; min-width:120px">
+      <span class="mono" style="color:var(--mute); font-size:11px">${esc(c.label)}</span>
+      <input data-chiave="${c.chiave}" ${attr} style="${inputStile}; margin-top:3px" />
+    </label>`;
+  }
+
+  function form() {
+    box.innerHTML = `
+      <p class="mono" style="font-size:12px; letter-spacing:1px">${titolo}</p>
+      <p style="font-size:13px; color:var(--mute); margin-top:4px">Scrivi i tuoi numeri: anche solo quelli che hai, il resto lo aggiungi dopo.</p>
+      <form id="tf-form" style="margin-top:8px">
+        ${TEST_FORZA.map(
+          (t) => `<div style="padding:10px 0; border-top:1px solid var(--border)">
+            <p style="font-size:15px; font-weight:600">${t.emoji} ${esc(t.nome)}</p>
+            <p class="mono" style="color:var(--mute); font-size:11px; margin-top:2px">${esc(t.regola)}</p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px">
+              ${t.campi.filter((c) => c.tipo !== "si_no").map(campoHtml).join("")}
+            </div>
+            ${t.campi.filter((c) => c.tipo === "si_no").map(campoHtml).join("")}
+          </div>`
+        ).join("")}
+        <p class="error-text" id="tf-error" hidden></p>
+        <button type="submit" class="btn" style="width:100%; margin-top:8px">Salva i miei test</button>
+      </form>`;
+
+    const f = box.querySelector("#tf-form");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = f.querySelector("#tf-error");
+      errEl.hidden = true;
+      const dati = {};
+      for (const t of TEST_FORZA) {
+        for (const c of t.campi) {
+          const inp = f.querySelector(`[data-chiave="${c.chiave}"]`);
+          if (c.tipo === "si_no") dati[c.chiave] = inp.checked;
+          else if (c.tipo === "testo") dati[c.chiave] = inp.value.trim();
+          else if (c.tipo === "sec") {
+            const sec = leggiSecondi(inp.value);
+            if (Number.isNaN(sec)) {
+              errEl.textContent = `${t.nome}: scrivi il tempo come 1:45 (minuti:secondi)`;
+              errEl.hidden = false;
+              return;
+            }
+            dati[c.chiave] = sec;
+          } else {
+            const n = inp.value.trim() === "" ? null : Number(inp.value.trim().replace(",", "."));
+            if (Number.isNaN(n)) {
+              errEl.textContent = `${t.nome}: «${inp.value}» non è un numero`;
+              errEl.hidden = false;
+              return;
+            }
+            dati[c.chiave] = n;
+          }
+        }
+      }
+      const btn = f.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        const r = await api.post("/test-forza", { data: stato.data, risultati: dati });
+        risultati = r.risultati;
+        riepilogo();
+      } catch (err) {
+        errEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errEl.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  }
+
+  if (risultati) riepilogo();
+  else form();
 }
 
 // Menu a tendina "Chi viene oggi": chi ha messo presente e chi no per l'allenamento di
