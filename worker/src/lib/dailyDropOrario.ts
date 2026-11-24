@@ -26,6 +26,37 @@ const GIORNI_ALLENAMENTO = [1, 3, 5];
 // tutto il giorno — dopo questi minuti la possibilità di rispondere sparisce.
 export const FINESTRA_RISPOSTA_MIN = 5;
 
+// Daily Drop speciali (Francesca, nov 2026): in queste date scattano a sorpresa in una fascia
+// precisa, anche fuori dai giorni di allenamento, con più minuti per rispondere e un invito
+// diverso. `da`/`a` = minuti dalla mezzanotte di Roma (a escluso). Natale 14:00–15:40 (non
+// oltre: alle 16:00 c'è il promemoria acqua), Capodanno subito dopo mezzanotte.
+export const DAILY_DROP_SPECIALI: Record<
+  string,
+  { da: number; a: number; finestra: number; titolo: string; invito: string; notifica: string }
+> = {
+  "2026-12-25": {
+    da: 14 * 60,
+    a: 15 * 60 + 40,
+    finestra: 10,
+    titolo: "🎄 DAILY DROP DI NATALE",
+    invito: "Una foto con i tuoi parenti, adesso! Brindisi, tombola o dolci: fai vedere il tuo Natale.",
+    notifica: "🎄 Daily Drop di Natale! Una foto con i tuoi parenti, adesso. Hai 10 minuti ⏱️",
+  },
+  "2027-01-01": {
+    da: 5,
+    a: 30,
+    finestra: 15,
+    titolo: "🥂 DAILY DROP DI CAPODANNO",
+    invito: "Buon anno! Una foto del tuo brindisi di mezzanotte, con chi sei in questo momento.",
+    notifica: "🥂 Buon anno! Daily Drop di Capodanno: una foto del tuo brindisi. Hai 15 minuti ⏱️",
+  },
+};
+
+// Minuti per rispondere al Daily Drop di quella data (più lunghi per quelli speciali).
+export function finestraDailyDrop(data: string): number {
+  return DAILY_DROP_SPECIALI[data]?.finestra ?? FINESTRA_RISPOSTA_MIN;
+}
+
 function fasciaAllenamento(giornoSettimana: number): { inizio: number; fine: number } | null {
   if (giornoSettimana === 1 || giornoSettimana === 3) return { inizio: 19 * 60 + 30, fine: 20 * 60 + 30 }; // lun/mer 19:30-20:30
   if (giornoSettimana === 5) return { inizio: 19 * 60, fine: 20 * 60 }; // ven 19:00-20:00
@@ -75,14 +106,43 @@ function giornoSaltato(data: string, giornoSettimana: number): number {
   return GIORNI_ALLENAMENTO[Math.floor(random() * GIORNI_ALLENAMENTO.length)];
 }
 
+// Settimana con un Daily Drop speciale (Natale, Capodanno): anche lì al massimo 2 Daily Drop
+// in tutto (Francesca: "massimo 2"), quindi lo speciale prende il posto di uno normale. Dei
+// giorni normali rimasti (non saltati e diversi dal giorno speciale) resta solo il primo.
+// `false` = questo giorno normale salta per far posto allo speciale.
+function normaleConSpeciale(data: string, giornoSettimana: number): boolean {
+  const lunedi = new Date(`${data}T00:00:00Z`);
+  lunedi.setUTCDate(lunedi.getUTCDate() - (giornoSettimana - 1));
+  const giornoDi = (g: number) => {
+    const d = new Date(lunedi);
+    d.setUTCDate(d.getUTCDate() + g - 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const settimana = [1, 2, 3, 4, 5, 6, 7].map(giornoDi);
+  const speciali = settimana.filter((d) => DAILY_DROP_SPECIALI[d]);
+  if (!speciali.length) return true;
+  const saltato = giornoSaltato(data, giornoSettimana);
+  const normali = GIORNI_ALLENAMENTO.filter((g) => g !== saltato)
+    .map(giornoDi)
+    .filter((d) => !DAILY_DROP_SPECIALI[d]);
+  const posti = Math.max(0, 2 - speciali.length);
+  return normali.slice(0, posti).includes(data);
+}
+
 // Minuti dalla mezzanotte in cui "scatta" il Daily Drop per questa data, o null se oggi
 // non è previsto (non è un giorno di allenamento, oppure è un giorno di allenamento ma
 // questa volta "non tocca" — occasionale, non ogni sessione).
 export function orarioDailyDrop(data: string, giornoSettimana: number): number | null {
+  const speciale = DAILY_DROP_SPECIALI[data];
+  if (speciale) {
+    const r = creaGeneratore(seedDaData(`speciale-${data}`));
+    return speciale.da + Math.floor(r() * (speciale.a - speciale.da));
+  }
   const fascia = fasciaAllenamento(giornoSettimana);
   if (!fascia) return null;
 
   if (giornoSettimana === giornoSaltato(data, giornoSettimana)) return null;
+  if (!normaleConSpeciale(data, giornoSettimana)) return null;
 
   const random = creaGeneratore(seedDaData(data));
   random(); // il primo valore serviva alla vecchia probabilità: scartarlo lascia invariati gli orari
@@ -117,7 +177,8 @@ export function statoDailyDrop(
   const orarioScatto = orarioDailyDrop(data, giornoSettimana);
   if (orarioScatto === null) return { previsto: false, attivo: false, scaduto: false };
 
-  const attivo = ora >= orarioScatto && ora < orarioScatto + FINESTRA_RISPOSTA_MIN;
-  const scaduto = ora >= orarioScatto + FINESTRA_RISPOSTA_MIN;
+  const finestra = finestraDailyDrop(data);
+  const attivo = ora >= orarioScatto && ora < orarioScatto + finestra;
+  const scaduto = ora >= orarioScatto + finestra;
   return { previsto: true, attivo, scaduto };
 }

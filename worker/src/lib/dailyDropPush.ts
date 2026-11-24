@@ -1,6 +1,6 @@
 import type { Env } from "../types";
 import { oggi, adessoRoma } from "./oggi";
-import { orarioDailyDrop, minutiOra, FINESTRA_RISPOSTA_MIN } from "./dailyDropOrario";
+import { orarioDailyDrop, minutiOra, FINESTRA_RISPOSTA_MIN, DAILY_DROP_SPECIALI, finestraDailyDrop } from "./dailyDropOrario";
 import { sendWebPush } from "./webPush";
 
 type Iscrizione = { id: number; endpoint: string; p256dh: string; auth: string };
@@ -9,10 +9,11 @@ type Iscrizione = { id: number; endpoint: string; p256dh: string; auth: string }
 // il push di chiusura sostituisca questa notifica invece di aggiungersi; `scadeAlle` (epoch ms)
 // serve al service worker se il push arriva in ritardo, a finestra già chiusa: in quel caso
 // mostra direttamente "Daily Drop chiuso" invece dell'invito a rispondere.
-export function payloadDailyDrop(scadeAlle: number) {
+export function payloadDailyDrop(scadeAlle: number, data?: string) {
+  const speciale = data ? DAILY_DROP_SPECIALI[data] : undefined;
   return {
     title: "📸 100FT — Daily Drop!",
-    body: `È il momento: bevi un sorso e condividi SUBITO la foto. Hai ${FINESTRA_RISPOSTA_MIN} minuti per rispondere ⏱️`,
+    body: speciale?.notifica ?? `È il momento: bevi un sorso e condividi SUBITO la foto. Hai ${FINESTRA_RISPOSTA_MIN} minuti per rispondere ⏱️`,
     url: "/",
     tag: "daily-drop",
     tipo: "daily-drop",
@@ -61,7 +62,8 @@ export async function inviaDailyDropSeAttivo(env: Env): Promise<void> {
   const ora = minutiOra();
   if (ora < orarioScatto) return; // non è ancora ora
 
-  if (ora >= orarioScatto + FINESTRA_RISPOSTA_MIN) {
+  const finestra = finestraDailyDrop(data);
+  if (ora >= orarioScatto + finestra) {
     await inviaChiusura(env, data);
     return;
   }
@@ -82,11 +84,11 @@ export async function inviaDailyDropSeAttivo(env: Env): Promise<void> {
   // per i secondi trascorsi da mezzanotte di Roma, non come istante).
   const r = adessoRoma();
   const secondiOra = r.getUTCHours() * 3600 + r.getUTCMinutes() * 60 + r.getUTCSeconds();
-  const scadeAlle = Date.now() + ((orarioScatto + FINESTRA_RISPOSTA_MIN) * 60 - secondiOra) * 1000;
+  const scadeAlle = Date.now() + ((orarioScatto + finestra) * 60 - secondiOra) * 1000;
 
   // 10 min: il Daily Drop è a tempo, ma tolleri un piccolo ritardo di consegna (se arriva a
   // finestra chiusa il service worker lo mostra già come "chiuso", vedi sw.js).
-  await inviaA(env, iscrizioni, payloadDailyDrop(scadeAlle), 600);
+  await inviaA(env, iscrizioni, payloadDailyDrop(scadeAlle, data), 600);
 }
 
 async function inviaChiusura(env: Env, data: string): Promise<void> {

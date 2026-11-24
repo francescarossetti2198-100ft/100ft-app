@@ -149,7 +149,7 @@ sfide.get("/", requireAuth, async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.titolo, s.descrizione, s.tipo, s.criterio, s.punti, s.flash, s.data_inizio, s.data_fine,
             s.foto_richieste AS fotoRichieste, s.votazione_dal, s.votazione_fino, s.risultati_dal,
-            s.punti_vincitore AS puntiVincitore, s.missioni, s.solo_user_id AS soloUserId,
+            s.punti_vincitore AS puntiVincitore, s.missioni, s.missioni_dal, s.missioni_foto, s.solo_user_id AS soloUserId,
             (SELECT COUNT(*) FROM sfide_foto f WHERE f.sfida_id = s.id AND f.user_id = ?) AS fotoCaricate,
             (SELECT json_group_array(json_object('missione', f.missione, 'foto', f.foto_url, 'giorno', f.giorno)) FROM sfide_foto f
               WHERE f.sfida_id = s.id AND f.user_id = ? AND f.missione IS NOT NULL) AS missioniFatte,
@@ -163,18 +163,35 @@ sfide.get("/", requireAuth, async (c) => {
   )
     // Sfida di prova (solo_user_id): agli atleti la vede solo il suo, la dashboard coach sempre.
     .bind(...(!comeAtleta ? [io, io, io] : [io, io, io, oggi, io]))
-    .all<Record<string, unknown> & { flash: number; data_inizio: string; missioni: string | null; missioniFatte: string }>();
+    .all<Record<string, unknown> & {
+      flash: number; data_inizio: string; missioni: string | null; missioni_dal: string | null; missioni_foto: string | null; missioniFatte: string;
+    }>();
 
   // Sfide a tappe: missioni come array di testi, e per ogni missione fatta la foto
   // dell'atleta (la card la mostra come miniatura). Finché la sfida non è completata
   // valgono solo le foto di oggi: quelle di un giorno lasciato a metà vanno rifatte.
-  const conMissioni = results.map(({ missioni, missioniFatte, ...s }) => {
+  // Sfida a calendario (missioni_dal, es. calendario dell'Avvento): ogni casella si sblocca
+  // dal suo giorno e resta valida per sempre; agli atleti il testo di quelle ancora chiuse
+  // non arriva (null), così resta una sorpresa.
+  const conMissioni = results.map(({ missioni, missioni_dal, missioni_foto, missioniFatte, ...s }) => {
     if (!missioni) return s;
     const fatte = JSON.parse(missioniFatte) as { missione: number; foto: string; giorno: string }[];
+    const testi = JSON.parse(missioni) as string[];
+    if (missioni_dal) {
+      const dal = JSON.parse(missioni_dal) as string[];
+      return {
+        ...s,
+        missioni: comeAtleta ? testi.map((t, i) => (dal[i] && dal[i] > oggi ? null : t)) : testi,
+        missioniDal: dal,
+        missioniFoto: missioni_foto ? (JSON.parse(missioni_foto) as number[]) : null,
+        missioniFatte: fatte,
+        giornoLasciato: null,
+      };
+    }
     const valide = s.partecipato ? fatte : fatte.filter((f) => f.giorno === oggi);
     return {
       ...s,
-      missioni: JSON.parse(missioni) as string[],
+      missioni: testi,
       missioniFatte: valide,
       giornoLasciato: valide.length < fatte.length ? fatte[0].giorno : null,
     };
@@ -279,6 +296,81 @@ sfide.get("/:id/votazione", requireAuth, async (c) => {
   });
 });
 
+// Calendario (es. Avvento): le foto di TUTTI per una casella, per il carosello che si apre
+// toccando il giorno. Agli atleti solo dalle caselle già aperte. Francesca, nov 2026.
+sfide.get("/:id/caselle/:n", requireAuth, async (c) => {
+  const sfidaId = Number(c.req.param("id"));
+  const n = Number(c.req.param("n"));
+  const sfida = await c.env.DB.prepare(`SELECT missioni, missioni_dal, missioni_foto, solo_user_id FROM sfide WHERE id = ?`)
+    .bind(sfidaId)
+    .first<{ missioni: string | null; missioni_dal: string | null; missioni_foto: string | null; solo_user_id: number | null }>();
+  const isCoach = c.var.user.role === "coach";
+  if (!sfida?.missioni || !sfida.missioni_dal || (!isCoach && sfida.solo_user_id != null && sfida.solo_user_id !== c.var.user.userId)) {
+    return c.json({ error: "Sfida non trovata" }, 404);
+  }
+  const missioni = JSON.parse(sfida.missioni) as string[];
+  const dal = JSON.parse(sfida.missioni_dal) as string[];
+  if (!Number.isInteger(n) || n < 0 || n >= missioni.length) return c.json({ error: "Casella non trovata" }, 404);
+  const oggi = adessoRoma().toISOString().slice(0, 10);
+  if (!isCoach && dal[n] && dal[n] > oggi) {
+    return c.json({ error: `Questa casella si apre il ${dal[n].slice(8, 10)}/${dal[n].slice(5, 7)}` }, 403);
+  }
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT f.id, f.user_id AS userId, f.foto_url AS foto, f.didascalia,
+            -- La coach partecipa al calendario: senza nome nel profilo si vede "Coach".
+            CASE WHEN u.role = 'coach' AND COALESCE(a.nome, '') = '' THEN 'Coach' ELSE a.nome END AS nome,
+            a.nickname, a.foto_url AS fotoUrl
+     FROM sfide_foto f
+     JOIN users u ON u.id = f.user_id
+     LEFT JOIN athlete_profile a ON a.user_id = f.user_id
+     WHERE f.sfida_id = ? AND f.missione = ?
+     ORDER BY f.id`
+  )
+    .bind(sfidaId, n)
+    .all<{
+      id: number; userId: number; foto: string; didascalia: string | null;
+      nome: string | null; nickname: string | null; fotoUrl: string | null;
+    }>();
+
+  return c.json({
+    missione: missioni[n],
+    dal: dal[n] ?? null,
+    // 2 = "prima e dopo": l'app unisce due foto affiancate (collage verticale).
+    fotoPerCasella: sfida.missioni_foto ? ((JSON.parse(sfida.missioni_foto) as number[])[n] ?? 1) : 1,
+    foto: results.map(({ userId, ...r }) => ({ ...r, mia: userId === c.var.user.userId })),
+  });
+});
+
+// "🗓️ 2 dicembre · Le luci di Natale ✨": titolo del post di una casella del calendario.
+const MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+export function testoCasella(dal: string | undefined, missione: string): string {
+  const nome = missione.split(" — ")[0].trim();
+  return dal ? `🗓️ ${Number(dal.slice(8, 10))} ${MESI_IT[Number(dal.slice(5, 7)) - 1]} · ${nome}` : `🗓️ ${nome}`;
+}
+
+// Didascalia della foto di una casella: max 200 caratteri, vuota = nessuna.
+function pulisciDidascalia(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().slice(0, 200);
+  return t || null;
+}
+
+// L'atleta aggiunge o cambia la didascalia della propria foto in una casella del calendario.
+sfide.post("/:id/caselle/:n/didascalia", requireAuth, async (c) => {
+  const sfidaId = Number(c.req.param("id"));
+  const n = Number(c.req.param("n"));
+  const body = await c.req.json<{ didascalia?: string }>().catch(() => ({}) as { didascalia?: string });
+  const didascalia = pulisciDidascalia(body.didascalia);
+  const r = await c.env.DB.prepare(
+    `UPDATE sfide_foto SET didascalia = ? WHERE sfida_id = ? AND missione = ? AND user_id = ?`
+  )
+    .bind(didascalia, sfidaId, n, c.var.user.userId)
+    .run();
+  if ((r.meta.changes ?? 0) === 0) return c.json({ error: "Non hai ancora una foto in questa casella" }, 404);
+  return c.json({ ok: true, didascalia });
+});
+
 // Voto alla foto più bella: un voto a testa (si può cambiare finché è aperto), mai la propria.
 // Può votare ogni atleta, anche chi non ha caricato la foto, e anche la coach (Francesca).
 // Si vota per id della foto (partecipazione), così il client non sa di chi è.
@@ -314,24 +406,30 @@ sfide.post("/:id/vota", requireAuth, async (c) => {
 });
 
 sfide.post("/:id/partecipa", requireAuth, async (c) => {
-  if (c.var.user.role !== "atleta") {
+  // La coach partecipa solo al Calendario dell'Avvento (Francesca, nov 2026): carica le sue
+  // foto nelle caselle come tutti, ma senza punti né completamento (non è in classifica).
+  const isCoach = c.var.user.role === "coach";
+  if (c.var.user.role !== "atleta" && !isCoach) {
     return c.json({ error: "Solo gli atleti possono partecipare alle sfide" }, 403);
   }
 
   const sfidaId = Number(c.req.param("id"));
 
   const sfida = await c.env.DB.prepare(
-    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste, missioni, solo_user_id,
+    `SELECT id, titolo, tipo, punti, flash, data_inizio, data_fine, foto_richieste, missioni, missioni_dal, solo_user_id,
             votazione_dal, votazione_fino, risultati_dal FROM sfide WHERE id = ?`
   )
     .bind(sfidaId)
     .first<{
       id: number; titolo: string; tipo: string; punti: number; flash: number;
-      data_inizio: string; data_fine: string; foto_richieste: number; missioni: string | null; solo_user_id: number | null;
+      data_inizio: string; data_fine: string; foto_richieste: number; missioni: string | null; missioni_dal: string | null; solo_user_id: number | null;
       votazione_dal: string | null; votazione_fino: string | null; risultati_dal: string | null;
     }>();
-  if (!sfida || (sfida.solo_user_id != null && sfida.solo_user_id !== c.var.user.userId)) {
+  if (!sfida || (!isCoach && sfida.solo_user_id != null && sfida.solo_user_id !== c.var.user.userId)) {
     return c.json({ error: "Sfida non trovata" }, 404);
+  }
+  if (isCoach && !sfida.missioni_dal) {
+    return c.json({ error: "Solo gli atleti possono partecipare alle sfide" }, 403);
   }
   if (sfida.tipo === "traguardo") {
     return c.json({ error: "Questa sfida si completa da sola quando raggiungi il traguardo" }, 400);
@@ -366,6 +464,12 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   if (missioni && (!Number.isInteger(missione) || missione! < 0 || missione! >= missioni.length)) {
     return c.json({ error: "Missione non valida" }, 400);
   }
+  // Calendario: una casella si può fare solo dal giorno in cui si sblocca.
+  const missioniDal = sfida.missioni_dal ? (JSON.parse(sfida.missioni_dal) as string[]) : null;
+  const sbloccoMissione = missioniDal && missione != null ? missioniDal[missione] : null;
+  if (sbloccoMissione && sbloccoMissione > oggi) {
+    return c.json({ error: `Questa casella si apre il ${sbloccoMissione.slice(8, 10)}/${sbloccoMissione.slice(5, 7)}` }, 400);
+  }
 
   const fotoUrl = foto ? await salvaFoto(c.env.FOTO_SFIDE, "sfide", foto) : null;
 
@@ -374,24 +478,41 @@ sfide.post("/:id/partecipa", requireAuth, async (c) => {
   if (sfida.tipo === "foto" && sfida.foto_richieste > 1 && fotoUrl) {
     // Sfida a tappe = una sola giornata: le foto di un giorno lasciato a metà non valgono
     // più, si riparte da capo oggi. Scelta di Francesca, nov 2026.
-    if (missioni) {
+    if (missioni && !missioniDal) {
       await c.env.DB.prepare(
         `DELETE FROM sfide_foto WHERE sfida_id = ? AND user_id = ? AND missione IS NOT NULL AND giorno IS NOT ?`
       )
         .bind(sfidaId, c.var.user.userId, oggi)
         .run();
     }
+    // Calendario: didascalia facoltativa sotto la foto della casella.
+    const didascalia = missioniDal ? pulisciDidascalia(body.didascalia) : null;
     const ins = await c.env.DB.prepare(
-      `INSERT OR IGNORE INTO sfide_foto (sfida_id, user_id, foto_url, missione, giorno) VALUES (?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO sfide_foto (sfida_id, user_id, foto_url, missione, giorno, didascalia) VALUES (?, ?, ?, ?, ?, ?)`
     )
-      .bind(sfidaId, c.var.user.userId, fotoUrl, missione, missioni ? oggi : null)
+      .bind(sfidaId, c.var.user.userId, fotoUrl, missione, missioni ? oggi : null, didascalia)
       .run();
     if ((ins.meta.changes ?? 0) === 0) return c.json({ error: "Hai già caricato la foto di questa missione" }, 409);
+    // Calendario: ogni foto esce subito nella sezione "Avvento" del Feed (non in quello
+    // principale), dove tutti la vedono e possono reagire e commentare. Francesca, nov 2026.
+    if (missioniDal && missioni && missione != null) {
+      await c.env.DB.prepare(
+        `INSERT INTO post_feed (user_id, tipo, contenuto_url, testo, calendario) VALUES (?, 'sfida', ?, ?, ?)`
+      )
+        .bind(
+          c.var.user.userId,
+          fotoUrl,
+          testoCasella(missioniDal[missione], missioni[missione]),
+          JSON.stringify({ tipo: "foto", sfida: sfidaId, missione })
+        )
+        .run();
+    }
     const n = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM sfide_foto WHERE sfida_id = ? AND user_id = ?`)
       .bind(sfidaId, c.var.user.userId)
       .first<{ n: number }>();
     const caricate = n?.n ?? 0;
-    if (caricate < sfida.foto_richieste) {
+    // La coach non completa mai la sfida (niente punti, partecipazione o trofei).
+    if (caricate < sfida.foto_richieste || isCoach) {
       return c.json({ ok: true, completata: false, fotoCaricate: caricate, fotoRichieste: sfida.foto_richieste });
     }
   }

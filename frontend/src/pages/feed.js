@@ -202,6 +202,111 @@ function portaAlPost(card, apriCommenti) {
 }
 
 // TODO: filtri per tipo.
+// Collage di gruppo di una casella del Calendario dell'Avvento (post della coach del 30/12):
+// tutte le foto di chi l'ha fatta, con il nome sotto. Stile "poster" come collage.js.
+const MESI_CORTI_FEED = ["GEN", "FEB", "MAR", "APR", "MAG", "GIU", "LUG", "AGO", "SET", "OTT", "NOV", "DIC"];
+function gruppoCalendarioHtml(g) {
+  const nome = (g.testo || "").split(" — ")[0];
+  const giorno = g.dal ? `${Number(g.dal.slice(8, 10))} ${MESI_CORTI_FEED[Number(g.dal.slice(5, 7)) - 1]}` : "";
+  const tessere = g.foto
+    .map((f) => {
+      const chi = esc(f.nickname || f.nome || "Atleta");
+      return `
+        <figure style="margin:0; background:#fff; border-radius:10px; overflow:hidden; border:1px solid #e7e0d2">
+          <img src="${mediaUrl(f.foto)}" alt="Foto di ${chi}" loading="lazy" decoding="async"
+            style="width:100%; aspect-ratio:1; object-fit:cover; display:block" />
+          <figcaption style="padding:5px 6px 6px; font-size:11px; line-height:1.25; color:#111">
+            <strong style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${chi}</strong>
+            ${f.didascalia ? `<span style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:#555">${esc(f.didascalia)}</span>` : ""}
+          </figcaption>
+        </figure>`;
+    })
+    .join("");
+  return `
+    <div style="margin-top:10px; background:#f6f1e7; color:#111; border-radius:14px; padding:14px 12px 12px; border:1px solid #e7e0d2; font-family:var(--font-mono)">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+        <img src="/logo-nero.png" alt="100 Functional Training" style="height:28px; width:auto; display:block" />
+        <span style="width:1px; height:24px; background:#111; margin:0 4px"></span>
+        <span style="background:#ffd84d; font-weight:700; font-size:11px; letter-spacing:.5px; padding:4px 8px; text-transform:uppercase">Calendario dell'Avvento</span>
+      </div>
+      <div style="display:flex; align-items:baseline; gap:10px; margin:12px 0">
+        <span style="font-weight:800; font-size:30px; letter-spacing:-1px; line-height:1">${giorno}</span>
+        <span style="font-weight:700; font-size:16px">${esc(nome)}</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px">${tessere}</div>
+    </div>`;
+}
+
+// Schede "Tutti" / "🗓️ Avvento" sopra la lista del Feed: compaiono solo se c'è un
+// Calendario dell'Avvento in corso. Nella sezione Avvento le foto arrivano appena caricate:
+// ogni 30 secondi controlla se ce ne sono di nuove e lo dice con un avviso da toccare.
+// `opzioni()` dà le opzioni correnti della pagina (es. la ricerca). Ritorna `ricarica(extra)`.
+export function attivaSezioniFeed({ tabsEl, avvisoEl, list, opzioni = () => ({}) }) {
+  const stato = { sezione: "tutti", ultimoId: null, timer: null };
+  const carica = (extra = {}) =>
+    montaFeed(list, {
+      ...opzioni(),
+      ...extra,
+      sezione: stato.sezione,
+      onAvvento: (a) => {
+        tabsEl.hidden = !a;
+        if (!a && stato.sezione === "avvento") {
+          stato.sezione = "tutti";
+          disegnaTabs();
+        }
+      },
+      onPosts: (posts) => {
+        stato.ultimoId = posts[0]?.id ?? null;
+        avvisoEl.hidden = true;
+      },
+      onPostNonTrovato: extra.postId
+        ? () => {
+            stato.sezione = stato.sezione === "avvento" ? "tutti" : "avvento";
+            disegnaTabs();
+            carica({ ...extra, onPostNonTrovato: null });
+          }
+        : null,
+    });
+  const tab = (id, testo) => {
+    const on = stato.sezione === id;
+    return `<button type="button" class="feed-sezione-btn" data-sezione="${id}" aria-pressed="${on}"
+      style="flex:1; padding:8px 10px; border-radius:9px; border:1px solid ${on ? "var(--accent)" : "var(--border)"};
+             background:${on ? "var(--accent)" : "var(--surface-2)"}; color:${on ? "#fff" : "var(--text)"};
+             font-weight:700; font-size:13px; cursor:pointer">${testo}</button>`;
+  };
+  function disegnaTabs() {
+    tabsEl.innerHTML = `<div style="display:flex; gap:8px; margin-top:10px">${tab("tutti", "Tutti")}${tab("avvento", "🗓️ Avvento")}</div>`;
+    tabsEl.querySelectorAll(".feed-sezione-btn").forEach((b) =>
+      b.addEventListener("click", () => {
+        if (stato.sezione === b.dataset.sezione) return;
+        stato.sezione = b.dataset.sezione;
+        disegnaTabs();
+        list.innerHTML = `<p class="mono" style="color:var(--mute)">Carico...</p>`;
+        carica();
+      })
+    );
+  }
+  disegnaTabs();
+  tabsEl.hidden = true;
+
+  avvisoEl.addEventListener("click", () => {
+    avvisoEl.hidden = true;
+    carica();
+    list.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  stato.timer = setInterval(async () => {
+    if (!list.isConnected) return clearInterval(stato.timer);
+    if (stato.sezione !== "avvento" || document.hidden) return;
+    try {
+      const { posts } = await api.get("/feed?sezione=avvento");
+      if (posts[0] && posts[0].id !== stato.ultimoId) avvisoEl.hidden = false;
+    } catch {
+      // rete assente: riprova al prossimo giro
+    }
+  }, 30000);
+  return carica;
+}
+
 export function renderFeed(appEl) {
   const el = document.createElement("div");
   el.className = "screen";
@@ -250,7 +355,11 @@ export function renderFeed(appEl) {
       </div>
       <div id="feed-persone"></div>
       ${bannerSpotifyHtml()}
+      <div id="feed-sezioni" hidden></div>
     </div>
+    <button type="button" id="feed-nuove" hidden class="mono"
+      style="width:100%; margin-top:10px; padding:9px; border-radius:9px; border:none; cursor:pointer;
+             background:var(--accent); color:#fff; font-size:13px; font-weight:700">🔄 Nuove foto: tocca per vederle</button>
     <div id="feed-list" style="margin-top:12px"><p class="mono" style="color:var(--mute)">Carico...</p></div>
   `;
   appEl.appendChild(el);
@@ -263,7 +372,17 @@ export function renderFeed(appEl) {
 
   // Arrivo da una notifica (#/feed?post=ID[&commenti=1]): porta a quel post, e se serve apre i commenti.
   const q = currentQuery();
-  montaFeed(list, { postId: Number(q.get("post")) || null, apriCommenti: q.get("commenti") === "1" });
+  const ricerca = () => {
+    const t = input.value.trim();
+    return t.length >= 2 ? { q: t } : {};
+  };
+  const carica = attivaSezioniFeed({
+    tabsEl: el.querySelector("#feed-sezioni"),
+    avvisoEl: el.querySelector("#feed-nuove"),
+    list,
+    opzioni: ricerca,
+  });
+  carica({ postId: Number(q.get("post")) || null, apriCommenti: q.get("commenti") === "1" });
 
   let timer;
   const esegui = async () => {
@@ -271,10 +390,10 @@ export function renderFeed(appEl) {
     clear.hidden = q.length === 0;
     if (q.length < 2) {
       personeBox.innerHTML = "";
-      montaFeed(list);
+      carica();
       return;
     }
-    montaFeed(list, { q });
+    carica();
     try {
       const { atleti } = await api.get(`/atleti/cerca?q=${encodeURIComponent(q)}`);
       personeBox.innerHTML = atleti.length ? personeHtml(atleti) : "";
@@ -291,7 +410,7 @@ export function renderFeed(appEl) {
     input.value = "";
     clear.hidden = true;
     personeBox.innerHTML = "";
-    montaFeed(list);
+    carica();
     input.focus();
   });
 }
@@ -325,16 +444,21 @@ export async function montaFeed(list, opts = {}) {
     const params = new URLSearchParams();
     if (opts.userId) params.set("userId", String(opts.userId));
     if (opts.q) params.set("q", opts.q);
+    if (opts.sezione === "avvento") params.set("sezione", "avvento");
     // finoA resta anche dopo (quando il Feed si ridisegna per una reazione) così il post non sparisce.
     if (opts.postId) opts.finoA = opts.postId;
     if (opts.finoA) params.set("finoA", String(opts.finoA));
     const qs = params.toString();
-    const { posts } = await api.get(qs ? `/feed?${qs}` : "/feed");
+    const { posts, avvento } = await api.get(qs ? `/feed?${qs}` : "/feed");
+    opts.onAvvento?.(avvento ?? null);
+    opts.onPosts?.(posts);
 
     if (!posts.length) {
       const vuoto = opts.q
         ? "Nessun risultato per questa ricerca."
-        : opts.userId
+        : opts.sezione === "avvento"
+          ? "Ancora nessuna foto del Calendario dell'Avvento: apri una casella nelle Sfide e inizia tu! 🎄"
+          : opts.userId
           ? "Ancora nessun post."
           : "Ancora nessun post.";
       list.innerHTML = `<p class="mono" style="color:var(--mute)">${vuoto}</p>`;
@@ -346,6 +470,8 @@ export async function montaFeed(list, opts = {}) {
         let info = TIPO_INFO[p.tipo] ?? { icona: "•", azione: "" };
         const vittoria = p.tipo === "athlete_of_week" ? datiVittoria(p) : null;
         if (vittoria) info = { ...info, azione: `è l'Atleta del Mese di ${vittoria.nomeMese}` };
+        if (p.casella) info = { icona: "🗓️", azione: "ha aperto una casella" };
+        if (p.gruppo) info = { icona: "🎄", azione: "Calendario dell'Avvento" };
         const daCoach = p.tipo === "annuncio_coach" || p.tipo === "allenamento" || p.tipo === "merenda";
         const autore = daCoach ? "Coach" : p.nickname || p.nome || "Atleta";
 
@@ -396,6 +522,10 @@ export async function montaFeed(list, opts = {}) {
               ? compleannoHtml(p, autore)
               : `<p style="margin-top:8px; white-space:pre-line">${linkify(p.testo)}</p>`}
             ${fotoPostHtml(p)}
+            ${p.casella?.didascalia
+              ? `<p style="margin-top:8px; font-size:14px; white-space:pre-line; overflow-wrap:anywhere"><strong>${esc(autore)}</strong> ${esc(p.casella.didascalia)}</p>`
+              : ""}
+            ${p.gruppo ? gruppoCalendarioHtml(p.gruppo) : ""}
             ${p.allegatoUrl ? `<a href="${mediaUrl(p.allegatoUrl)}" target="_blank" rel="noopener"
                  class="mono" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px;
                         background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
@@ -535,6 +665,13 @@ export async function montaFeed(list, opts = {}) {
     if (opts.postId) {
       const card = list.querySelector(`[data-post-card="${opts.postId}"]`);
       if (card) portaAlPost(card, opts.apriCommenti);
+      else if (opts.onPostNonTrovato) {
+        // Notifica di un post della sezione Avvento (o viceversa): cambia sezione e riprova.
+        const altro = opts.onPostNonTrovato;
+        opts.onPostNonTrovato = null;
+        altro();
+        return;
+      }
       opts.postId = null;
     }
 

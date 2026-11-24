@@ -31,6 +31,18 @@ export function mezzanotteRomaUtc(anno: number, mese: number, giorno = 1): strin
   return new Date(utc - offset).toISOString().slice(0, 19).replace("T", " ");
 }
 
+// Inizio e fine (esclusa) in UTC del giorno di Roma `data` ("YYYY-MM-DD"), per filtrare
+// colonne salvate in UTC (post_feed.data, xp_log.data) per giorno italiano: `date(data)`
+// sbaglia tra le 00:00 e le 01:00/02:00 di Roma (es. il Daily Drop di Capodanno).
+export function giornoRomaUtc(data: string): { da: string; a: string } {
+  const [y, m, d] = data.split("-").map(Number);
+  const dopo = new Date(Date.UTC(y, m - 1, d + 1));
+  return {
+    da: mezzanotteRomaUtc(y, m, d),
+    a: mezzanotteRomaUtc(dopo.getUTCFullYear(), dopo.getUTCMonth() + 1, dopo.getUTCDate()),
+  };
+}
+
 export function oggi(): { data: string; giornoSettimana: number } {
   const now = adessoRoma();
   const data = now.toISOString().slice(0, 10);

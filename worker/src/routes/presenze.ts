@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
-import { verificaBonusSettimana, verificaExtraDueSettimane } from "../lib/bonusSettimana";
+import { verificaBonusSettimana, verificaExtraDueSettimane, verificaExtraGiorni } from "../lib/bonusSettimana";
 import { verificaTraguardi } from "../lib/traguardi";
 import { oggi, sessioneOggi, adessoRoma, INIZIO_STAGIONE } from "../lib/oggi";
 import { assegnaMilestone } from "../lib/milestones";
@@ -382,6 +382,7 @@ presenze.post("/appello", requireCoach, async (c) => {
     }
     await verificaBonusSettimana(c.env.DB, a.userId, data);
     await verificaExtraDueSettimane(c.env.DB, a.userId, data);
+    await verificaExtraGiorni(c.env.DB, a.userId, data);
     // Le sfide automatiche sulle presenze si completano subito all'appello, non solo quando
     // l'atleta riapre l'app (altrimenti l'appello dell'ultimo venerdì del mese arrivava tardi).
     if (sara) await verificaTraguardi(c.env.DB, a.userId);

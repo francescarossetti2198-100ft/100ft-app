@@ -1,7 +1,7 @@
 import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError, mediaUrl } from "../api.js";
 import { getUser } from "../auth.js";
-import { collageHtml, scaricaCollageHtml, attachCollage } from "../collage.js";
+import { collageHtml, scaricaCollageHtml, attachCollage, nomeMissione } from "../collage.js";
 
 const TIPO_LABEL = {
   presenza: "Sfida di gruppo",
@@ -245,7 +245,9 @@ export function montaSfide(container, { conDailyDrop = true } = {}) {
 async function loadDailyDrop(el) {
   const card = el.querySelector("#daily-drop-card");
   try {
-    const { previsto, attivo, scaduto, risposta, numeroRisposte } = await api.get("/daily-drop/oggi");
+    const { previsto, attivo, scaduto, risposta, numeroRisposte, speciale } = await api.get("/daily-drop/oggi");
+    // Daily Drop speciale (Natale, Capodanno): titolo e invito suoi.
+    const titoloDD = speciale?.titolo ?? "💧 DAILY DROP";
 
     // Occasionale in occasione dei giorni di allenamento — quando non è previsto, niente card.
     if (!previsto) {
@@ -255,7 +257,7 @@ async function loadDailyDrop(el) {
 
     if (risposta) {
       card.innerHTML = `
-        <p class="kicker">💧 DAILY DROP</p>
+        <p class="kicker">${titoloDD}</p>
         <p style="margin-top:6px">Hai già risposto oggi ✓</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
       `;
@@ -266,7 +268,7 @@ async function loadDailyDrop(el) {
     // più modulo, la possibilità di rispondere è finita per oggi.
     if (scaduto) {
       card.innerHTML = `
-        <p class="kicker">💧 DAILY DROP</p>
+        <p class="kicker">${titoloDD}</p>
         <p class="mono" style="color:var(--mute); margin-top:6px">Il momento per oggi è passato ⏱</p>
         <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno risposto in tempo</p>
       `;
@@ -276,15 +278,15 @@ async function loadDailyDrop(el) {
     // Non riveliamo mai l'orario esatto prima che scatti — si perderebbe l'effetto sorpresa.
     if (!attivo) {
       card.innerHTML = `
-        <p class="kicker">💧 DAILY DROP</p>
+        <p class="kicker">${titoloDD}</p>
         <p class="mono" style="color:var(--mute); margin-top:6px">Non ancora arrivato oggi — tieni d'occhio l'app.</p>
       `;
       return;
     }
 
     card.innerHTML = `
-      <p class="kicker">💧 DAILY DROP</p>
-      <p style="margin-top:6px">Una foto al volo, ovunque tu sia in questo momento.</p>
+      <p class="kicker">${titoloDD}</p>
+      <p style="margin-top:6px">${speciale?.invito ?? "Una foto al volo, ovunque tu sia in questo momento."}</p>
       <p class="mono" style="color:var(--mute); font-size:12px; margin-top:4px">${numeroRisposte} atleti hanno già risposto</p>
       ${fotoInputHtml("dd-foto")}
       <textarea id="dd-testo" rows="2" maxlength="280" placeholder="Scrivi qualcosa da mettere nel Feed (facoltativo)"
@@ -505,7 +507,9 @@ function fotoProgressoHtml(s) {
 // "Pausa pranzo 🍽️ — Una foto del tuo pranzo." → si vede solo il nome in grassetto; tocchi
 // il nome e si apre la spiegazione sotto (troppo testo tutto insieme, Francesca nov 2026).
 // Senza " — " la missione è solo il nome.
-function missioneTestoHtml(m) {
+function missioneTestoHtml(m, dal) {
+  // Casella del calendario ancora chiusa: il worker non manda il testo (sorpresa).
+  if (m == null) return `<span style="color:var(--mute)">🔒 Si apre il ${dal ? `${dal.slice(8, 10)}/${dal.slice(5, 7)}` : "…"}</span>`;
   const [nome, ...resto] = m.split(" — ");
   const spiegazione = resto.join(" — ");
   if (!spiegazione) return `<span style="font-weight:600">${nome}</span>`;
@@ -526,7 +530,12 @@ function missioniHtml(s) {
     return `<div style="margin-top:12px">${collageHtml(dati)}</div>${scaricaCollageHtml(dati)}`;
   }
   const gg = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
-  const avviso = s.giornoLasciato
+  // Calendario (es. Avvento): ogni casella si apre in un giorno di allenamento e da lì si
+  // può fare quando si vuole, anche con una foto della galleria.
+  const calendario = Array.isArray(s.missioniDal);
+  const avviso = calendario
+    ? `In ogni giorno di allenamento si apre una nuova casella: puoi farla quel giorno o quando vuoi dopo, entro il ${gg(s.data_fine)}.`
+    : s.giornoLasciato
     ? `Il ${gg(s.giornoLasciato)} non avevi finito: le foto di quel giorno non valgono più, oggi si riparte da capo.`
     : fatte.size
       ? "Oggi è la tua giornata: scatta le foto che mancano entro mezzanotte!"
@@ -534,20 +543,25 @@ function missioniHtml(s) {
   const righe = s.missioni
     .map((m, i) => {
       const foto = fatte.get(i);
-      const segno = foto
+      const chiusa = m == null;
+      const segno = chiusa
+        ? `<span style="width:40px; height:40px; border-radius:8px; flex:0 0 auto; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--mute)">${i + 1}</span>`
+        : foto
         ? `<img src="${mediaUrl(foto)}" alt="" loading="lazy" style="width:40px; height:40px; object-fit:cover; border-radius:8px; flex:0 0 auto" />`
         : `<span style="width:40px; height:40px; border-radius:8px; flex:0 0 auto; border:2px dashed var(--border)"></span>`;
       const azione = foto
         ? `<span style="color:var(--livello-1); font-weight:600">✓</span>`
+        : chiusa
+        ? ""
         : `<label class="foto-btn" style="position:relative; flex:0 0 auto; padding:8px 12px; border-radius:10px;
                   background:var(--surface-2); color:var(--text); font-weight:600; font-size:14px; cursor:pointer">
-             <span class="missione-txt">📷 Scatta</span>
-             <input class="missione-input" type="file" accept="image/*" capture="environment" style="position:absolute; width:1px; height:1px; opacity:0" />
+             <span class="missione-txt">${calendario ? "📷 Foto" : "📷 Scatta"}</span>
+             <input class="missione-input" type="file" accept="image/*"${calendario ? "" : ` capture="environment"`} style="position:absolute; width:1px; height:1px; opacity:0" />
            </label>`;
       return `
         <div class="missione-riga" data-missione="${i}" style="display:flex; align-items:flex-start; gap:10px">
           ${segno}
-          <span style="flex:1; min-width:0; font-size:14px; padding-top:10px">${missioneTestoHtml(m)}</span>
+          <span style="flex:1; min-width:0; font-size:14px; padding-top:10px">${missioneTestoHtml(m, s.missioniDal?.[i])}</span>
           ${azione}
         </div>`;
     })
@@ -559,6 +573,375 @@ function missioniHtml(s) {
     </p>
     <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px">${righe}</div>
     <p class="error-text foto-error" hidden style="margin-top:6px"></p>`;
+}
+
+// Sfida a calendario (Avvento, dic 2026): una griglia di giorni. Ogni casella si apre nel suo
+// giorno; toccandola si vedono la missione, il tasto per la propria foto e il carosello con
+// le foto di tutti (apriCasella). Idea di Francesca, nov 2026.
+const giornoCorto = (d) => `${Number(d.slice(8, 10))}`;
+
+const MESI_LUNGHI = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+
+// Il mese intero come un calendario da muro (LUN–DOM): i giorni con una casella sono i
+// riquadri da toccare (emoji / 🔒 / la tua foto), gli altri giorni solo il numero.
+function calendarioHtml(s, oggi, { caricabile }) {
+  const fatte = new Map(s.missioniFatte.map((f) => [f.missione, f.foto]));
+  const perGiorno = new Map(s.missioniDal.map((d, i) => [d, i]));
+  const primo = s.missioniDal.find(Boolean) ?? s.data_inizio;
+  const anno = Number(primo.slice(0, 4));
+  const mese = Number(primo.slice(5, 7));
+  const giorniNelMese = new Date(anno, mese, 0).getDate();
+  const vuoti = (new Date(anno, mese - 1, 1).getDay() + 6) % 7; // lunedì = 0
+  const pad = (n) => String(n).padStart(2, "0");
+
+  const casella = (i, g) => {
+    const m = s.missioni[i];
+    const dal = s.missioniDal[i];
+    const aperta = !dal || dal <= oggi;
+    const mia = fatte.get(i);
+    const emoji = m ? nomeMissione(m).emoji : "";
+    const sfondo = mia
+      ? `background:center/cover no-repeat url('${mediaUrl(mia)}');`
+      : aperta
+        ? "background:color-mix(in srgb, var(--accent) 16%, var(--surface-2));"
+        : "background:transparent; border:2px dashed var(--border);";
+    const bordoOggi = dal === oggi ? "box-shadow:0 0 0 2px var(--accent);" : "";
+    return `
+      <button type="button" class="cal-casella" data-n="${i}"
+        aria-label="Casella del ${g} ${MESI_LUNGHI[mese - 1].toLowerCase()}${mia ? ", fatta" : aperta ? "" : ", chiusa"}"
+        style="position:relative; aspect-ratio:1; border:none; border-radius:8px; padding:0; cursor:pointer; overflow:hidden;
+               color:var(--text); ${sfondo} ${bordoOggi}">
+        ${mia ? `<span style="position:absolute; inset:0; background:linear-gradient(to bottom, rgba(0,0,0,.55), transparent 60%)"></span>` : ""}
+        <span class="mono" style="position:absolute; top:3px; left:4px; font-weight:700; font-size:12px; line-height:1; ${mia ? "color:#fff;" : ""}">${g}</span>
+        <span style="position:absolute; right:3px; bottom:2px; font-size:${mia ? "10px" : "15px"}; line-height:1;
+                     ${aperta ? "" : "opacity:.5;"}">${mia ? "✅" : aperta ? emoji || "📷" : "🔒"}</span>
+      </button>`;
+  };
+
+  const celle = [];
+  for (let k = 0; k < vuoti; k++) celle.push("<span></span>");
+  for (let g = 1; g <= giorniNelMese; g++) {
+    const data = `${anno}-${pad(mese)}-${pad(g)}`;
+    const i = perGiorno.get(data);
+    celle.push(
+      i != null
+        ? casella(i, g)
+        : `<span class="mono" style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:12px;
+             color:var(--mute); opacity:.55; border-radius:8px; ${data === oggi ? "box-shadow:inset 0 0 0 1px var(--border);" : ""}">${g}</span>`
+    );
+  }
+  const intestazione = ["L", "M", "M", "G", "V", "S", "D"]
+    .map((d) => `<span class="mono" style="text-align:center; font-size:10px; font-weight:700; color:var(--mute)">${d}</span>`)
+    .join("");
+
+  const avviso = caricabile
+    ? `Tocca un giorno colorato per vedere la missione e le foto di tutti. Ogni casella si apre nel suo giorno e puoi farla anche dopo, entro il ${giornoCorto(s.data_fine)}/${s.data_fine.slice(5, 7)}.`
+    : "Tocca un giorno colorato per vedere la missione e le foto di tutti.";
+  return `
+    <div style="margin-top:12px; padding:12px 10px 10px; border-radius:14px; border:1px solid var(--border); background:var(--surface)">
+      <p style="text-align:center; font-family:var(--font-ui); font-weight:800; font-size:18px; text-transform:uppercase; letter-spacing:.5px">
+        🎄 ${MESI_LUNGHI[mese - 1]} ${anno}</p>
+      <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; margin-top:8px">${intestazione}</div>
+      <div class="cal-griglia" data-caricabile="${caricabile ? 1 : 0}"
+        style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; margin-top:4px">${celle.join("")}</div>
+    </div>
+    <p class="mono" style="font-size:12px; margin-top:10px; padding:8px 10px; border-radius:8px; background:var(--surface-2)">📅 ${avviso}</p>
+    ${s.partecipato ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>` : ""}`;
+}
+
+const escHtml = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const CHIUDI_BTN = `<button type="button" class="cal-chiudi" aria-label="Chiudi"
+  style="position:absolute; top:10px; right:12px; border:none; background:none; color:var(--mute); font-size:20px; cursor:pointer">✕</button>`;
+
+// Come avatarHtml, ma più grande: in testa a ogni foto del carosello del calendario.
+function avatarGrandeHtml(a) {
+  const nome = a.nickname || a.nome || "?";
+  const cerchio = (display) =>
+    `<span style="display:${display}; width:34px; height:34px; flex:0 0 auto; border-radius:50%; background:var(--surface-2);
+       align-items:center; justify-content:center; font-size:15px; font-weight:700; color:var(--mute)">${escHtml(nome[0].toUpperCase())}</span>`;
+  if (a.fotoUrl) {
+    return `<img src="${mediaUrl(a.fotoUrl)}" alt=""
+       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"
+       style="width:34px; height:34px; flex:0 0 auto; border-radius:50%; object-fit:cover" />${cerchio("none")}`;
+  }
+  return cerchio("inline-flex");
+}
+
+// Unisce due foto ("prima" e "dopo") in un collage verticale 1000×1500: prima sopra, dopo
+// sotto, ognuna ritagliata al centro in 4:3, con l'etichetta PRIMA / DOPO. Francesca, nov 2026.
+async function unisciPrimaDopo(primaFile, dopoFile) {
+  const W = 1000;
+  const H = 750;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H * 2;
+  const ctx = canvas.getContext("2d");
+  const files = [primaFile, dopoFile];
+  for (let k = 0; k < 2; k++) {
+    const img = await createImageBitmap(files[k], { imageOrientation: "from-image" });
+    const scala = Math.max(W / img.width, H / img.height);
+    const w = img.width * scala;
+    const h = img.height * scala;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, k * H, W, H);
+    ctx.clip();
+    ctx.drawImage(img, (W - w) / 2, k * H + (H - h) / 2, w, h);
+    ctx.restore();
+    img.close?.();
+    const etichetta = k === 0 ? "PRIMA" : "DOPO";
+    ctx.font = "700 48px sans-serif";
+    const tw = ctx.measureText(etichetta).width;
+    ctx.fillStyle = "rgba(0,0,0,.6)";
+    ctx.fillRect(28, k * H + 28, tw + 36, 70);
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(etichetta, 46, k * H + 64);
+  }
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, H - 4, W, 8);
+  const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+  return new File([blob], "prima-dopo.jpg", { type: "image/jpeg" });
+}
+
+// La casella aperta: missione, la propria foto (o il tasto per caricarla) e il carosello con
+// le foto di tutti per quel giorno. Dopo un caricamento ricarica le sfide (onDone) e si ridisegna.
+async function apriCasella(sfidaId, n, { caricabile, onDone, onCompletata }) {
+  const ov = document.createElement("div");
+  ov.className = "cal-dettaglio";
+  ov.style.cssText =
+    "position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.82); display:flex; align-items:center; justify-content:center; padding:16px";
+  ov.innerHTML = `<div role="dialog" aria-modal="true" class="cal-box"
+      style="position:relative; width:100%; max-width:420px; max-height:90vh; overflow-y:auto; background:var(--surface);
+             border:1px solid var(--border); border-radius:18px; padding:20px 16px 18px">
+      <p class="mono" style="color:var(--mute); font-size:13px">Carico...</p></div>`;
+  const box = ov.querySelector(".cal-box");
+  const chiudi = () => {
+    ov.remove();
+    document.removeEventListener("keydown", suEsc);
+  };
+  const suEsc = (e) => e.key === "Escape" && chiudi();
+  ov.addEventListener("click", (e) => {
+    if (e.target === ov || e.target.closest(".cal-chiudi")) chiudi();
+  });
+  document.addEventListener("keydown", suEsc);
+  document.body.appendChild(ov);
+
+  const disegna = async (vaiAllaMia = false) => {
+    let d;
+    try {
+      d = await api.get(`/sfide/${sfidaId}/caselle/${n}`);
+    } catch (err) {
+      box.innerHTML = `${CHIUDI_BTN}
+        <p style="font-weight:600; padding-right:24px">🔒 ${escHtml(err instanceof ApiError ? err.message : "Errore imprevisto")}</p>`;
+      return;
+    }
+    const [nome, ...resto] = d.missione.split(" — ");
+    const spiegazione = resto.join(" — ");
+    const giorno = d.dal
+      ? new Date(`${d.dal}T12:00:00`).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })
+      : "";
+    const mia = d.foto.find((f) => f.mia);
+    const tot = d.foto.length;
+    const doppia = d.fotoPerCasella === 2;
+    const slot = (k, testo) => `
+      <label class="cal-slot" data-k="${k}" style="position:relative; flex:1; aspect-ratio:4/5; border-radius:12px; cursor:pointer;
+             border:2px dashed var(--border); display:flex; align-items:center; justify-content:center; overflow:hidden;
+             background:var(--surface-2) center/cover no-repeat">
+        <span class="mono cal-slot-txt" style="font-size:13px; font-weight:700; text-align:center; padding:4px 8px; border-radius:8px">📷 ${testo}</span>
+        <input class="cal-input-doppia" type="file" accept="image/*" style="position:absolute; width:1px; height:1px; opacity:0" />
+      </label>`;
+    // Didascalia facoltativa, scritta prima di scegliere la foto (si può cambiare dopo).
+    const campoDidascalia = `
+      <textarea class="cal-didascalia" maxlength="200" rows="2" placeholder="Scrivi una didascalia (facoltativa)"
+        style="width:100%; margin-top:14px; padding:10px 12px; border-radius:12px; border:1px solid var(--border);
+               background:var(--surface-2); color:var(--text); font:inherit; font-size:14px; resize:vertical; box-sizing:border-box"></textarea>`;
+    const mioBlocco = mia
+      ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:12px">✓ La tua foto è nel calendario</p>`
+      : caricabile && doppia
+        ? `<div style="display:flex; gap:8px; margin-top:14px">${slot(0, "Prima")}${slot(1, "Dopo")}</div>
+           ${campoDidascalia}
+           <button type="button" class="btn cal-carica-doppia" disabled style="width:100%; margin-top:10px">Scegli le due foto</button>
+           <p class="error-text cal-errore" hidden style="margin-top:6px"></p>`
+      : caricabile
+        ? `${campoDidascalia}
+           <label class="foto-btn" style="position:relative; display:block; text-align:center; margin-top:10px; padding:12px; border-radius:12px;
+                  background:var(--accent); color:#fff; font-weight:700; cursor:pointer">
+             <span class="cal-carica-txt">📷 Carica la tua foto</span>
+             <input class="cal-input" type="file" accept="image/*" style="position:absolute; width:1px; height:1px; opacity:0" />
+           </label>
+           <p class="error-text cal-errore" hidden style="margin-top:6px"></p>`
+        : "";
+    // Ogni foto come un post: in alto chi l'ha messa (foto profilo + nome), poi la foto e
+    // sotto la didascalia. Sulla propria si può aggiungere o cambiare la didascalia.
+    const slide = (f) => {
+      const nomeAtleta = escHtml(f.nickname || f.nome || "Atleta");
+      return `
+      <div style="flex:0 0 100%; scroll-snap-align:start; min-width:0">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
+          ${avatarGrandeHtml(f)}
+          <span style="font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${nomeAtleta}</span>
+          ${f.mia ? `<span class="mono" style="font-size:11px; color:var(--mute)">(tu)</span>` : ""}
+        </div>
+        <img src="${mediaUrl(f.foto)}" alt="Foto di ${nomeAtleta}" loading="lazy" decoding="async"
+          style="width:100%; aspect-ratio:${d.fotoPerCasella === 2 ? "2/3" : "4/5"}; object-fit:cover; border-radius:12px; display:block; background:var(--surface-2)" />
+        <div class="cal-didascalia-box" style="margin-top:8px; font-size:14px; line-height:1.4">
+          ${f.didascalia ? `<p style="white-space:pre-line; overflow-wrap:anywhere"><strong>${nomeAtleta}</strong> ${escHtml(f.didascalia)}</p>` : ""}
+          ${f.mia ? `<button type="button" class="cal-modifica-didascalia mono" data-testo="${escHtml(f.didascalia ?? "")}"
+              style="margin-top:4px; padding:0; border:none; background:none; color:var(--accent); font-size:12px; cursor:pointer">
+              ✏️ ${f.didascalia ? "Modifica la didascalia" : "Aggiungi una didascalia"}</button>` : ""}
+        </div>
+      </div>`;
+    };
+    const frecce = [["prev", "‹", "left:6px"], ["next", "›", "right:6px"]]
+      .map(([dir, simbolo, lato]) => `
+        <button type="button" class="cal-car-${dir}" aria-label="${dir === "prev" ? "Foto precedente" : "Foto successiva"}"
+          style="position:absolute; top:40%; ${lato}; transform:translateY(-50%); width:32px; height:32px; border:none;
+                 border-radius:50%; background:rgba(255,255,255,.85); color:#000; font-size:22px; line-height:1; cursor:pointer;
+                 display:${dir === "prev" ? "none" : "flex"}; align-items:center; justify-content:center;
+                 box-shadow:0 1px 4px rgba(0,0,0,.3)">${simbolo}</button>`)
+      .join("");
+    const carosello = tot
+      ? `<div style="position:relative; margin-top:8px">
+          <div class="cal-car" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none;
+               -webkit-overflow-scrolling:touch; border-radius:12px">${d.foto.map(slide).join("")}</div>
+          ${tot > 1 ? `<span class="cal-car-cont mono" style="position:absolute; top:50px; right:8px; background:rgba(0,0,0,.6); color:#fff;
+                font-size:12px; padding:3px 8px; border-radius:10px">1/${tot}</span>${frecce}` : ""}
+        </div>`
+      : `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:8px; padding:24px 10px; text-align:center;
+            border:2px dashed var(--border); border-radius:12px">Ancora nessuna foto: inizia tu! 📸</p>`;
+
+    box.innerHTML = `${CHIUDI_BTN}
+      <p class="kicker" style="text-transform:uppercase">${escHtml(giorno)}</p>
+      <p style="font-family:var(--font-ui); font-weight:800; font-size:22px; margin-top:4px; padding-right:24px">${escHtml(nome)}</p>
+      ${spiegazione ? `<p class="mono" style="color:var(--mute); font-size:13px; margin-top:4px">${escHtml(spiegazione)}</p>` : ""}
+      ${mioBlocco}
+      <p class="mono" style="font-size:12px; margin-top:18px; text-transform:uppercase; letter-spacing:.5px">Le foto di tutti · ${tot}</p>
+      ${carosello}`;
+
+    const car = box.querySelector(".cal-car");
+    if (car && tot > 1) {
+      const cont = box.querySelector(".cal-car-cont");
+      const prev = box.querySelector(".cal-car-prev");
+      const next = box.querySelector(".cal-car-next");
+      const indice = () => Math.round(car.scrollLeft / car.clientWidth);
+      const aggiorna = () => {
+        const i = indice();
+        cont.textContent = `${i + 1}/${tot}`;
+        prev.style.display = i > 0 ? "flex" : "none";
+        next.style.display = i < tot - 1 ? "flex" : "none";
+      };
+      car.addEventListener("scroll", aggiorna, { passive: true });
+      prev.addEventListener("click", () => car.scrollTo({ left: Math.max(0, indice() - 1) * car.clientWidth }));
+      next.addEventListener("click", () => car.scrollTo({ left: Math.min(tot - 1, indice() + 1) * car.clientWidth }));
+      if (vaiAllaMia) {
+        const i = d.foto.findIndex((f) => f.mia);
+        if (i > 0) requestAnimationFrame(() => car.scrollTo({ left: i * car.clientWidth }));
+      }
+    }
+
+    const errEl = box.querySelector(".cal-errore");
+    // Carica la foto della casella; `false` se non è andata (l'errore è già a schermo).
+    const carica = async (file) => {
+      errEl.hidden = true;
+      const formData = new FormData();
+      formData.append("foto", file);
+      formData.append("missione", String(n));
+      const didascalia = box.querySelector(".cal-didascalia")?.value.trim();
+      if (didascalia) formData.append("didascalia", didascalia);
+      try {
+        const r = await api.postForm(`/sfide/${sfidaId}/partecipa`, formData);
+        if (r?.completata) onCompletata?.();
+        onDone?.();
+        await disegna(true);
+        return true;
+      } catch (err) {
+        errEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+        errEl.hidden = false;
+        return false;
+      }
+    };
+
+    // Didascalia della propria foto: il bottone ✏️ apre un campo con Salva / Annulla.
+    box.querySelector(".cal-modifica-didascalia")?.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      const contenitore = btn.closest(".cal-didascalia-box");
+      contenitore.innerHTML = `
+        <textarea class="cal-didascalia-edit" maxlength="200" rows="2" placeholder="Scrivi una didascalia"
+          style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2);
+                 color:var(--text); font:inherit; font-size:14px; resize:vertical; box-sizing:border-box"></textarea>
+        <div style="display:flex; gap:8px; margin-top:6px">
+          <button type="button" class="btn cal-salva-didascalia" style="flex:1">Salva</button>
+          <button type="button" class="btn cal-annulla-didascalia" style="flex:1; background:var(--surface-2); color:var(--text)">Annulla</button>
+        </div>
+        <p class="error-text cal-errore-didascalia" hidden style="margin-top:6px"></p>`;
+      const area = contenitore.querySelector("textarea");
+      area.value = btn.dataset.testo;
+      area.focus();
+      contenitore.querySelector(".cal-annulla-didascalia").addEventListener("click", () => disegna(true));
+      contenitore.querySelector(".cal-salva-didascalia").addEventListener("click", async (ev) => {
+        ev.currentTarget.disabled = true;
+        try {
+          await api.post(`/sfide/${sfidaId}/caselle/${n}/didascalia`, { didascalia: area.value });
+          await disegna(true);
+        } catch (err) {
+          const er = contenitore.querySelector(".cal-errore-didascalia");
+          er.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
+          er.hidden = false;
+          ev.currentTarget.disabled = false;
+        }
+      });
+    });
+
+    const input = box.querySelector(".cal-input");
+    input?.addEventListener("change", async () => {
+      if (!input.files[0]) return;
+      const txt = box.querySelector(".cal-carica-txt");
+      txt.textContent = "Carico...";
+      input.disabled = true;
+      if (!(await carica(input.files[0]))) {
+        txt.textContent = "📷 Carica la tua foto";
+        input.disabled = false;
+        input.value = "";
+      }
+    });
+
+    // "Prima e dopo": due foto scelte nei due riquadri, unite in una sola immagine.
+    const scelte = [null, null];
+    const btnDoppia = box.querySelector(".cal-carica-doppia");
+    box.querySelectorAll(".cal-slot").forEach((lab) => {
+      const inp = lab.querySelector("input");
+      inp.addEventListener("change", () => {
+        const f = inp.files[0];
+        if (!f) return;
+        scelte[Number(lab.dataset.k)] = f;
+        lab.style.backgroundImage = `url('${URL.createObjectURL(f)}')`;
+        lab.style.borderStyle = "solid";
+        const t = lab.querySelector(".cal-slot-txt");
+        t.textContent = lab.dataset.k === "0" ? "Prima ✓" : "Dopo ✓";
+        t.style.background = "rgba(0,0,0,.6)";
+        t.style.color = "#fff";
+        const pronte = scelte.every(Boolean);
+        btnDoppia.disabled = !pronte;
+        btnDoppia.textContent = pronte ? "Carica prima e dopo" : "Scegli le due foto";
+      });
+    });
+    btnDoppia?.addEventListener("click", async () => {
+      btnDoppia.disabled = true;
+      btnDoppia.textContent = "Carico...";
+      try {
+        const unita = await unisciPrimaDopo(scelte[0], scelte[1]);
+        if (await carica(unita)) return;
+      } catch {
+        errEl.textContent = "Non riesco a leggere una delle due foto, prova con un'altra";
+        errEl.hidden = false;
+      }
+      btnDoppia.disabled = false;
+      btnDoppia.textContent = "Carica prima e dopo";
+    });
+  };
+  await disegna();
 }
 
 // Una singola sfida come riga dentro la card del mese. Le completate restano visibili
@@ -584,12 +967,15 @@ function sfidaItemHtml(s, oggi) {
   const done = !!s.partecipato;
   const isCoach = getUser()?.role === "coach";
   const aTappe = s.tipo === "foto" && Array.isArray(s.missioni);
-  const conRighe = aTappe && !isCoach && (done || (!scaduta && !nonIniziata));
+  const calendario = aTappe && Array.isArray(s.missioniDal);
+  const conRighe = aTappe && !calendario && !isCoach && (done || (!scaduta && !nonIniziata));
   // Coach o sfida chiusa: le missioni solo come elenco, senza caricamento.
-  const elencoMissioni = aTappe && !conRighe
-    ? `<ul class="mono" style="font-size:13px; margin:8px 0 0; padding-left:18px">${s.missioni.map((m) => `<li style="margin-top:4px">${missioneTestoHtml(m)}</li>`).join("")}</ul>`
+  const elencoMissioni = aTappe && !calendario && !conRighe
+    ? `<ul class="mono" style="font-size:13px; margin:8px 0 0; padding-left:18px">${s.missioni.map((m, i) => `<li style="margin-top:4px">${missioneTestoHtml(m, s.missioniDal?.[i])}</li>`).join("")}</ul>`
     : "";
-  const azione = conRighe
+  const azione = calendario
+    ? calendarioHtml(s, oggi, { caricabile: !done && !scaduta && !nonIniziata })
+    : conRighe
     ? `${missioniHtml(s)}${
         done ? `<p class="mono" style="color:var(--livello-1); font-size:13px; margin-top:10px">✓ Completata</p>` : ""
       }`
@@ -619,12 +1005,14 @@ function sfidaItemHtml(s, oggi) {
   if (aTappe) {
     const stato = done
       ? `<span style="color:var(--livello-1)">✓ Completata</span>`
-      : conRighe ? `${s.missioniFatte.length}/${s.missioni.length} missioni` : `${s.missioni.length} missioni`;
+      : calendario
+        ? `${s.missioniFatte.length}/${s.missioni.length} caselle`
+        : conRighe ? `${s.missioniFatte.length}/${s.missioni.length} missioni` : `${s.missioni.length} ${calendario ? "caselle" : "missioni"}`;
     return `
       <details class="sfida-item sfida-tappe" data-id="${s.id}" data-tipo="${s.tipo}"${tappeAperte.has(s.id) ? " open" : ""}>
         <summary>
           <span style="flex:1; min-width:0">
-            <span class="mono" style="display:block; color:var(--mute); font-size:11px">${TIPO_LABEL[s.tipo] ?? s.tipo} · A TAPPE</span>
+            <span class="mono" style="display:block; color:var(--mute); font-size:11px">${TIPO_LABEL[s.tipo] ?? s.tipo} · ${Array.isArray(s.missioniDal) ? "CALENDARIO" : "A TAPPE"}</span>
             <span style="display:block; font-weight:600; margin-top:2px">${s.titolo}</span>
             <span class="mono" style="display:block; color:var(--accent); font-size:13px; margin-top:6px">+${s.punti} PT · ${stato}</span>
           </span>
@@ -820,6 +1208,17 @@ function attachMissioni(container, el, onDone) {
     });
   });
   attachCollage(container);
+  container.querySelectorAll(".cal-casella").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cardEl = btn.closest("[data-id]");
+      const caricabile = btn.closest(".cal-griglia").dataset.caricabile === "1";
+      apriCasella(cardEl.dataset.id, Number(btn.dataset.n), {
+        caricabile,
+        onDone,
+        onCompletata: () => loadClassifica(el, "mese"),
+      });
+    });
+  });
   container.querySelectorAll(".missione-input").forEach((input) => {
     input.addEventListener("change", async () => {
       if (!input.files[0]) return;
@@ -827,6 +1226,7 @@ function attachMissioni(container, el, onDone) {
       const riga = input.closest(".missione-riga");
       const errorEl = cardEl.querySelector(".foto-error");
       const txt = riga.querySelector(".missione-txt");
+      txt.dataset.testo ??= txt.textContent;
       errorEl.hidden = true;
       txt.textContent = "Carico...";
       input.disabled = true;
@@ -841,7 +1241,7 @@ function attachMissioni(container, el, onDone) {
       } catch (err) {
         errorEl.textContent = err instanceof ApiError ? err.message : "Errore imprevisto";
         errorEl.hidden = false;
-        txt.textContent = "📷 Scatta";
+        txt.textContent = txt.dataset.testo ?? "📷 Scatta";
         input.disabled = false;
         input.value = "";
       }

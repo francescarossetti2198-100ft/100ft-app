@@ -3,6 +3,7 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { parseFotoPersonalizzazione } from "../lib/fotoPersonalizzazione";
 import { eliminaFoto } from "../lib/storage";
+import { adessoRoma } from "../lib/oggi";
 
 const EMOJI_VALIDE = ["👍", "🔥", "💪", "🎉", "🖕"];
 
@@ -19,8 +20,15 @@ feed.get("/", requireAuth, async (c) => {
   const userIdFiltro = c.req.query("userId");
   const finoA = Number(c.req.query("finoA")) || 0;
   const q = (c.req.query("q") ?? "").trim();
+  // ?sezione=avvento -> solo le foto del Calendario dell'Avvento (una per casella e atleta,
+  // uscite appena caricate). Il Feed normale invece non le mostra. Francesca, nov 2026.
+  const sezioneAvvento = c.req.query("sezione") === "avvento";
 
-  const condizioni: string[] = [];
+  const condizioni: string[] = [
+    sezioneAvvento
+      ? "json_extract(p.calendario, '$.tipo') = 'foto'"
+      : "(p.calendario IS NULL OR json_extract(p.calendario, '$.tipo') != 'foto')",
+  ];
   const parametri: unknown[] = [];
 
   if (userIdFiltro && /^\d+$/.test(userIdFiltro)) {
@@ -50,7 +58,10 @@ feed.get("/", requireAuth, async (c) => {
   const { results: posts } = await c.env.DB.prepare(
     `SELECT p.id, p.tipo, p.testo, p.contenuto_url AS contenutoUrl,
             p.allegato_url AS allegatoUrl, p.allegato_nome AS allegatoNome,
-            p.data, p.user_id AS userId, a.nome, a.nickname,
+            p.data, p.user_id AS userId, p.calendario,
+            CASE WHEN p.calendario IS NOT NULL AND COALESCE(a.nome, '') = ''
+                  AND (SELECT role FROM users WHERE id = p.user_id) = 'coach' THEN 'Coach' ELSE a.nome END AS nome,
+            a.nickname,
             a.foto_url AS fotoUrl, a.foto_personalizzazione AS fotoPersonalizzazione
      FROM post_feed p
      LEFT JOIN athlete_profile a ON a.user_id = p.user_id
@@ -72,6 +83,7 @@ feed.get("/", requireAuth, async (c) => {
       nickname: string | null;
       fotoUrl: string | null;
       fotoPersonalizzazione: string | null;
+      calendario: string | null;
     }>();
 
   // Foto della coach — i suoi post (annuncio / diario / merenda) hanno user_id NULL, quindi
@@ -124,7 +136,9 @@ feed.get("/", requireAuth, async (c) => {
   // Post di una sfida di prova (sfide.solo_user_id): li vedono solo quell'atleta e la coach.
   const postNascosti = new Set<string>();
   const vedeTutto = c.var.user.role === "coach";
-  const urlSfide = [...new Set(posts.filter((p) => p.tipo === "sfida" && p.contenutoUrl).map((p) => p.contenutoUrl!))];
+  const urlSfide = [
+    ...new Set(posts.filter((p) => p.tipo === "sfida" && p.contenutoUrl && !p.calendario).map((p) => p.contenutoUrl!)),
+  ];
   if (urlSfide.length) {
     const { results: foto } = await c.env.DB.prepare(
       `SELECT x.foto_url AS chiave, y.foto_url AS fotoUrl, s.titolo, s.data_inizio AS dataInizio, s.missioni,
@@ -146,11 +160,84 @@ feed.get("/", requireAuth, async (c) => {
     }
   }
 
+  // Calendario dell'Avvento: le foto delle caselle (sezione Avvento) portano la didascalia
+  // aggiornata; i collage di gruppo (post della coach del 30/12) tutte le foto della casella
+  // con chi le ha messe. Le sfide di prova (solo_user_id) restano nascoste agli altri.
+  const cal = new Map<number, { tipo: string; sfida: number; missione: number }>();
+  for (const p of posts) if (p.calendario) cal.set(p.id, JSON.parse(p.calendario));
+  const casellaPerPost = new Map<number, Record<string, unknown>>();
+  const gruppoPerPost = new Map<number, Record<string, unknown>>();
+  const postCalNascosti = new Set<number>();
+  if (cal.size) {
+    const idSfide = [...new Set([...cal.values()].map((x) => x.sfida))];
+    const { results: sfideCal } = await c.env.DB.prepare(
+      `SELECT id, titolo, missioni, missioni_dal AS missioniDal, solo_user_id AS soloUserId
+       FROM sfide WHERE id IN (${idSfide.map(() => "?").join(",")})`
+    )
+      .bind(...idSfide)
+      .all<{ id: number; titolo: string; missioni: string; missioniDal: string; soloUserId: number | null }>();
+    const sfidaPer = new Map(sfideCal.map((x) => [x.id, x]));
+
+    const urlFoto = posts.filter((p) => cal.get(p.id)?.tipo === "foto" && p.contenutoUrl).map((p) => p.contenutoUrl!);
+    const didascalie = new Map<string, string | null>();
+    if (urlFoto.length) {
+      const { results } = await c.env.DB.prepare(
+        `SELECT foto_url AS url, didascalia FROM sfide_foto WHERE foto_url IN (${urlFoto.map(() => "?").join(",")})`
+      )
+        .bind(...urlFoto)
+        .all<{ url: string; didascalia: string | null }>();
+      for (const r of results) didascalie.set(r.url, r.didascalia);
+    }
+
+    for (const p of posts) {
+      const x = cal.get(p.id);
+      if (!x) continue;
+      const sf = sfidaPer.get(x.sfida);
+      if (!sf || (sf.soloUserId != null && sf.soloUserId !== c.var.user.userId && !vedeTutto)) {
+        postCalNascosti.add(p.id);
+        continue;
+      }
+      const missioni = JSON.parse(sf.missioni) as string[];
+      const dal = JSON.parse(sf.missioniDal) as string[];
+      const info = { sfida: sf.id, titolo: sf.titolo, missione: x.missione, testo: missioni[x.missione] ?? "", dal: dal[x.missione] ?? null };
+      if (x.tipo === "foto") {
+        casellaPerPost.set(p.id, { ...info, didascalia: p.contenutoUrl ? (didascalie.get(p.contenutoUrl) ?? null) : null });
+      } else {
+        const { results: foto } = await c.env.DB.prepare(
+          `SELECT f.foto_url AS foto, f.didascalia,
+                  CASE WHEN u.role = 'coach' AND COALESCE(a.nome, '') = '' THEN 'Coach' ELSE a.nome END AS nome,
+                  a.nickname, a.foto_url AS fotoUrl
+           FROM sfide_foto f JOIN users u ON u.id = f.user_id LEFT JOIN athlete_profile a ON a.user_id = f.user_id
+           WHERE f.sfida_id = ? AND f.missione = ? ORDER BY f.id`
+        )
+          .bind(sf.id, x.missione)
+          .all<{ foto: string; didascalia: string | null; nome: string | null; nickname: string | null; fotoUrl: string | null }>();
+        gruppoPerPost.set(p.id, { ...info, foto });
+      }
+    }
+  }
+
+  // C'è un Calendario dell'Avvento in corso (o finito da poco)? Allora il Feed mostra la
+  // sezione "Avvento" accanto a quello principale.
+  const oggi = adessoRoma().toISOString().slice(0, 10);
+  const avvento = await c.env.DB.prepare(
+    `SELECT id, titolo FROM sfide
+     WHERE missioni_dal IS NOT NULL AND data_inizio <= ? AND data_fine >= date(?, '-14 days')
+       AND (solo_user_id IS NULL OR solo_user_id = ? OR ?)
+     ORDER BY data_inizio DESC LIMIT 1`
+  )
+    .bind(oggi, oggi, c.var.user.userId, vedeTutto ? 1 : 0)
+    .first<{ id: number; titolo: string }>();
+
   return c.json({
-    posts: posts.filter((p) => !p.contenutoUrl || !postNascosti.has(p.contenutoUrl)).map((p) => {
+    avvento: avvento ?? null,
+    posts: posts.filter((p) => (!p.contenutoUrl || !postNascosti.has(p.contenutoUrl)) && !postCalNascosti.has(p.id)).map((p) => {
       const daCoach = p.userId == null;
       return {
         ...p,
+        calendario: undefined,
+        casella: casellaPerPost.get(p.id) ?? null,
+        gruppo: gruppoPerPost.get(p.id) ?? null,
         foto: p.contenutoUrl ? (fotoPerPost.get(p.contenutoUrl) ?? [p.contenutoUrl]) : [],
         collage: p.contenutoUrl ? (collagePerPost.get(p.contenutoUrl) ?? null) : null,
         fotoUrl: daCoach ? (coach?.fotoUrl ?? null) : p.fotoUrl,

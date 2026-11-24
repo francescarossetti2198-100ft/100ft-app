@@ -40,6 +40,7 @@ import { inviaPromemoriaPresenzaSeraSeAttivo } from "./lib/promemoriaPresenzaSer
 import { pubblicaMerendaDelGiornoSeAttivo } from "./lib/merendaFeed";
 import { assegnaAtletaDelMeseSeAttivo } from "./lib/atletaMese";
 import { chiudiVotazioniScadute } from "./lib/votazioneSfide";
+import { pubblicaCollageCalendarioSeAttivo } from "./lib/calendarioCollage";
 import { inviaPushSfidaLampoSeAttivo } from "./lib/sfidaLampoPush";
 import { pubblicaCompleanniSeAttivo } from "./lib/compleanniFeed";
 import { rilevaSorpassi } from "./lib/notifiche";
@@ -137,6 +138,8 @@ export default {
     );
     ctx.waitUntil(pubblicaCompleanniSeAttivo(env));
     ctx.waitUntil(inviaPushSfidaLampoSeAttivo(env));
+    // Calendario dell'Avvento: i collage di gruppo di ogni casella nel Feed (lib/calendarioCollage.ts).
+    ctx.waitUntil(pubblicaCollageCalendarioSeAttivo(env));
     // Sorpassi in classifica per la campanella delle notifiche (lib/notifiche.ts).
     ctx.waitUntil(rilevaSorpassi(env.DB));
   },

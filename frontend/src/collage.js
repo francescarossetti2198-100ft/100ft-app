@@ -16,7 +16,7 @@ const esc = (s) =>
 
 // "Pausa pranzo 🍽️ — Una foto del tuo pranzo." → { nome: "Pausa pranzo", emoji: "🍽️" }
 const EMOJI_FINALE = /\s*((?:\p{Extended_Pictographic}|️|‍)+)\s*$/u;
-function nomeMissione(m) {
+export function nomeMissione(m) {
   const nome = m.split(" — ")[0].trim();
   const e = nome.match(EMOJI_FINALE);
   return e ? { nome: nome.slice(0, e.index).trim(), emoji: e[1] } : { nome, emoji: "" };

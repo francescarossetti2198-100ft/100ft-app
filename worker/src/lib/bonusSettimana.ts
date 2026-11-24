@@ -101,6 +101,50 @@ export async function verificaExtraDueSettimane(db: D1Database, userId: number, 
   }
 }
 
+// Sfide extra "allenati in questi giorni" (sfide_extra.criterio = 'giorni:2026-12-21,2026-12-23,2026-12-28',
+// dic 2026): si completa da sola quando l'atleta è presente all'appello in TUTTI quei giorni.
+// Una volta sola: partecipazione + punti + post nel Feed; se la coach corregge l'appello e un
+// giorno salta, si tolgono. Gira all'appello, solo per le extra che contengono quel giorno.
+export async function verificaExtraGiorni(db: D1Database, userId: number, data: string): Promise<void> {
+  const { results: extra } = await db
+    .prepare(`SELECT id, titolo, punti, criterio FROM sfide_extra WHERE criterio LIKE 'giorni:%' AND criterio LIKE ?`)
+    .bind(`%${data}%`)
+    .all<{ id: number; titolo: string; punti: number | null; criterio: string }>();
+
+  for (const s of extra) {
+    const giorni = s.criterio.slice("giorni:".length).split(",").map((g) => g.trim()).filter(Boolean);
+    if (!giorni.includes(data)) continue;
+    const { results: presenti } = await db
+      .prepare(
+        `SELECT DISTINCT data FROM presenze WHERE user_id = ? AND confermata = 1
+         AND data IN (${giorni.map(() => "?").join(",")})`
+      )
+      .bind(userId, ...giorni)
+      .all<{ data: string }>();
+    const fatta = presenti.length === giorni.length;
+    const azione = `sfida_extra_${s.id}`;
+    const gia = await db
+      .prepare(`SELECT 1 FROM partecipazioni_sfide_extra WHERE sfida_extra_id = ? AND user_id = ?`)
+      .bind(s.id, userId)
+      .first();
+    if (fatta && !gia) {
+      const ins = await db
+        .prepare(`INSERT OR IGNORE INTO partecipazioni_sfide_extra (sfida_extra_id, user_id) VALUES (?, ?)`)
+        .bind(s.id, userId)
+        .run();
+      if ((ins.meta.changes ?? 0) === 0) continue;
+      if (s.punti) await awardXp(db, userId, azione, s.punti, undefined, s.titolo);
+      await db.prepare(`INSERT INTO post_feed (user_id, tipo, testo) VALUES (?, 'sfida', ?)`).bind(userId, s.titolo).run();
+    } else if (!fatta && gia) {
+      await db.batch([
+        db.prepare(`DELETE FROM partecipazioni_sfide_extra WHERE sfida_extra_id = ? AND user_id = ?`).bind(s.id, userId),
+        db.prepare(`DELETE FROM xp_log WHERE user_id = ? AND azione = ?`).bind(userId, azione),
+        db.prepare(`DELETE FROM post_feed WHERE user_id = ? AND tipo = 'sfida' AND testo = ? AND contenuto_url IS NULL`).bind(userId, s.titolo),
+      ]);
+    }
+  }
+}
+
 export async function verificaBonusSettimana(db: D1Database, userId: number, data: string): Promise<void> {
   const lunedi = lunediDi(data);
   if (lunedi < INIZIO_BONUS) return;

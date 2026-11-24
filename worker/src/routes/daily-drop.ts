@@ -3,8 +3,9 @@ import type { Env, SessionUser } from "../types";
 import { requireAuth, requireCoach } from "../middleware/auth";
 import { awardXp } from "../lib/xp";
 import { salvaFoto } from "../lib/storage";
-import { oggi as oggiInfo } from "../lib/oggi";
-import { statoDailyDrop, FINESTRA_RISPOSTA_MIN } from "../lib/dailyDropOrario";
+import { oggi as oggiInfo, giornoRomaUtc } from "../lib/oggi";
+import { statoDailyDrop, FINESTRA_RISPOSTA_MIN, DAILY_DROP_SPECIALI } from "../lib/dailyDropOrario";
+import { verificaExtraDailyDrop } from "../lib/extraDailyDrop";
 import { sendWebPush } from "../lib/webPush";
 import { payloadDailyDrop } from "../lib/dailyDropPush";
 import { verificaTraguardi } from "../lib/traguardi";
@@ -38,13 +39,14 @@ async function simulazioneAttiva(env: Env, userId: number): Promise<boolean> {
 dailyDrop.get("/oggi", requireAuth, async (c) => {
   const { data, giornoSettimana } = oggiInfo();
   let { previsto, attivo, scaduto } = statoDailyDrop(data, giornoSettimana);
+  const giorno = giornoRomaUtc(data);
 
   const [mia, conteggio, simulazione] = await Promise.all([
-    c.env.DB.prepare(`SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND date(data) = ?`)
-      .bind(c.var.user.userId, data)
+    c.env.DB.prepare(`SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND data >= ? AND data < ?`)
+      .bind(c.var.user.userId, giorno.da, giorno.a)
       .first(),
-    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM post_feed WHERE tipo = 'daily_drop' AND date(data) = ?`)
-      .bind(data)
+    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM post_feed WHERE tipo = 'daily_drop' AND data >= ? AND data < ?`)
+      .bind(giorno.da, giorno.a)
       .first<{ n: number }>(),
     simulazioneAttiva(c.env, c.var.user.userId),
   ]);
@@ -62,6 +64,10 @@ dailyDrop.get("/oggi", requireAuth, async (c) => {
     scaduto,
     risposta: !!mia,
     numeroRisposte: conteggio?.n ?? 0,
+    // Daily Drop speciale (Natale, Capodanno): titolo e invito diversi per la card.
+    speciale: DAILY_DROP_SPECIALI[data]
+      ? { titolo: DAILY_DROP_SPECIALI[data].titolo, invito: DAILY_DROP_SPECIALI[data].invito }
+      : null,
   });
 });
 
@@ -76,10 +82,11 @@ dailyDrop.post("/", requireAuth, async (c) => {
     if (!attivo) return c.json({ error: "Il Daily Drop non è ancora arrivato oggi" }, 400);
   }
 
+  const giorno = giornoRomaUtc(data);
   const esistente = await c.env.DB.prepare(
-    `SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND date(data) = ?`
+    `SELECT id FROM post_feed WHERE tipo = 'daily_drop' AND user_id = ? AND data >= ? AND data < ?`
   )
-    .bind(c.var.user.userId, data)
+    .bind(c.var.user.userId, giorno.da, giorno.a)
     .first();
   if (esistente) return c.json({ error: "Hai già risposto al Daily Drop di oggi" }, 409);
 
@@ -104,6 +111,8 @@ dailyDrop.post("/", requireAuth, async (c) => {
   // Completa subito il traguardo "Fai almeno un daily drop" (prima si sbloccava solo
   // riaprendo le Sfide / il Profilo — chi chiudeva l'app restava senza i +10).
   await verificaTraguardi(c.env.DB, c.var.user.userId);
+  // Sfide extra "rispondi a questi Daily Drop" (es. Natale + Capodanno, dic 2026).
+  await verificaExtraDailyDrop(c.env.DB, c.var.user.userId, data);
 
   // La simulazione è "usa e getta".
   if (simulazione) {
