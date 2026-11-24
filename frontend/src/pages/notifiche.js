@@ -2,6 +2,7 @@ import { renderTabbar } from "../components/tabbar.js";
 import { api, ApiError } from "../api.js";
 import { navigate } from "../router.js";
 import { fotoProfiloHtml } from "./profilo.js";
+import { attivaNotifiche, statoNotifiche } from "../push.js";
 
 // Notifiche dell'atleta, stile Instagram: chi ha commentato o reagito ai tuoi post, i punti
 // (sempre col perché), traguardi, compleanni, sorpassi in classifica (a cui si risponde con
@@ -83,6 +84,12 @@ function rigaHtml(n) {
             )
             .join("")}
         </div>`;
+  }
+  if (n.tipo === "attiva_push") {
+    extra = `<div class="nt-push" style="margin-top:8px">
+      <button type="button" class="btn nt-push-btn" style="width:auto; padding:8px 16px">🔔 Attiva le notifiche</button>
+      <p class="mono nt-push-msg" hidden style="margin:6px 0 0; font-size:12px; color:var(--mute)"></p>
+    </div>`;
   }
   if (n.tipo === "riepilogo" && n.dettagli?.length) {
     extra = `<div class="nt-dettagli" hidden style="margin-top:8px; border-top:1px solid var(--border)">
@@ -178,6 +185,48 @@ async function carica(lista) {
     riga.addEventListener("click", apri);
     riga.addEventListener("keydown", (e) => {
       if (e.key === "Enter") apri(e);
+    });
+  });
+
+  lista.querySelectorAll(".nt-push").forEach(async (box) => {
+    const b = box.querySelector(".nt-push-btn");
+    const msg = box.querySelector(".nt-push-msg");
+    const mostra = (testo) => {
+      msg.textContent = testo;
+      msg.hidden = false;
+    };
+    // Prima di toccare il tasto: se da qui non si possono attivare, si spiega subito perché.
+    const stato = await statoNotifiche().catch(() => "non-supportato");
+    if (stato === "attive") {
+      b.remove();
+      mostra("Notifiche già attive su questo telefono ✅");
+      return;
+    }
+    if (stato === "non-supportato") {
+      b.remove();
+      mostra(
+        "Su iPhone si attivano solo dall'app aggiunta alla schermata Home: in Safari tocca Condividi → «Aggiungi alla schermata Home», apri l'app da lì e torna qui."
+      );
+      return;
+    }
+    if (stato === "negato") {
+      b.remove();
+      mostra("Le notifiche sono bloccate per 100FT: sbloccale dalle impostazioni del telefono, poi torna qui.");
+      return;
+    }
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      b.disabled = true;
+      b.textContent = "Attivo...";
+      try {
+        await attivaNotifiche();
+        b.remove();
+        mostra("Fatto! Notifiche attivate ✅");
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = "🔔 Attiva le notifiche";
+        mostra(err instanceof Error ? err.message : "Non sono riuscito ad attivarle, riprova");
+      }
     });
   });
 

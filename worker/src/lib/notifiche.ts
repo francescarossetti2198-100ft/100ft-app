@@ -537,6 +537,22 @@ export async function elencoNotifiche(db: D1Database, userId: number): Promise<N
         anteprima: dato.testo,
         link: dato.link,
       });
+    } else if (n.tipo === "attiva_push") {
+      // Invito della coach ad attivare le notifiche (inserito a mano in DB, nov 2026), col
+      // tasto per attivarle da lì. Sparisce da solo appena l'atleta ha un dispositivo iscritto.
+      const iscritta = await db
+        .prepare(`SELECT 1 FROM push_subscriptions WHERE user_id = ? LIMIT 1`)
+        .bind(userId)
+        .first();
+      if (iscritta) continue;
+      out.push({
+        id: `push-${n.id}`,
+        tipo: "attiva_push",
+        data: n.data,
+        attori: [coach],
+        totaleAttori: 1,
+        testo: "ti ricorda di attivare le notifiche, così non ti perdi Daily Drop, sfide lampo e promemoria 🔔",
+      });
     }
   }
 
